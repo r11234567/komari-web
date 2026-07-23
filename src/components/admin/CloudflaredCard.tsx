@@ -87,7 +87,7 @@ export function CloudflaredCard({ settings }: { settings: SettingsResponse }) {
   };
 
   const stop = async () => {
-    const body = settings.disable_password_login
+    const body: Record<string, string> = settings.disable_password_login
       ? { confirm_text: confirmText }
       : { current_password: password };
     const ok = await runAction(
@@ -212,4 +212,3 @@ export function CloudflaredCard({ settings }: { settings: SettingsResponse }) {
     </SettingCard>
   );
 }
-

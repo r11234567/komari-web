@@ -1,6 +1,5 @@
 import { Cross1Icon, ExitIcon } from "@radix-ui/react-icons";
 import {
-  Button,
   Callout,
   Flex,
   Grid,
@@ -23,7 +22,6 @@ import { TablerMenu2 } from "../Icones/Tabler";
 import LoginDialog from "../Login";
 import { useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
-import Tips from "../ui/tips";
 import { useRPC2Call } from "@/contexts/RPC2Context";
 import { resolveI18nText } from "@/utils/i18nText";
 import {
