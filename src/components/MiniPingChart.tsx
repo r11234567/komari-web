@@ -63,7 +63,7 @@ const MiniPingChart = ({
   hours = 12,
 }: MiniPingChartProps) => {
   const { t } = useTranslation();
-  const { call } = useRPC2Call();
+  const { call, callViaHTTP } = useRPC2Call();
   const [metricSeries, setMetricSeries] = useState<MetricSeries[]>([]);
   const [tasks, setTasks] = useState<PublicPingTask[]>([]);
   const [stats, setStats] = useState<PingMetricStat[]>([]);
@@ -81,6 +81,7 @@ const MiniPingChart = ({
     }
 
     let active = true;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     setHiddenLines({});
@@ -88,7 +89,7 @@ const MiniPingChart = ({
     const taskRequest = call<unknown, PublicPingTask[]>("public:getPublicPingTasks").catch(
       () => [],
     );
-    const metricRequest = call<unknown, QueryMetricsResponse>(
+    const metricRequest = callViaHTTP<unknown, QueryMetricsResponse>(
       "public:queryMetrics",
       {
         metric_keys: [PING_LATENCY_METRIC],
@@ -99,12 +100,12 @@ const MiniPingChart = ({
         aggregation: "avg",
         fill_empty: true,
       },
-      { timeout: 30000 },
+      { timeout: 30000, signal: controller.signal },
     );
-    const statsRequest = call<unknown, PingMetricStatsResponse>(
+    const statsRequest = callViaHTTP<unknown, PingMetricStatsResponse>(
       "public:getPingMetricStats",
       { entity_id: uuid, hours, max_points: 240 },
-      { timeout: 30000 },
+      { timeout: 30000, signal: controller.signal },
     ).catch(() => null);
 
     Promise.all([taskRequest, metricRequest, statsRequest])
@@ -123,8 +124,9 @@ const MiniPingChart = ({
 
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [call, hours, uuid]);
+  }, [call, callViaHTTP, hours, uuid]);
 
   const taskMap = useMemo(
     () => new Map(tasks.map((task) => [String(task.id), task])),

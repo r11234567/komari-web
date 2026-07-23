@@ -1,13 +1,15 @@
-import { Outlet } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 
 import AdminPanelBar from "../../components/admin/AdminPanelBar";
-import { AccountProvider } from "@/contexts/AccountContext";
+import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { updateSettingsWithToast, useSettings } from "@/lib/api";
 import { Button, Dialog } from "@radix-ui/themes";
 import { useEffect, useState } from "react";
 import { Eula } from "@/utils/field";
 import { normalizeLanguage, readStoredLanguage } from "@/utils/language";
-const AdminLayout = () => {
+import Loading from "@/components/loading";
+
+const AuthenticatedAdminLayout = () => {
   const { settings, loading } = useSettings();
   const lang = readStoredLanguage() || "en";
   const [open, setOpen] = useState(false);
@@ -23,46 +25,58 @@ const AdminLayout = () => {
       setOpen(true);
     }
   }, [loading, settings, lang]);
+
   return (
     <>
       <Dialog.Root open={open}>
         <Dialog.Content>
-          <Dialog.Content>
-            <Dialog.Title>法律声明与合规指引</Dialog.Title>
-            <div className="flex flex-col gap-2">
-              <div className="max-h-[70vh] overflow-y-auto space-y-4">
-                <pre className="text-wrap">{Eula}</pre>
-              </div>
-              <div className="flex flex-row gap-2 justify-end items-center">
-                <Button
-                  variant="soft"
-                  color="red"
-                  onClick={() => window.close()}
-                >
-                  不接受
-                </Button>
-                <Button
-                  variant="solid"
-                  onClick={() => {
-                    setOpen(false);
-                    updateSettingsWithToast(
-                      { eula_accepted: true },
-                      (key) => key
-                    );
-                  }}
-                >
-                  我已详细阅读并接受
-                </Button>
-              </div>
+          <Dialog.Title>法律声明与合规指引</Dialog.Title>
+          <div className="flex flex-col gap-2">
+            <div className="max-h-[70vh] overflow-y-auto space-y-4">
+              <pre className="text-wrap">{Eula}</pre>
             </div>
-          </Dialog.Content>
+            <div className="flex flex-row gap-2 justify-end items-center">
+              <Button
+                variant="soft"
+                color="red"
+                onClick={() => window.close()}
+              >
+                不接受
+              </Button>
+              <Button
+                variant="solid"
+                onClick={() => {
+                  setOpen(false);
+                  updateSettingsWithToast(
+                    { eula_accepted: true },
+                    (key) => key
+                  );
+                }}
+              >
+                我已详细阅读并接受
+              </Button>
+            </div>
+          </div>
         </Dialog.Content>
       </Dialog.Root>
-      <AccountProvider>
-        <AdminPanelBar content={<Outlet />} />
-      </AccountProvider>
+      <AdminPanelBar content={<Outlet />} />
     </>
   );
 };
+
+const ProtectedAdminLayout = () => {
+  const { account, loading } = useAccount();
+
+  if (loading) return <Loading />;
+  if (!account?.logged_in) return <Navigate to="/" replace />;
+
+  return <AuthenticatedAdminLayout />;
+};
+
+const AdminLayout = () => (
+  <AccountProvider>
+    <ProtectedAdminLayout />
+  </AccountProvider>
+);
 
 export default AdminLayout;

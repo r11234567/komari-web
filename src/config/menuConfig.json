@@ -41,7 +41,7 @@
           "icon": "Terminal"
         },
         {
-          "labelKey": "settings.metrics.title",
+          "labelKey": "settings.lts_database.title",
           "path": "/admin/settings/metrics",
           "icon": "Database"
         }

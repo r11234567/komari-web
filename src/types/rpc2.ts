@@ -127,6 +127,8 @@ export interface RPC2ConnectionOptions {
 export interface RPC2CallOptions {
   /** 请求超时时间（毫秒） */
   timeout?: number;
+  /** Abort an HTTP RPC when the owning view is replaced or unmounted. */
+  signal?: AbortSignal;
   /** 是否为通知请求（不期望响应） */
   notification?: boolean;
 }

@@ -197,7 +197,7 @@ type ChartQueryGroup = {
 };
 
 const MAX_REALTIME_POINTS = 30 * 5;
-const HISTORY_MAX_POINTS = 700;
+const HISTORY_MAX_POINTS = 5000;
 const DASHBOARD_TEMPLATE_KEY = "chartDashboardTemplate";
 const CUSTOM_RANGE_DEFAULT_DAYS = 24;
 
@@ -552,31 +552,40 @@ const chartSizeClass: Record<ChartSize, string> = {
 
 const buildTimeViews = (
   t: ReturnType<typeof useTranslation>["t"],
-  maxMetricRetentionDays: number,
+  configuredRetentionHours: number,
 ): TimeView[] => {
   const views: TimeView[] = [
     { key: "real-time", label: t("common.real_time") },
-    { key: "10m", label: t("chart.minutes", { count: 10 }), hours: 10 / 60 },
-    { key: "1h", label: t("chart.hours", { count: 1 }), hours: 1 },
   ];
-  const validRetentionDays =
-    Number.isFinite(maxMetricRetentionDays) && maxMetricRetentionDays > 0
-      ? maxMetricRetentionDays
-      : 0;
-
-  if (validRetentionDays >= 1) {
-    views.push({ key: "1d", label: t("chart.days", { count: 1 }), hours: 24 });
+  const retentionHours = Math.min(
+    90 * 24,
+    Number.isFinite(configuredRetentionHours) && configuredRetentionHours > 0
+      ? configuredRetentionHours
+      : 90 * 24,
+  );
+  const fixedRanges = [1, 6, 12, 24, 7 * 24, 15 * 24];
+  for (const hours of fixedRanges) {
+    if (hours > retentionHours) continue;
+    views.push({
+      key: `${hours}h`,
+      label:
+        hours < 24
+          ? t("chart.hours", { count: hours })
+          : t("chart.days", { count: hours / 24 }),
+      hours,
+    });
   }
-  if (validRetentionDays >= 7) {
-    views.push({ key: "7d", label: t("chart.days", { count: 7 }), hours: 7 * 24 });
+  for (let hours = 30 * 24; hours < retentionHours; hours += 15 * 24) {
+    views.push({
+      key: `${hours / 24}d`,
+      label: t("chart.days", { count: hours / 24 }),
+      hours,
+    });
   }
-  if (validRetentionDays > 0 && validRetentionDays !== 1 && validRetentionDays !== 7) {
-    const retentionHours = validRetentionDays * 24;
+  if (!views.some((view) => view.hours === retentionHours)) {
     views.push({
       key: `retention-${retentionHours}`,
-      label: Number.isInteger(validRetentionDays)
-        ? t("chart.days", { count: validRetentionDays })
-        : t("chart.hours", { count: retentionHours }),
+      label: t("chart.hours", { count: retentionHours }),
       hours: retentionHours,
     });
   }
@@ -954,26 +963,33 @@ const toQueryRange = (range: CustomTimeRange) => {
 const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   const { t } = useTranslation();
   const { uuid } = useParams<{ uuid: string }>();
-  const { call } = useRPC2Call();
+  const { call, callViaHTTP } = useRPC2Call();
   const { account } = useAccount();
   const { publicInfo, refresh: refreshPublicInfo } = usePublicInfo();
   const { nodeList } = useNodeList();
   const node = nodeList?.find((item) => item.uuid === uuid);
   const [definitions, setDefinitions] = useState<MetricDefinition[]>([]);
   const [definitionsLoaded, setDefinitionsLoaded] = useState(false);
-  const maxMetricRetentionDays = useMemo(() => {
+  const maxHistoryRetentionHours = useMemo(() => {
     if (!definitionsLoaded) return 0;
-    const retentionDays = definitions
-      .map((definition) => Number(definition.retention_days))
-      .filter((days) => Number.isFinite(days) && days > 0);
-    if (retentionDays.length > 0) return Math.max(...retentionDays);
-
-    const fallback = Number(publicInfo?.metric_retention_days);
-    return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
-  }, [definitions, definitionsLoaded, publicInfo?.metric_retention_days]);
+    const retentionHours = definitions
+      .map((definition) => Number(definition.retention_days) * 24)
+      .filter((hours) => Number.isFinite(hours) && hours > 0);
+    const configured = [
+      Number(publicInfo?.record_preserve_time),
+      Number(publicInfo?.ping_record_preserve_time),
+      ...retentionHours,
+    ].filter((hours) => Number.isFinite(hours) && hours > 0);
+    return configured.length > 0 ? Math.max(...configured) : 0;
+  }, [
+    definitions,
+    definitionsLoaded,
+    publicInfo?.ping_record_preserve_time,
+    publicInfo?.record_preserve_time,
+  ]);
   const timeViews = useMemo(
-    () => buildTimeViews(t, maxMetricRetentionDays),
-    [t, maxMetricRetentionDays],
+    () => buildTimeViews(t, maxHistoryRetentionHours),
+    [t, maxHistoryRetentionHours],
   );
   const [viewKey, setViewKey] = useState("real-time");
   const selectedView = timeViews.find((view) => view.key === viewKey) ?? timeViews[0];
@@ -1163,13 +1179,14 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     }
 
     let active = true;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
     Promise.all(
       chartQueryGroups.map(async (group) => ({
         group,
-        result: await call<any, QueryMetricsResponse>(
+        result: await callViaHTTP<any, QueryMetricsResponse>(
           "public:queryMetrics",
           {
             metric_keys: group.metricKeys,
@@ -1180,7 +1197,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
             aggregation,
             fill_empty: true,
           },
-          { timeout: 30000 },
+          { timeout: 30000, signal: controller.signal },
         ),
       })),
     )
@@ -1202,10 +1219,11 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     aggregation,
-    call,
+    callViaHTTP,
     chartQueryGroups,
     uuid,
   ]);
@@ -1220,17 +1238,18 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     }
 
     let active = true;
+    const controller = new AbortController();
     Promise.all(
       pingGroups.map(async (group) => ({
         group,
-        result: await call<any, PingMetricStatsResponse>(
+        result: await callViaHTTP<any, PingMetricStatsResponse>(
           "public:getPingMetricStats",
           {
             entity_id: uuid,
             ...group.rangeParams,
             max_points: HISTORY_MAX_POINTS,
           },
-          { timeout: 30000 },
+          { timeout: 30000, signal: controller.signal },
         ),
       })),
     )
@@ -1249,9 +1268,10 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
-    call,
+    callViaHTTP,
     chartQueryGroups,
     uuid,
   ]);

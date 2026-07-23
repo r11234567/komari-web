@@ -221,12 +221,19 @@ export class RPC2Client {
       id: options.notification ? undefined : this.generateRequestId(),
     };
 
+    const controller = new AbortController();
+    const timeout = options.timeout
+      ? window.setTimeout(() => controller.abort(), options.timeout)
+      : undefined;
+    const abortFromCaller = () => controller.abort(options.signal?.reason);
+    options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+
     try {
       const response = await fetch(this.baseUrl, {
         method: "POST",
         headers: this.options.headers,
         body: JSON.stringify(request),
-        signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -249,6 +256,9 @@ export class RPC2Client {
         throw error;
       }
       throw new Error(i18n.t("rpc2.request_failed", { method }));
+    } finally {
+      if (timeout !== undefined) window.clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", abortFromCaller);
     }
   }
 
