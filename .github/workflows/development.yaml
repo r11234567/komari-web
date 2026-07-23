@@ -1,9 +1,8 @@
 name: Development Environment
 
 on:
-  # Temporarily disabled
-  # push:
-  #   branches: [main]
+  push:
+    branches: [lts-1.2.5]
   # pull_request:
   #   branches: [main]
   workflow_dispatch:
@@ -14,21 +13,21 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build project
         run: npm run build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist
