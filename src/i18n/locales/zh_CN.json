@@ -769,7 +769,7 @@
       "stop_confirm_title": "停止 Cloudflared",
       "stop_confirm_description": "请用当前密码确认此敏感操作；关闭密码登录时请输入 STOP CLOUDFLARED。",
       "export_title": "原始历史 CSV",
-      "export_description": "为单个节点创建低优先级后台导出任务，在线导出范围最多 90 天。",
+      "export_description": "为单个节点创建低优先级后台导出任务，可选范围受数据保留期限限制。",
       "export_type": "历史类型",
       "export_resources": "资源历史",
       "export_range": "导出范围",

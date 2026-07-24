@@ -671,7 +671,7 @@
       "stop_confirm_title": "Stop Cloudflared",
       "stop_confirm_description": "Confirm this privileged operation with the current password. Passwordless installations must type STOP CLOUDFLARED.",
       "export_title": "Raw history CSV",
-      "export_description": "Create a low-priority background export for one node. Online exports are limited to 90 days.",
+      "export_description": "Create a low-priority background export for one node. The selectable range is limited to the configured data retention period.",
       "export_type": "History type",
       "export_resources": "Resource history",
       "export_range": "Export range",

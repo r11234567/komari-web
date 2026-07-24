@@ -22,30 +22,81 @@ type ExportJob = {
   error?: string;
 };
 
-const ranges = [
-  { hours: 1, label: "1h" },
-  { hours: 6, label: "6h" },
-  { hours: 12, label: "12h" },
-  { hours: 24, label: "1d" },
-  { hours: 7 * 24, label: "7d" },
-  { hours: 15 * 24, label: "15d" },
-  { hours: 30 * 24, label: "30d" },
-  { hours: 45 * 24, label: "45d" },
-  { hours: 60 * 24, label: "60d" },
-  { hours: 75 * 24, label: "75d" },
-  { hours: 90 * 24, label: "90d" },
-];
+type RetentionInfo = {
+  resource_hours: number;
+  ping_hours: number;
+};
+
+/** Build a list of selectable hour values up to maxHours, using natural breakpoints. */
+function buildRanges(maxHours: number): { hours: number; label: string }[] {
+  const candidates = [
+    { hours: 1, label: "1h" },
+    { hours: 6, label: "6h" },
+    { hours: 12, label: "12h" },
+    { hours: 24, label: "1d" },
+    { hours: 7 * 24, label: "7d" },
+    { hours: 15 * 24, label: "15d" },
+    { hours: 30 * 24, label: "30d" },
+    { hours: 45 * 24, label: "45d" },
+    { hours: 60 * 24, label: "60d" },
+    { hours: 75 * 24, label: "75d" },
+    { hours: 90 * 24, label: "90d" },
+  ];
+  const filtered = candidates.filter((r) => r.hours <= maxHours);
+  // Always include the exact retention limit as the last option if it isn't already there.
+  const last = filtered[filtered.length - 1];
+  if (!last || last.hours !== maxHours) {
+    const days = maxHours / 24;
+    const label = Number.isInteger(days) ? `${days}d` : `${maxHours}h`;
+    filtered.push({ hours: maxHours, label });
+  }
+  return filtered;
+}
 
 const exportStorageKey = "komari-lts-history-export-job";
+const retentionStorageKey = "komari-lts-export-retention";
 
 export function HistoryExportCard() {
   const { t } = useTranslation();
   const { nodeList } = useNodeList();
   const [type, setType] = React.useState<ExportType>("load");
   const [uuid, setUUID] = React.useState("");
-  const [hours, setHours] = React.useState(90 * 24);
+  const [hours, setHours] = React.useState<number | null>(null);
+  const [retention, setRetention] = React.useState<RetentionInfo | null>(null);
   const [job, setJob] = React.useState<ExportJob | null>(null);
   const [busy, setBusy] = React.useState(false);
+
+  // Fetch retention info once on mount.
+  React.useEffect(() => {
+    const cached = window.sessionStorage.getItem(retentionStorageKey);
+    if (cached) {
+      try {
+        setRetention(JSON.parse(cached) as RetentionInfo);
+        return;
+      } catch {
+        // ignore, fetch fresh
+      }
+    }
+    void requestAdminData<RetentionInfo>(
+      "/api/admin/history/export/retention",
+      "Failed to read export retention",
+    )
+      .then((info) => {
+        setRetention(info);
+        window.sessionStorage.setItem(retentionStorageKey, JSON.stringify(info));
+      })
+      .catch(() => {
+        // Fall back to a sensible default so the UI remains usable.
+        setRetention({ resource_hours: 720, ping_hours: 24 });
+      });
+  }, []);
+
+  // When type or retention changes, reset hours to the maximum allowed value.
+  React.useEffect(() => {
+    if (!retention) return;
+    const maxHours = type === "ping" ? retention.ping_hours : retention.resource_hours;
+    setHours(maxHours);
+  }, [type, retention]);
 
   React.useEffect(() => {
     if (!uuid && nodeList?.length) setUUID(nodeList[0].uuid);
@@ -77,11 +128,19 @@ export function HistoryExportCard() {
     return () => window.clearTimeout(timer);
   }, [job, t]);
 
+  const maxHours = retention
+    ? type === "ping"
+      ? retention.ping_hours
+      : retention.resource_hours
+    : null;
+  const ranges = maxHours ? buildRanges(maxHours) : [];
+
   const startExport = async () => {
     if (!uuid) {
       toast.error(t("settings.lts_database.export_select_node"));
       return;
     }
+    if (!hours) return;
     setBusy(true);
     try {
       const next = await requestAdminData<ExportJob>(
@@ -150,17 +209,23 @@ export function HistoryExportCard() {
                   ))}
                 </Select.Content>
               </Select.Root>
-              <Select.Root value={String(hours)} onValueChange={(value) => setHours(Number(value))}>
+              <Select.Root
+                value={hours !== null ? String(hours) : ""}
+                onValueChange={(value) => setHours(Number(value))}
+                disabled={ranges.length === 0}
+              >
                 <Select.Trigger aria-label={t("settings.lts_database.export_range")} />
                 <Select.Content>
                   {ranges.map((range) => (
-                    <Select.Item key={range.hours} value={String(range.hours)}>{range.label}</Select.Item>
+                    <Select.Item key={range.hours} value={String(range.hours)}>
+                      {range.label}
+                    </Select.Item>
                   ))}
                 </Select.Content>
               </Select.Root>
             </div>
             <Flex justify="end">
-              <Button disabled={busy || !uuid} onClick={() => void startExport()}>
+              <Button disabled={busy || !uuid || !hours} onClick={() => void startExport()}>
                 <FileDown size={16} />
                 {t("settings.lts_database.export_generate")}
               </Button>
@@ -208,4 +273,3 @@ export function HistoryExportCard() {
     </SettingCard>
   );
 }
-
