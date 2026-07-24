@@ -1,5 +1,6 @@
 import { useNodeList } from "@/contexts/NodeListContext";
 import { requestAdminData } from "@/lib/adminApi";
+import { Input } from "@/components/ui/input";
 import { Button, Flex, Progress, Select, Text } from "@radix-ui/themes";
 import { Download, FileDown, RotateCcw, X } from "lucide-react";
 import React from "react";
@@ -9,6 +10,7 @@ import { SettingCard } from "./SettingCard";
 
 type ExportType = "load" | "ping";
 type ExportStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+type RangeMode = "quick" | "custom";
 
 type ExportJob = {
   id: string;
@@ -27,30 +29,54 @@ type RetentionInfo = {
   ping_hours: number;
 };
 
-/** Build a list of selectable hour values up to maxHours, using natural breakpoints. */
+/** Format hours to a short human-readable label. */
+function fmtHours(h: number): string {
+  if (h < 24) return `${h}h`;
+  const d = h / 24;
+  return Number.isInteger(d) ? `${d}d` : `${h}h`;
+}
+
+/**
+ * Build the quick-select shortcut list.
+ * Fixed entries: 1h 6h 12h 1d 7d 15d, then 15-day increments up to maxHours.
+ */
 function buildRanges(maxHours: number): { hours: number; label: string }[] {
-  const candidates = [
-    { hours: 1, label: "1h" },
-    { hours: 6, label: "6h" },
-    { hours: 12, label: "12h" },
-    { hours: 24, label: "1d" },
-    { hours: 7 * 24, label: "7d" },
-    { hours: 15 * 24, label: "15d" },
-    { hours: 30 * 24, label: "30d" },
-    { hours: 45 * 24, label: "45d" },
-    { hours: 60 * 24, label: "60d" },
-    { hours: 75 * 24, label: "75d" },
-    { hours: 90 * 24, label: "90d" },
-  ];
-  const filtered = candidates.filter((r) => r.hours <= maxHours);
-  // Always include the exact retention limit as the last option if it isn't already there.
-  const last = filtered[filtered.length - 1];
-  if (!last || last.hours !== maxHours) {
-    const days = maxHours / 24;
-    const label = Number.isInteger(days) ? `${days}d` : `${maxHours}h`;
-    filtered.push({ hours: maxHours, label });
+  const result: { hours: number; label: string }[] = [];
+  const fixed = [1, 6, 12, 24, 7 * 24, 15 * 24];
+  for (const h of fixed) {
+    if (h <= maxHours) result.push({ hours: h, label: fmtHours(h) });
   }
-  return filtered;
+  // 15-day steps starting at 30d
+  for (let days = 30; days * 24 <= maxHours; days += 15) {
+    if (!result.find((r) => r.hours === days * 24)) {
+      result.push({ hours: days * 24, label: `${days}d` });
+    }
+  }
+  // Always include exact retention ceiling if not already present
+  const last = result[result.length - 1];
+  if (!last || last.hours < maxHours) {
+    result.push({ hours: maxHours, label: fmtHours(maxHours) });
+  }
+  return result;
+}
+
+/** Convert a datetime-local value ("YYYY-MM-DDTHH:mm") to RFC3339. */
+function localInputToRFC3339(value: string): string {
+  if (!value) return "";
+  // datetime-local gives local time; Date constructor treats it as local
+  return new Date(value).toISOString();
+}
+
+/** Convert an ISO timestamp to datetime-local input value. */
+function isoToLocalInput(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  // format: YYYY-MM-DDTHH:mm (local time, no seconds)
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
 }
 
 const exportStorageKey = "komari-lts-history-export-job";
@@ -59,14 +85,21 @@ const retentionStorageKey = "komari-lts-export-retention";
 export function HistoryExportCard() {
   const { t } = useTranslation();
   const { nodeList } = useNodeList();
+
   const [type, setType] = React.useState<ExportType>("load");
   const [uuid, setUUID] = React.useState("");
-  const [hours, setHours] = React.useState<number | null>(null);
   const [retention, setRetention] = React.useState<RetentionInfo | null>(null);
+
+  // Range mode: quick shortcut or custom date range
+  const [rangeMode, setRangeMode] = React.useState<RangeMode>("quick");
+  const [quickHours, setQuickHours] = React.useState<number | null>(null);
+  const [customStart, setCustomStart] = React.useState("");
+  const [customEnd, setCustomEnd] = React.useState("");
+
   const [job, setJob] = React.useState<ExportJob | null>(null);
   const [busy, setBusy] = React.useState(false);
 
-  // Fetch retention info once on mount.
+  // Fetch retention once on mount
   React.useEffect(() => {
     const cached = window.sessionStorage.getItem(retentionStorageKey);
     if (cached) {
@@ -74,7 +107,7 @@ export function HistoryExportCard() {
         setRetention(JSON.parse(cached) as RetentionInfo);
         return;
       } catch {
-        // ignore, fetch fresh
+        // fall through to fetch
       }
     }
     void requestAdminData<RetentionInfo>(
@@ -85,23 +118,24 @@ export function HistoryExportCard() {
         setRetention(info);
         window.sessionStorage.setItem(retentionStorageKey, JSON.stringify(info));
       })
-      .catch(() => {
-        // Fall back to a sensible default so the UI remains usable.
-        setRetention({ resource_hours: 720, ping_hours: 24 });
-      });
+      .catch(() => setRetention({ resource_hours: 720, ping_hours: 24 }));
   }, []);
 
-  // When type or retention changes, reset hours to the maximum allowed value.
+  // When type or retention changes, reset quick selection to max
   React.useEffect(() => {
     if (!retention) return;
     const maxHours = type === "ping" ? retention.ping_hours : retention.resource_hours;
-    setHours(maxHours);
+    setQuickHours(maxHours);
+    setRangeMode("quick");
+    setCustomStart("");
+    setCustomEnd("");
   }, [type, retention]);
 
   React.useEffect(() => {
     if (!uuid && nodeList?.length) setUUID(nodeList[0].uuid);
   }, [nodeList, uuid]);
 
+  // Resume a pending job from localStorage
   React.useEffect(() => {
     const saved = window.localStorage.getItem(exportStorageKey);
     if (!saved) return;
@@ -113,6 +147,7 @@ export function HistoryExportCard() {
       .catch(() => window.localStorage.removeItem(exportStorageKey));
   }, [t]);
 
+  // Poll running jobs
   React.useEffect(() => {
     if (!job || (job.status !== "queued" && job.status !== "running")) return;
     const timer = window.setTimeout(() => {
@@ -121,35 +156,65 @@ export function HistoryExportCard() {
         t("settings.lts_database.export_status_error"),
       )
         .then(setJob)
-        .catch((error) => {
-          toast.error(error instanceof Error ? error.message : String(error));
-        });
+        .catch((error) => toast.error(error instanceof Error ? error.message : String(error)));
     }, 1000);
     return () => window.clearTimeout(timer);
   }, [job, t]);
 
   const maxHours = retention
-    ? type === "ping"
-      ? retention.ping_hours
-      : retention.resource_hours
+    ? type === "ping" ? retention.ping_hours : retention.resource_hours
     : null;
   const ranges = maxHours ? buildRanges(maxHours) : [];
+
+  const maxDatetime = isoToLocalInput(new Date().toISOString());
+  const minDatetime = maxHours
+    ? isoToLocalInput(new Date(Date.now() - maxHours * 3600_000).toISOString())
+    : "";
+
+  // Custom date handlers — selecting any date switches to custom mode
+  const handleCustomStart = (v: string) => {
+    setCustomStart(v);
+    if (v) { setRangeMode("custom"); setQuickHours(null); }
+  };
+  const handleCustomEnd = (v: string) => {
+    setCustomEnd(v);
+    if (v) { setRangeMode("custom"); setQuickHours(null); }
+  };
+
+  // Quick shortcut handler — switches back to quick mode
+  const handleQuickSelect = (h: number) => {
+    setQuickHours(h);
+    setRangeMode("quick");
+    setCustomStart("");
+    setCustomEnd("");
+  };
+
+  const canSubmit =
+    !!uuid &&
+    (rangeMode === "quick" ? !!quickHours : !!(customStart && customEnd));
 
   const startExport = async () => {
     if (!uuid) {
       toast.error(t("settings.lts_database.export_select_node"));
       return;
     }
-    if (!hours) return;
     setBusy(true);
     try {
+      let body: Record<string, unknown>;
+      if (rangeMode === "custom" && customStart && customEnd) {
+        body = {
+          type, uuid,
+          start: localInputToRFC3339(customStart),
+          end: localInputToRFC3339(customEnd),
+          max_points: 5000,
+        };
+      } else {
+        body = { type, uuid, hours: quickHours, max_points: 5000 };
+      }
       const next = await requestAdminData<ExportJob>(
         "/api/admin/history/export",
         t("settings.lts_database.export_start_error"),
-        {
-          method: "POST",
-          body: JSON.stringify({ type, uuid, hours, max_points: 5000 }),
-        },
+        { method: "POST", body: JSON.stringify(body) },
       );
       setJob(next);
       window.localStorage.setItem(exportStorageKey, next.id);
@@ -193,8 +258,9 @@ export function HistoryExportCard() {
       <Flex direction="column" className="w-full pt-3" gap="3">
         {!job ? (
           <>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <Select.Root value={type} onValueChange={(value) => setType(value as ExportType)}>
+            {/* Type + node selectors */}
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <Select.Root value={type} onValueChange={(v) => setType(v as ExportType)}>
                 <Select.Trigger aria-label={t("settings.lts_database.export_type")} />
                 <Select.Content>
                   <Select.Item value="load">{t("settings.lts_database.export_resources")}</Select.Item>
@@ -209,23 +275,73 @@ export function HistoryExportCard() {
                   ))}
                 </Select.Content>
               </Select.Root>
-              <Select.Root
-                value={hours !== null ? String(hours) : ""}
-                onValueChange={(value) => setHours(Number(value))}
-                disabled={ranges.length === 0}
-              >
-                <Select.Trigger aria-label={t("settings.lts_database.export_range")} />
-                <Select.Content>
-                  {ranges.map((range) => (
-                    <Select.Item key={range.hours} value={String(range.hours)}>
-                      {range.label}
-                    </Select.Item>
-                  ))}
-                </Select.Content>
-              </Select.Root>
             </div>
+
+            {/* Quick shortcuts */}
+            <div>
+              <Text as="div" size="1" color="gray" mb="1">
+                {t("settings.lts_database.export_range")}
+              </Text>
+              <Flex wrap="wrap" gap="1">
+                {ranges.map((r) => (
+                  <Button
+                    key={r.hours}
+                    size="1"
+                    variant={rangeMode === "quick" && quickHours === r.hours ? "solid" : "soft"}
+                    disabled={rangeMode === "custom"}
+                    onClick={() => handleQuickSelect(r.hours)}
+                  >
+                    {r.label}
+                  </Button>
+                ))}
+              </Flex>
+            </div>
+
+            {/* Custom date range */}
+            <div>
+              <Text as="div" size="1" color="gray" mb="1">
+                {t("settings.lts_database.export_custom_range")}
+              </Text>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <Input
+                  type="datetime-local"
+                  value={customStart}
+                  min={minDatetime}
+                  max={customEnd || maxDatetime}
+                  disabled={rangeMode === "quick" && !!quickHours && !customStart && !customEnd ? false : false}
+                  onChange={(e) => handleCustomStart(e.target.value)}
+                  placeholder={t("settings.lts_database.export_custom_start")}
+                />
+                <Input
+                  type="datetime-local"
+                  value={customEnd}
+                  min={customStart || minDatetime}
+                  max={maxDatetime}
+                  onChange={(e) => handleCustomEnd(e.target.value)}
+                  placeholder={t("settings.lts_database.export_custom_end")}
+                />
+              </div>
+              {rangeMode === "custom" && (
+                <Button
+                  size="1"
+                  variant="ghost"
+                  color="gray"
+                  mt="1"
+                  onClick={() => {
+                    setCustomStart("");
+                    setCustomEnd("");
+                    setRangeMode("quick");
+                    if (maxHours) setQuickHours(maxHours);
+                  }}
+                >
+                  <X size={12} />
+                  {t("settings.lts_database.export_clear_custom")}
+                </Button>
+              )}
+            </div>
+
             <Flex justify="end">
-              <Button disabled={busy || !uuid || !hours} onClick={() => void startExport()}>
+              <Button disabled={busy || !canSubmit} onClick={() => void startExport()}>
                 <FileDown size={16} />
                 {t("settings.lts_database.export_generate")}
               </Button>
@@ -239,7 +355,7 @@ export function HistoryExportCard() {
                   {job.type === "load" ? t("settings.lts_database.export_resources") : "Ping"}
                 </Text>
                 <Text as="div" size="1" color="gray">
-                  {new Date(job.start).toLocaleString()} - {new Date(job.end).toLocaleString()}
+                  {new Date(job.start).toLocaleString()} – {new Date(job.end).toLocaleString()}
                 </Text>
               </div>
               <Text size="2">{t(`settings.lts_database.export_status_${job.status}`)}</Text>
