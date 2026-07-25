@@ -25,6 +25,7 @@ import type {
 import {
   PING_LATENCY_METRIC,
   applyMetricEwma,
+  comparePingTaskOrder,
   formatRemainingTags,
   metricChartBoundaryTicks,
   metricSeriesColor,
@@ -176,12 +177,21 @@ const MiniPingChart = ({
       }
     });
 
+    const orderedSeries = renderSeries
+      .sort((left, right) =>
+        comparePingTaskOrder(left.tags, right.tags, taskMap),
+      )
+      .map((series, index) => ({
+        ...series,
+        color: metricSeriesColor(index),
+      }));
+
     return {
       rows: Array.from(rows.values()).sort(
         (left, right) =>
           new Date(String(left.time)).getTime() - new Date(String(right.time)).getTime(),
       ),
-      series: renderSeries,
+      series: orderedSeries,
     };
   }, [metricSeries, t, taskMap]);
 
@@ -329,7 +339,7 @@ const MiniPingChart = ({
                   dot={item.pointCount <= 30}
                   isAnimationActive={false}
                   strokeWidth={2}
-                  connectNulls={false}
+                  connectNulls={true}
                   type="linear"
                   hide={hiddenLines[item.dataKey] === true}
                 />
