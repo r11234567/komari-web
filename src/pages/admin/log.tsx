@@ -8,6 +8,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Button, Dialog, Flex } from "@radix-ui/themes";
+import { Activity } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
 import AdminPageTitle from "@/components/admin/AdminPageTitle";
@@ -34,6 +36,7 @@ const LogPage = () => {
   const [limit, setLimit] = React.useState<number>(defaultPageSize);
   const limitCustomized = React.useRef(false);
   const [t] = useTranslation();
+  const navigate = useNavigate();
   React.useEffect(() => {
     if (limitCustomized.current) return;
     setLimit(defaultPageSize);
@@ -79,6 +82,10 @@ const LogPage = () => {
         >
           {t("logs.title")}
         </AdminPageTitle>
+        <Button variant="soft" onClick={() => navigate("/admin/pprof")}>
+          <Activity size={16} />
+          {t("pprof.title")}
+        </Button>
       </div>
       <div className="overflow-hidden rounded-md border border-[var(--gray-a5)] bg-[var(--color-panel-solid)]">
         <div className="overflow-x-auto">
