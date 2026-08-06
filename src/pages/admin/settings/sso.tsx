@@ -28,10 +28,11 @@ export default function SsoSettings() {
         onChange={async (checked) => {
           await updateSettingsWithToast({ o_auth_enabled: checked }, t);
         }}
+        className="km-page-admin-settings-sso km-setting-card"
       />
       <SettingCardSelect
         title={t("settings.sso.provider")}
-        description={t("settings.sso.provider_description") + " [Not Implemented, 暂未实现]"}
+        description={t("settings.sso.provider_description") + t("settings.sso.not_implemented_suffix")}
         defaultValue={"Github"}
         OnSave={async (data) => {
           await updateSettingsWithToast({ o_auth_provider: data }, t);
@@ -42,7 +43,7 @@ export default function SsoSettings() {
         ]}
       />
       <SettingCardShortTextInput
-        title={t("settings.sso.client_id")}
+        title={t("settings.sso.generic.client_id")}
         description={t("settings.sso.client_id_description")}
         defaultValue={settings.o_auth_client_id || ""}
         OnSave={async (data) => {
@@ -50,7 +51,7 @@ export default function SsoSettings() {
         }}
       />
       <SettingCardShortTextInput
-        title={t("settings.sso.client_secret")}
+        title={t("settings.sso.generic.client_secret")}
         description={t("settings.sso.client_secret_description")}
         defaultValue={settings.o_auth_client_secret || ""}
         OnSave={async (data) => {

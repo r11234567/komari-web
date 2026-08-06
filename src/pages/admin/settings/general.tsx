@@ -13,7 +13,7 @@ import {
   SettingCardShortTextInput,
   SettingCardSwitch,
 } from "@/components/admin/SettingCard";
-import { DatabaseMaintenanceCard } from "@/components/admin/DatabaseMaintenanceCard";
+import { CloudflaredCard } from "@/components/admin/CloudflaredCard";
 import React from "react";
 import { toast } from "sonner";
 import Loading from "@/components/loading";
@@ -38,6 +38,30 @@ export default function GeneralSettings() {
         {t("settings.general.auto_discovery")}
       </SettingCardLabel>
       <ApiCard settings={settings} />
+      <SettingCardLabel>{t("settings.general.integrations")}</SettingCardLabel>
+      <CloudflaredCard settings={settings} />
+      <SettingCardSwitch
+        title={t("settings.general.nezha_compat_title")}
+        description={t("settings.general.nezha_compat_description")}
+        defaultChecked={settings.nezha_compat_enabled === true}
+        onChange={async (checked) => {
+          await updateSettingsWithToast({ nezha_compat_enabled: checked }, t);
+        }}
+      />
+      <SettingCardShortTextInput
+        title={t("settings.general.nezha_compat_listen")}
+        description={t("settings.general.nezha_compat_listen_description")}
+        defaultValue={settings.nezha_compat_listen || "0.0.0.0:5555"}
+        placeholder="0.0.0.0:5555"
+        OnSave={async (value) => {
+          const listen = value.trim();
+          if (!listen) {
+            toast.error(t("settings.general.nezha_compat_listen_invalid"));
+            return;
+          }
+          await updateSettingsWithToast({ nezha_compat_listen: listen }, t);
+        }}
+      />
       <label className="text-xl font-bold">{t("settings.geoip.title")}</label>
       <SettingCardSwitch
         title={t("settings.geoip.enable_title")}
@@ -46,6 +70,7 @@ export default function GeneralSettings() {
         onChange={async (checked) => {
           await updateSettingsWithToast({ geo_ip_enabled: checked }, t);
         }}
+        className="km-page-admin-settings-general km-setting-card"
       />
       <SettingCardSelect
         title={t("settings.geoip.provider_title")}
@@ -77,6 +102,7 @@ export default function GeneralSettings() {
             );
           }
         }}
+        className="km-setting-card"
       >
         {t("common.update")}
       </SettingCardButton>
@@ -117,8 +143,6 @@ export default function GeneralSettings() {
           </Flex>
         </Flex>
       </SettingCardCollapse>
-      <SettingCardLabel>{t("settings.database.title")}</SettingCardLabel>
-      <DatabaseMaintenanceCard />
     </>
   );
 }

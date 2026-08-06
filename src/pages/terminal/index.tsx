@@ -45,22 +45,29 @@ const TerminalArea: React.FC<TerminalAreaProps> = ({
   width,
   isOpen,
   appearance,
-}) => (
-  <div
-    className="terminal-page relative flex justify-center flex-col h-full min-w-128"
-    style={{ width, ...appearance }}
-  >
-    <div className="terminal-xterm-host m-0 w-full h-full">
-      <div ref={terminalRef} className="h-full w-full" />
-    </div>
+}) => {
+  const { t } = useTranslation();
+  return (
     <div
-      className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center justify-center bg-accent-4 hover:bg-accent-6 text-white cursor-pointer rounded-l-full w-6 h-12 z-20"
-      onClick={toggleClipboard}
+      className="km-terminal-container terminal-page relative flex justify-center flex-col h-full min-w-128"
+      style={{ width, ...appearance }}
     >
-      {isOpen ? ">" : "<"}
+      <div className="km-terminal-toolbar terminal-xterm-host m-0 w-full h-full">
+        <div ref={terminalRef} className="km-terminal-xterm h-full w-full" />
+      </div>
+      <div
+        className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center justify-center bg-accent-4 hover:bg-accent-6 text-white cursor-pointer rounded-l-full w-6 h-12 z-20"
+        onClick={toggleClipboard}
+        role="button"
+        tabIndex={0}
+        aria-label={isOpen ? t("common.close", "Close") : t("command_clipboard.title", "Command Clipboard")}
+        title={isOpen ? t("common.close", "Close") : t("command_clipboard.title", "Command Clipboard")}
+      >
+        {isOpen ? ">" : "<"}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Divider: React.FC<{
   onMouseDown: (e: React.MouseEvent | React.TouchEvent) => void;
@@ -74,7 +81,7 @@ const Divider: React.FC<{
 );
 
 const ClipboardPanel: React.FC = () => (
-  <div className="h-screen p-2 min-w-64" style={{ flex: 1 }}>
+  <div className="km-terminal-clipboard h-screen p-2 min-w-64" style={{ flex: 1 }}>
     <CommandClipboardPanel className="h-full w-full" />
   </div>
 );
@@ -516,7 +523,7 @@ const TerminalPage = () => {
     <TerminalContext.Provider
       value={{ terminal: terminalInstance.current, sendCommand }}
     >
-      <Theme appearance="dark">
+      <Theme appearance="dark" className="km-page-terminal">
         <Toaster theme="dark" />
         {settingsResolutionError ? (
           <div className="absolute left-4 top-4 z-30 max-w-[32rem]">

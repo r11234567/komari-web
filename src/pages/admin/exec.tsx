@@ -57,6 +57,8 @@ const COMMAND_EDITOR_LINE_HEIGHT_VAR = "--command-editor-line-height";
 const COMMAND_EDITOR_VERTICAL_PADDING_VAR = "--command-editor-vertical-padding";
 const COMMAND_EDITOR_COLLAPSED_HEIGHT = `calc(${COMMAND_EDITOR_COLLAPSED_LINES} * var(${COMMAND_EDITOR_LINE_HEIGHT_VAR}) + var(${COMMAND_EDITOR_VERTICAL_PADDING_VAR}))`;
 const COMMAND_EDITOR_LINE_NUMBER_LIMIT = 500;
+// 客户端标记“执行超时”的内部结果（避免在 UI 中展示硬编码中文）
+const TIMEOUT_RESULT_MARKER = "__komari_exec_timeout__";
 
 const parsePixelValue = (value: string) => {
     const parsedValue = Number.parseFloat(value);
@@ -262,7 +264,7 @@ const ExecContent = () => {
             setResults(prevResults =>
                 prevResults.map(result =>
                     result.finished_at === null
-                        ? { ...result, finished_at: new Date().toISOString(), exit_code: -1, result: "执行超时" }
+                        ? { ...result, finished_at: new Date().toISOString(), exit_code: -1, result: TIMEOUT_RESULT_MARKER }
                         : result
                 )
             );
@@ -329,7 +331,7 @@ const ExecContent = () => {
                 throw new Error(data.message);
             }
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "未知错误";
+            const errorMessage = err instanceof Error ? err.message : t("common.unknownError");
             toast.error(errorMessage);
         } finally {
             setExecuting(false);
@@ -359,11 +361,15 @@ const ExecContent = () => {
         }).join(", ");
     };
 
+    // 超时标记结果展示为本地化文案
+    const displayResultText = (result: TaskResult) =>
+        result.result === TIMEOUT_RESULT_MARKER ? t("exec.status.timeout") : result.result;
+
     const getTaskStatus = (result: TaskResult) => {
         if (result.finished_at === null) {
             return { status: "running", color: "blue" as const, text: t("exec.status.running") };
         }
-        if (result.result === "执行超时") {
+        if (result.result === TIMEOUT_RESULT_MARKER) {
             return { status: "timeout", color: "orange" as const, text: t("exec.status.timeout", "超时") };
         }
         if (result.exit_code === 0) {
@@ -373,7 +379,7 @@ const ExecContent = () => {
     };
 
     return (
-        <div className="p-4 flex flex-col gap-3">
+        <div className="km-page-admin-exec km-exec-header p-4 flex flex-col gap-3">
             {/* 页面标题 */}
             <div>
                 <h1 className="text-2xl font-bold">{t("exec.title")}</h1>
@@ -385,7 +391,7 @@ const ExecContent = () => {
             <Separator size="4" />
 
             {/* 命令输入区域 */}
-            <Card className="p-6">
+            <Card className="km-exec-editor-card p-6">
                 <Flex direction="column" gap="4">
 
                     <label htmlFor={COMMAND_EDITOR_ID} className="text-xl font-bold">
@@ -399,7 +405,7 @@ const ExecContent = () => {
                         <div
                             ref={commandLineGutterRef}
                             aria-hidden="true"
-                            className="select-none overflow-hidden border-r border-[var(--gray-a5)] bg-[var(--gray-2)] px-2 text-right font-mono text-xs text-[var(--gray-11)] [line-height:var(--command-editor-line-height)] [padding-bottom:calc(var(--command-editor-vertical-padding)/2)] [padding-top:calc(var(--command-editor-vertical-padding)/2)]"
+                            className="km-exec-editor-gutter select-none overflow-hidden border-r border-[var(--gray-a5)] bg-[var(--gray-2)] px-2 text-right font-mono text-xs text-[var(--gray-11)] [line-height:var(--command-editor-line-height)] [padding-bottom:calc(var(--command-editor-vertical-padding)/2)] [padding-top:calc(var(--command-editor-vertical-padding)/2)]"
                         >
                             {commandLineLabels.map((label, index) => (
                                 <div
@@ -427,7 +433,7 @@ const ExecContent = () => {
                             rows={COMMAND_EDITOR_COLLAPSED_LINES}
                             wrap="soft"
                             spellCheck={false}
-                            className="h-full w-full resize-none border-0 bg-transparent px-3 font-mono text-sm text-[var(--gray-12)] outline-none placeholder:text-[var(--gray-9)] [line-height:var(--command-editor-line-height)] [padding-bottom:calc(var(--command-editor-vertical-padding)/2)] [padding-top:calc(var(--command-editor-vertical-padding)/2)]"
+                            className="km-exec-editor-input h-full w-full resize-none border-0 bg-transparent px-3 font-mono text-sm text-[var(--gray-12)] outline-none placeholder:text-[var(--gray-9)] [line-height:var(--command-editor-line-height)] [padding-bottom:calc(var(--command-editor-vertical-padding)/2)] [padding-top:calc(var(--command-editor-vertical-padding)/2)]"
                             style={{
                                 maxHeight: commandFocused ? "60vh" : COMMAND_EDITOR_COLLAPSED_HEIGHT,
                                 overflowY: commandFocused ? "auto" : "hidden",
@@ -485,7 +491,7 @@ const ExecContent = () => {
 
             {/* 执行结果区域 */}
             {results.length > 0 && (
-                <Card className="p-6">
+                <Card className="km-exec-output p-6">
                     <Flex direction="column" gap="4">
                         <Flex justify="between" align="center">
                             <Text size="4" weight="medium">
@@ -548,7 +554,9 @@ const ExecContent = () => {
                                                     <Button
                                                         variant="ghost"
                                                         size="1"
-                                                        onClick={() => copyOutput(result.result)}
+                                                        onClick={() => copyOutput(displayResultText(result))}
+                                                        title={t("common.copy", "Copy")}
+                                                        aria-label={t("common.copy", "Copy")}
                                                     >
                                                         <Copy size={14} />
                                                     </Button>
@@ -570,7 +578,7 @@ const ExecContent = () => {
                                             {/* 输出内容 */}
                                             {result.result && (
                                                 <div className="bg-[var(--gray-2)] rounded-md p-3 font-mono text-sm overflow-x-auto">
-                                                    <pre className="whitespace-pre-wrap">{result.result}</pre>
+                                                    <pre className="whitespace-pre-wrap">{displayResultText(result)}</pre>
                                                 </div>
                                             )}
                                         </Flex>
@@ -585,7 +593,7 @@ const ExecContent = () => {
                                 <Flex align="center" gap="2">
                                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent" />
                                     <Text size="2" color="gray">
-                                        正在获取最新执行状态...
+                                        {t("exec.status.polling")}
                                     </Text>
                                 </Flex>
                                 <Button
@@ -593,7 +601,7 @@ const ExecContent = () => {
                                     size="1"
                                     onClick={clearPolling}
                                 >
-                                    停止轮询
+                                    {t("exec.stopPolling")}
                                 </Button>
                             </Flex>
                         )}

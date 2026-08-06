@@ -32,7 +32,7 @@ export const ServerView = ({ pingTasks }: { pingTasks: PingTask[] }) => {
   );
 
   return (
-    <div className="rounded-xl overflow-hidden">
+    <div className="km-page-admin-pingtask-server km-pingtask-server-list rounded-xl overflow-hidden">
       <Table>
         <TableHeader>
           <TableHead className="w-48">{t("common.server")}</TableHead>
@@ -146,11 +146,15 @@ const ServerRow: React.FC<{
           {ownedTasks.length > 0 ? display : t("common.none")}
           <Dialog.Root open={open} onOpenChange={setOpen}>
             <Dialog.Trigger>
-              <IconButton variant="ghost">
+              <IconButton
+                variant="ghost"
+                title={t("common.select_tasks", "Select tasks")}
+                aria-label={t("common.select_tasks", "Select tasks")}
+              >
                 <MoreHorizontal size={16} />
               </IconButton>
             </Dialog.Trigger>
-            <Dialog.Content maxWidth="450px">
+            <Dialog.Content maxWidth="450px" className="km-pingtask-server-form">
               <Dialog.Title>
                 {t("common.server")} - {nodeName}
               </Dialog.Title>
