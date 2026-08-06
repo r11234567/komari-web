@@ -7,7 +7,7 @@ import {
   Text,
 } from "@radix-ui/themes";
 import { AnimatePresence, motion } from "framer-motion"; // 引入 Framer Motion
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation /*useNavigate*/ } from "react-router-dom";
 import ColorSwitch from "../ColorSwitch";
@@ -16,14 +16,16 @@ import ThemeSwitch from "../ThemeSwitch";
 import { useIsMobile } from "@/hooks/use-mobile";
 import menuConfig from "../../config/menuConfig.json";
 import type { MenuItem } from "../../types/menu";
-import { iconMap } from "../../utils/iconHelper";
+import { iconMap, resolvePluginIcon } from "../../utils/iconHelper";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { TablerMenu2 } from "../Icones/Tabler";
 import LoginDialog from "../Login";
+import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
 import { useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { useRPC2Call } from "@/contexts/RPC2Context";
 import { resolveI18nText } from "@/utils/i18nText";
+import type { PluginInfo } from "@/types/plugin";
 import {
   getThemeConfigurationType,
   normalizeThemeRedirectTarget,
@@ -56,7 +58,11 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
   const ishttps = window.location.protocol === "https:";
   const [t, i18n] = useTranslation();
   const location = useLocation();
+  const isConfigFormPage =
+    location.pathname === "/admin/theme_managed" ||
+    location.pathname === "/admin/plugins/config";
   const { publicInfo } = usePublicInfo();
+  const { refreshVersion } = useAdminNavigation();
   //const navigate = useNavigate();
   // 获取版本信息
   const [versionInfo, setVersionInfo] = useState<{
@@ -69,8 +75,9 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     (typeof navigator !== "undefined" ? navigator.language : "");
   const currentTheme = publicInfo?.theme;
 
-  // 动态扩展菜单
+  // 动态扩展菜单（主题 + 插件注入页面）
   const [extraMenuItems, setExtraMenuItems] = useState<ExtendedMenuItem[]>([]);
+  const [pluginMenuItems, setPluginMenuItems] = useState<ExtendedMenuItem[]>([]);
 
   useEffect(() => {
     let ignore = false;
@@ -134,7 +141,59 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     return () => {
       ignore = true;
     };
-  }, [currentTheme]);
+  }, [currentTheme, refreshVersion]);
+  // 插件注入的管理页面：manifest pages（visibility=admin）-> 插件菜单的二级菜单。
+  // iframe 页面进入 plugin-page 路由；redirect 页面复用主题的站内跳转校验。
+  useEffect(() => {
+    let ignore = false;
+    async function loadPluginMenu() {
+      try {
+        const result = await call<any, PluginInfo[]>("admin:listPlugins");
+        if (ignore || !Array.isArray(result)) return;
+        const pluginIconUrl = (plugin: PluginInfo, icon?: string) =>
+          resolvePluginIcon(plugin.short, icon) || "Blocks";
+        const items: ExtendedMenuItem[] = [];
+        for (const plugin of result) {
+          if (!plugin.enabled) continue; // 未启用的插件不注入导航菜单
+          for (const page of plugin.pages || []) {
+            if (page.visibility === "public") continue; // 公开页面走公开路由，不进后台导航
+            const label =
+              resolveI18nText(page.title, currentLanguage) ||
+              resolveI18nText(plugin.name, currentLanguage) ||
+              plugin.short;
+            const pageType = page.type || "iframe";
+            if (pageType === "redirect") {
+              const target = normalizeThemeRedirectTarget(page.url);
+              if (!target) continue;
+              items.push({
+                labelKey: label,
+                rawLabel: label,
+                path: target,
+                icon: pluginIconUrl(plugin, page.icon),
+                reloadDocument: true, // 与主题 redirect 一致：整页跳转到站内路径
+              });
+              continue;
+            }
+            items.push({
+              labelKey: label,
+              rawLabel: label,
+              path: `/admin/plugin-page?short=${encodeURIComponent(plugin.short)}&file=${encodeURIComponent(page.file || "")}`,
+              icon: pluginIconUrl(plugin, page.icon),
+            });
+          }
+        }
+        if (!ignore) setPluginMenuItems(items);
+      } catch (e) {
+        console.warn("加载插件菜单失败:", e);
+        if (!ignore) setPluginMenuItems([]);
+      }
+    }
+    loadPluginMenu();
+    return () => {
+      ignore = true;
+    };
+  }, [call, currentLanguage, refreshVersion]);
+
   useEffect(() => {
     const fetchVersionInfo = async () => {
       try {
@@ -160,21 +219,38 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     return () => window.removeEventListener("resize", handleResize);
   }, [isMobile]);
 
-  // 根据路径自动展开子菜单（包含动态扩展项）
+  // 插件注入页面作为“插件”主菜单的二级菜单；主题配置菜单保持顶级扩展项。
+  const mergedBaseMenuItems: ExtendedMenuItem[] = useMemo(() => {
+    if (pluginMenuItems.length === 0) return baseMenuItems;
+    return baseMenuItems.map((item) =>
+      item.labelKey === "plugin.title"
+        ? { ...item, children: [...(item.children || []), ...pluginMenuItems] }
+        : item,
+    );
+  }, [pluginMenuItems]);
+
+  // 根据路径自动展开子菜单（包含动态扩展项；plugin-page 用 query 定位文件，
+  // 因此子菜单匹配基于 pathname 部分）
   useEffect(() => {
     const newState: { [key: string]: boolean } = {};
-    const combined: ExtendedMenuItem[] = [...baseMenuItems, ...extraMenuItems];
+    const combined: ExtendedMenuItem[] = [
+      ...mergedBaseMenuItems,
+      ...extraMenuItems,
+    ];
     combined.forEach((item) => {
       if (item.children) {
-        newState[item.path] = item.children.some(
-          (child: MenuItem) =>
-            location.pathname === child.path ||
-            location.pathname.startsWith(child.path),
-        );
+        newState[item.path] = item.children.some((child: MenuItem) => {
+          const childPath = child.path.split("?")[0];
+          return (
+            location.pathname === childPath ||
+            (childPath !== "/" &&
+              location.pathname.startsWith(childPath + "/"))
+          );
+        });
       }
     });
     setOpenSubMenus(newState);
-  }, [location.pathname, extraMenuItems]);
+  }, [location.pathname, extraMenuItems, mergedBaseMenuItems]);
 
   // 侧边栏动画变体
   const sidebarVariants = {
@@ -222,18 +298,19 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
   return (
     <>
       <Grid
+        className="km-admin-layout km-admin-panel-bar"
         columns={{ initial: "1fr", md: sidebarOpen ? "240px 1fr" : "0px 1fr" }} // 动态调整网格列
         rows={{ initial: "auto 1fr", md: "auto 1fr" }}
         style={{
           height: "100vh",
           width: "100vw",
-          overflow: "auto",
+          overflow: "hidden",
           backgroundColor: "var(--accent-1)",
         }}
       >
         {/* Navbar */}
         <motion.nav
-          className="col-span-2"
+          className="km-admin-panel-topbar col-span-2"
           initial={{ y: 0 }}
           animate={{ y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
@@ -249,6 +326,8 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
               <IconButton
                 variant="ghost"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
+                title={t("common.menu_sidebar", "Menu")}
+                aria-label={t("common.menu_sidebar", "Menu")}
                 style={{
                   display: isMobile && sidebarOpen ? "none" : "flex",
                   color: "var(--gray-11)",
@@ -268,7 +347,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
                     `${versionInfo.version} (${versionInfo.hash})`)}
               </label>
             </Flex>
-            <Flex gap="3" align="center" overflowX="auto">
+            <Flex gap="3" align="center" overflowX="auto" className="km-admin-panel-controls">
               {account && !account.logged_in && (
                 <LoginDialog
                   autoOpen={true}
@@ -281,7 +360,14 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
               <ThemeSwitch />
               <ColorSwitch />
               <LanguageSwitch />
-              <IconButton variant="soft" color="orange" onClick={logout}>
+              <IconButton
+                variant="soft"
+                color="orange"
+                className="km-admin-panel-account"
+                onClick={logout}
+                title={t("common.logout", "Logout")}
+                aria-label={t("common.logout", "Logout")}
+              >
                 <ExitIcon />
               </IconButton>
             </Flex>
@@ -295,6 +381,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
             initial="closed"
             animate={sidebarOpen ? "open" : "closed"}
             exit="closed"
+            className="km-admin-panel-nav"
             style={{
               backgroundColor: "var(--accent-1)",
               height: "100%",
@@ -315,6 +402,8 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
               {/* 关闭按钮 */}
               <IconButton
                 variant="soft"
+                title={t("common.close_sidebar", "Close menu")}
+                aria-label={t("common.close_sidebar", "Close menu")}
                 style={{
                   display: isMobile ? "flex" : "none",
                   margin: "8px 0px 0px 8px",
@@ -330,7 +419,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
                 className="h-full md:mt-0 mt-6"
                 style={{ width: "100%" }}
               >
-                {[...baseMenuItems, ...extraMenuItems].map(
+                {[...mergedBaseMenuItems, ...extraMenuItems].map(
                   (item: ExtendedMenuItem) => {
                     // 支持 icon 为 URL/相对路径
                     const isOpen = openSubMenus[item.path];
@@ -509,10 +598,12 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
         <motion.div
           variants={contentVariants}
           animate={sidebarOpen ? "open" : "closed"}
+          className="km-admin-panel-content"
           style={{
             backgroundColor: "var(--accent-3)",
             display: isMobile && sidebarOpen ? "none" : "block",
             height: "100%", // Ensure the container takes full height
+            minHeight: 0,
             overflow: "hidden", // Prevent this container from scrolling
           }}
         >
@@ -520,9 +611,12 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
             style={{
               backgroundColor: "var(--accent-1)",
               height: "100%",
+              minHeight: 0,
               borderRadius: "0",
               padding: isMobile ? "8px" : "16px",
-              overflowY: "auto",
+              overflowY: isConfigFormPage ? "hidden" : "auto",
+              display: isConfigFormPage ? "flex" : "block",
+              flexDirection: isConfigFormPage ? "column" : undefined,
               boxSizing: "border-box",
             }}
           >
@@ -545,7 +639,11 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
                 </Text>
               </Callout.Text>
             </Callout.Root>
-            {content}
+            {isConfigFormPage ? (
+              <div className="min-h-0 flex-1">{content}</div>
+            ) : (
+              content
+            )}
           </div>
         </motion.div>
       </Grid>
@@ -573,11 +671,15 @@ const SidebarItem = ({
 }) => {
   const location = useLocation();
   const isExternalLink = to.startsWith("http://") || to.startsWith("https://");
+  // 带 query 的菜单项（如 /admin/plugin-page?short=x）做全匹配；不带 query
+  // 的菜单项只比 pathname（如 /admin/plugins/config?short=x 点亮“插件配置”），
+  // 同时避免前缀兄弟路由（/admin/plugins 与 /admin/plugins/config）同时点亮。
   const isActive =
     !isExternalLink &&
     to !== "/" &&
-    (location.pathname === to ||
-      (to !== "/admin" && location.pathname.startsWith(to)));
+    (to.includes("?")
+      ? location.pathname + location.search === to
+      : location.pathname === to.split("?")[0]);
   const openInNewTab = newTab === true || (isExternalLink && newTab !== false);
 
   if (openInNewTab || reloadDocument) {

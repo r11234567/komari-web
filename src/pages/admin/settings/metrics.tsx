@@ -1,6 +1,6 @@
 import { Selector } from "@/components/Selector";
-import { CloudflaredCard } from "@/components/admin/CloudflaredCard";
-import { HistoryExportCard } from "@/components/admin/HistoryExportCard";
+import { DatabaseMaintenanceCard } from "@/components/admin/DatabaseMaintenanceCard";
+import { DownsamplingCard } from "@/components/admin/DownsamplingCard";
 import {
   SettingCard,
   SettingCardLabel,
@@ -135,7 +135,7 @@ export default function LTSDatabaseSettings() {
 
   return (
     <Flex direction="column" gap="3">
-      <SettingCardLabel>{t("settings.lts_database.title")}</SettingCardLabel>
+      <SettingCardLabel>{t("settings.database.title")}</SettingCardLabel>
       <SettingCardSwitch
         title={t("settings.lts_database.record_enabled")}
         description={t("settings.lts_database.record_enabled_description")}
@@ -145,8 +145,8 @@ export default function LTSDatabaseSettings() {
         }}
       />
       <MetricRetentionTable defaultRetentionDays={DEFAULT_RETENTION_DAYS} />
-      <CloudflaredCard settings={settings} />
-      <HistoryExportCard />
+      <DownsamplingCard />
+      <DatabaseMaintenanceCard />
     </Flex>
   );
 }

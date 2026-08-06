@@ -212,9 +212,9 @@ const NodeTable: React.FC<NodeTableProps> = ({ nodes, liveData, onlineSet }) => 
   }), [nodes, onlineSet, getNodeData, offlineServerPosition, sortState]);
 
   return (
-    <div className="mx-4 overflow-x-auto rounded-xl node-table-container">
+    <div className="km-node-table mx-4 overflow-x-auto rounded-xl node-table-container">
       <Table>
-        <TableHeader>
+        <TableHeader className="km-node-table-header">
           <TableRow>
             <TableHead className="w-[24px]"></TableHead>
             <TableHead
@@ -243,7 +243,7 @@ const NodeTable: React.FC<NodeTableProps> = ({ nodes, liveData, onlineSet }) => 
               title={t("nodeCard.sortTooltip")}
             >
               <Flex align="center" gap="1">
-                {t("nodeCard.status")}
+                {t("common.status")}
                 {getSortIcon("status")}
               </Flex>
             </TableHead>
@@ -253,7 +253,7 @@ const NodeTable: React.FC<NodeTableProps> = ({ nodes, liveData, onlineSet }) => 
               title={t("nodeCard.sortTooltip")}
             >
               <Flex align="center" gap="1">
-                {t("nodeCard.cpu")}
+                {t("admin.nodeDetail.cpu")}
                 {getSortIcon("cpu")}
               </Flex>
             </TableHead>
@@ -283,7 +283,7 @@ const NodeTable: React.FC<NodeTableProps> = ({ nodes, liveData, onlineSet }) => 
               title={t("nodeCard.sortTooltip")}
             >
               <Flex align="center" gap="1">
-                {t("nodeCard.price")}
+                {t("admin.nodeTable.price")}
                 {getSortIcon("price")}
               </Flex>
             </TableHead>
@@ -345,7 +345,7 @@ const NodeTable: React.FC<NodeTableProps> = ({ nodes, liveData, onlineSet }) => 
             return (
               <React.Fragment key={node.uuid}>
                 <TableRow
-                  className="hover:bg-accent-2 transition-colors duration-200 table-row-hover"
+                  className="km-node-table-row hover:bg-accent-2 transition-colors duration-200 table-row-hover"
                   onClick={() => toggleRowExpansion(node.uuid)}
                 >
                   <TableCell>

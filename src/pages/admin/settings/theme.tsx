@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import Loading from "@/components/loading";
 import { useSettings } from "@/lib/api";
@@ -83,7 +84,8 @@ const ThemePage = () => {
   } = useSettings();
   const currentTheme = settings?.theme;
   const navigate = useNavigate();
-  const { publicInfo } = usePublicInfo();
+  const { publicInfo, refresh: refreshPublicInfo } = usePublicInfo();
+  const { refreshNavigation } = useAdminNavigation();
   const [activeThemeHasConfig, setActiveThemeHasConfig] = useState(false);
 
   // 当 currentTheme 或 publicInfo.theme 变化时重新检测当前主题是否有配置文件
@@ -180,7 +182,7 @@ const ThemePage = () => {
       // 监听请求完成
       xhr.addEventListener("load", async () => {
         if (xhr.status === 413) {
-          toast.error(t("theme.uploda_413_content_too_large"));
+          toast.error(t("theme.upload_413_content_too_large"));
           setUploading(false);
           setUploadProgress(0);
           setUploadXhr(null);
@@ -260,6 +262,8 @@ const ThemePage = () => {
 
       // 刷新 settings 以获取最新的主题设置
       await refetchSettings();
+      await refreshPublicInfo();
+      refreshNavigation();
 
       // 更新主题列表中的活跃状态
       setThemes((prevThemes) =>
@@ -268,18 +272,6 @@ const ThemePage = () => {
           active: theme.short === themeShort,
         })),
       );
-
-      const theme = themes.find((t) => t.short === themeShort);
-      console.log(theme);
-      if (
-        theme &&
-        getThemeConfigurationType(theme.configuration) ===
-          THEME_CONFIGURATION_MANAGED &&
-        Array.isArray(theme.configuration.data) &&
-        theme.configuration.data.length > 0
-      ) {
-        window.location.reload();
-      }
 
       toast.success(t("theme.set_success"));
     } catch (err) {
@@ -315,6 +307,10 @@ const ThemePage = () => {
 
       // 重新获取主题列表
       await fetchThemes();
+      if (themeShort === currentTheme) {
+        await refreshPublicInfo();
+        refreshNavigation();
+      }
 
       setUpdateDialogOpen(false);
       setPreviewDialogOpen(false);
@@ -449,7 +445,7 @@ const ThemePage = () => {
   }
 
   return (
-    <Box className="p-6 space-y-6">
+    <Box className="km-page-admin-settings-theme p-6 space-y-6">
       <Flex justify="between" align="center" gap="3" wrap="wrap">
         <Text size="6" weight="bold">
           {t("theme.title")}
@@ -462,7 +458,7 @@ const ThemePage = () => {
               onClick={() => navigate("/admin/theme_managed")}
             >
               <Settings size={16} />
-              {`${currentTheme}设置`}
+              {t("theme.settings_with_name", { name: currentTheme })}
             </Button>
           )}
           <Button onClick={() => setUploadDialogOpen(true)} className="gap-2">
@@ -573,6 +569,8 @@ const ThemePage = () => {
                     variant="ghost"
                     onClick={() => setActiveTheme(theme.short)}
                     disabled={settingTheme === theme.short}
+                    title={t("theme.set_active", "Set as Active Theme")}
+                    aria-label={t("theme.set_active", "Set as Active Theme")}
                   >
                     {settingTheme === theme.short ? (
                       <Box className="animate-spin">
@@ -593,7 +591,7 @@ const ThemePage = () => {
       <UploadDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
-        title={t("theme.upload_theme")}
+        title={t("theme.upload")}
         description={t("theme.upload_description")}
         accept=".zip"
         dragDropText={t("theme.drag_drop")}
@@ -643,7 +641,7 @@ const ThemePage = () => {
               </Flex>
               <Flex gap="2" justify="start" align="center">
                 <Text size="2" weight="bold" color="gray" wrap="nowrap">
-                  {t("theme.description")}
+                  {t("common.description")}
                 </Text>
                 <Text size="3">{selectedTheme?.description}</Text>
               </Flex>
@@ -655,7 +653,13 @@ const ThemePage = () => {
                   <Text size="1" className="overflow-hidden text-ellipsis">
                     {selectedTheme?.url}
                   </Text>
-                  <a href={selectedTheme.url} target="_blank">
+                  <a
+                    href={selectedTheme.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={t("theme.theme_url", "Theme URL")}
+                    aria-label={t("theme.theme_url", "Theme URL")}
+                  >
                     <SquareArrowOutUpRight size={12} />
                   </a>
                 </Flex>
@@ -742,7 +746,7 @@ const ThemePage = () => {
       {/* 更新主题对话框 */}
       <Dialog.Root open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
         <Dialog.Content maxWidth="500px">
-          <Dialog.Title>{t("theme.update_theme")}</Dialog.Title>
+          <Dialog.Title>{t("theme.update")}</Dialog.Title>
           <Dialog.Description>
             {t("theme.update_description")}
           </Dialog.Description>
@@ -875,7 +879,7 @@ const ThemePage = () => {
                           color="gray"
                           wrap="nowrap"
                         >
-                          {t("theme.description")}
+                          {t("common.description")}
                         </Text>
                         <Text size="3">
                           {importPreview.theme.description}

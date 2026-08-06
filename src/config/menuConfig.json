@@ -1,8 +1,13 @@
 {
   "menu": [
     {
+      "labelKey": "common.dashboard",
+      "path": "/admin/dashboard",
+      "icon": "LayoutDashboard"
+    },
+    {
       "labelKey": "common.server",
-      "path": "/admin",
+      "path": "/admin/servers",
       "icon": "Server"
     },
     {
@@ -14,11 +19,6 @@
           "labelKey": "settings.site.title",
           "path": "/admin/settings/site",
           "icon": "Home"
-        },
-        {
-          "labelKey": "theme.title",
-          "path": "/admin/settings/theme",
-          "icon": "Palette"
         },
         {
           "labelKey": "settings.sign_on.title",
@@ -41,21 +41,48 @@
           "icon": "Terminal"
         },
         {
-          "labelKey": "settings.lts_database.title",
+          "labelKey": "settings.database.title",
           "path": "/admin/settings/metrics",
           "icon": "Database"
         }
       ]
     },
     {
-      "labelKey": "market.title",
-      "path": "/admin/market",
-      "icon": "Store",
+      "labelKey": "theme.menu",
+      "path": "/admin/theme",
+      "icon": "Palette",
       "children": [
+        {
+          "labelKey": "theme.title",
+          "path": "/admin/settings/theme",
+          "icon": "Palette"
+        },
         {
           "labelKey": "market.themes",
           "path": "/admin/market/themes",
-          "icon": "Palette"
+          "icon": "Store"
+        }
+      ]
+    },
+    {
+      "labelKey": "plugin.title",
+      "path": "/admin/plugins",
+      "icon": "Blocks",
+      "children": [
+        {
+          "labelKey": "plugin.manage",
+          "path": "/admin/plugins",
+          "icon": "Blocks"
+        },
+        {
+          "labelKey": "plugin.market",
+          "path": "/admin/market/plugins",
+          "icon": "Store"
+        },
+        {
+          "labelKey": "plugin.config",
+          "path": "/admin/plugins/config",
+          "icon": "Settings2"
         }
       ]
     },
@@ -110,6 +137,11 @@
       "labelKey": "logs.title",
       "path": "/admin/logs",
       "icon": "FileText"
+    },
+    {
+      "labelKey": "pprof.title",
+      "path": "/admin/pprof",
+      "icon": "Activity"
     },
     {
       "labelKey": "common.about",

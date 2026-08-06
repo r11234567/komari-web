@@ -136,7 +136,7 @@ export const TaskView = ({ pingTasks }: { pingTasks: PingTask[] }) => {
   };
 
   return (
-    <div className="rounded-xl overflow-hidden">
+    <div className="km-page-admin-pingtask-task km-pingtask-task-table rounded-xl overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -144,7 +144,7 @@ export const TaskView = ({ pingTasks }: { pingTasks: PingTask[] }) => {
             <TableHead>{t("common.name")}</TableHead>
             <TableHead>{t("common.server")}</TableHead>
             <TableHead>{t("ping.target")}</TableHead>
-            <TableHead>{t("ping.type")}</TableHead>
+            <TableHead>{t("common.type")}</TableHead>
             <TableHead>{t("ping.interval")}</TableHead>
             <TableHead>{t("common.action")}</TableHead>
           </TableRow>
@@ -326,7 +326,11 @@ const Row = ({
               submitEdit(nextForm);
             }}
           >
-            <IconButton variant="ghost">
+            <IconButton
+              variant="ghost"
+              title={t("common.select_clients", "Select clients")}
+              aria-label={t("common.select_clients", "Select clients")}
+            >
               <MoreHorizontal size="16" />
             </IconButton>
           </NodeSelectorDialog>
@@ -339,11 +343,15 @@ const Row = ({
         {/* 编辑按钮 */}
         <Dialog.Root open={editOpen} onOpenChange={setEditOpen}>
           <Dialog.Trigger>
-            <IconButton variant="soft">
+            <IconButton
+              variant="soft"
+              title={t("common.edit", "Edit")}
+              aria-label={t("common.edit", "Edit")}
+            >
               <Pencil size="16" />
             </IconButton>
           </Dialog.Trigger>
-          <Dialog.Content>
+          <Dialog.Content className="km-pingtask-task-form">
             <Dialog.Title>{t("common.edit")}</Dialog.Title>
             <form onSubmit={handleEdit} className="flex flex-col gap-2">
               <label>{t("common.name")}</label>
@@ -354,7 +362,7 @@ const Row = ({
                 }
                 required
               />
-              <label>{t("ping.type")}</label>
+              <label>{t("common.type")}</label>
               <Select.Root
                 value={form.type}
                 onValueChange={(v) =>
@@ -430,7 +438,12 @@ const Row = ({
         {/* 删除按钮 */}
         <Dialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
           <Dialog.Trigger>
-            <IconButton variant="soft" color="red">
+            <IconButton
+              variant="soft"
+              color="red"
+              title={t("common.delete", "Delete")}
+              aria-label={t("common.delete", "Delete")}
+            >
               <Trash size="16" />
             </IconButton>
           </Dialog.Trigger>

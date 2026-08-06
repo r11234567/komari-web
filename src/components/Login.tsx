@@ -5,7 +5,6 @@ import {
   Text,
   TextField,
   Button,
-  Box,
   IconButton,
 } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
@@ -32,6 +31,7 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
     const [isLoading, setIsLoading] = React.useState(false);
     const [require2FA, setRequire2FA] = React.useState(false);
     const [open, setOpen] = React.useState(autoOpen || false);
+    const fieldId = React.useId().replace(/:/g, "");
     const {publicInfo} = usePublicInfo();
   // 是否启用密码登录
   const passwordLoginEnabled = !publicInfo?.disable_password_login;
@@ -73,7 +73,7 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
             onLoginSuccess();
             return
           }
-          window.open("/admin", "_self");
+          window.open("/admin/dashboard", "_self");
         } else {
           if (data.message === "2FA code is required") {
             setRequire2FA(true);
@@ -86,14 +86,6 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
         console.error(err);
       } finally {
         setIsLoading(false);
-      }
-    };
-
-    // Handle Enter key press
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !isLoading && isFormValid) {
-        e.preventDefault(); // Prevent form submission issues
-        handleLogin();
       }
     };
 
@@ -112,8 +104,11 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
         return null;
       }
       return (
-        <a href="/admin" target="_blank">
-          <IconButton>
+        <a href="/admin/dashboard" target="_blank">
+          <IconButton
+            title={t("settings.title", "Settings")}
+            aria-label={t("settings.title", "Settings")}
+          >
             <TablerSettings></TablerSettings>
           </IconButton>
         </a>
@@ -133,7 +128,12 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
           );
         }
         return (
-          <span onClick={redirect} style={{ cursor: "pointer", display: "inline-flex" }}>
+          <span
+            onClick={redirect}
+            role="button"
+            tabIndex={0}
+            style={{ cursor: "pointer", display: "inline-flex" }}
+          >
             {trigger}
           </span>
         );
@@ -148,7 +148,7 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
         <Dialog.Trigger>
           {trigger ? trigger : <Button>{t("login.title")}</Button>}
         </Dialog.Trigger>
-        <Dialog.Content maxWidth="450px">
+        <Dialog.Content maxWidth="450px" className="km-login-dialog">
           <Dialog.Title>{t("login.title")}</Dialog.Title>
           <Dialog.Description size="2" mb="4">
             <div className="flex justify-center flex-col gap-2">
@@ -161,9 +161,10 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
             </div>
 
           </Dialog.Description>
-          <Box
+          <form
+            className="km-login-form"
             onSubmit={(e) => {
-              e.preventDefault(); // Prevent native form submission
+              e.preventDefault();
               if (isFormValid && !isLoading) {
                 handleLogin();
               }
@@ -177,9 +178,12 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
                       {t("login.username")}
                     </Text>
                     <TextField.Root
+                      className="km-login-input"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      onKeyDown={handleKeyDown}
+                      id={`login-username-${fieldId}`}
+                      name="username"
+                      autoComplete="username"
                       placeholder="admin"
                       disabled={isLoading}
                       autoFocus
@@ -190,10 +194,13 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
                       {t("login.password")}
                     </Text>
                     <TextField.Root
+                      className="km-login-input"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      onKeyDown={handleKeyDown}
+                      id={`login-password-${fieldId}`}
+                      name="password"
                       type="password"
+                      autoComplete="current-password"
                       placeholder={t("login.password_placeholder")}
                       disabled={isLoading}
                     />
@@ -203,16 +210,20 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
                       {t("login.two_factor")}
                     </Text>
                     <TextField.Root
+                      className="km-login-input"
                       value={twoFac}
                       onChange={(e) => setTwoFac(e.target.value)}
-                      onKeyDown={handleKeyDown}
+                      id={`login-2fa-code-${fieldId}`}
+                      name="2fa_code"
                       type="text"
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
                       placeholder="000000"
                       disabled={isLoading}
                     />
                   </label>
                   {errorMsg && (
-                    <Text as="div" size="2" color="red">
+                    <Text as="div" size="2" color="red" className="km-login-error">
                       {errorMsg}
                     </Text>
                   )}
@@ -220,7 +231,6 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
                     type="submit"
                     disabled={isLoading || !isFormValid}
                     style={{ opacity: isLoading || !isFormValid ? 0.6 : 1 }}
-                    onClick={handleLogin}
                   >
                     {isLoading ? "Logging in..." : t("login.title")}
                   </Button>
@@ -248,7 +258,7 @@ const LoginDialog = ({ trigger, autoOpen = false, showSettings = true, info, onL
                 </Button>
               )}
             </Flex>
-          </Box>
+          </form>
         </Dialog.Content>
       </Dialog.Root>
     );

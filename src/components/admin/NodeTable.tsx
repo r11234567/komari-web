@@ -102,7 +102,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "ipv4",
-    header: t("admin.nodeTable.ipAddress"),
+    header: t("admin.nodeDetail.ipAddress"),
     cell: ({ row }) => {
       const ipv4 = row.original.ipv4;
       const ipv6 = row.original.ipv6;
@@ -143,7 +143,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "version",
-    header: t("admin.nodeTable.clientVersion"),
+    header: t("admin.nodeDetail.clientVersion"),
     cell: ({ row }) => <div className="w-32">{row.getValue("version")}</div>,
   },
   {
@@ -315,14 +315,14 @@ export function DataTable() {
   return (
     <div
       className={`
-        mb-6
+        km-admin-node-table mb-6
         ${!isMobile ? "p-4" : ""}
       `}
     >
       <h2 className="text-2xl font-bold mb-4">
         {t("admin.nodeTable.nodeList")}
       </h2>
-      <div className="flex items-center justify-between mb-4">
+      <div className="km-admin-node-table-toolbar flex items-center justify-between mb-4">
         <TextField.Root
           placeholder={t("admin.nodeTable.searchByName")}
           value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
@@ -381,7 +381,7 @@ export function DataTable() {
                 sensors={sensors}
                 id={sortableId}
               >
-                <Table>
+                <Table className="km-admin-node-table-grid">
                   <TableHeader className="bg-muted sticky top-0 z-10">
                     {table.getHeaderGroups().map((headerGroup) => (
                       <TableRow key={headerGroup.id}>
@@ -418,7 +418,7 @@ export function DataTable() {
                         >
                           {data.length === 0 && !isLoading
                             ? t("admin.nodeTable.noData")
-                            : t("admin.nodeTable.noResults")}
+                            : t("common.no_results")}
                         </TableCell>
                       </TableRow>
                     )}

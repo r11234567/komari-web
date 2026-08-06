@@ -27,16 +27,16 @@ const PingMetricStatContent = ({ stat, t }: PingMetricStatContentProps) => {
   if (typeof stat.stddev === "number") {
     rows.push([t("chart.sampling.stddev"), formatMilliseconds(stat.stddev)]);
   }
-  if (typeof stat.p99_p50_ratio === "number") {
+  if (typeof stat.p99_p50_ratio === "number" && (stat.valid ?? 0) > 0) {
     rows.push([t("chart.volatility"), stat.p99_p50_ratio.toFixed(2)]);
   }
   rows.push([t("chart.total"), String(stat.total)]);
   rows.push([t("chart.valid"), String(stat.valid)]);
   if (stat.interval) rows.push([t("chart.interval"), `${stat.interval}s`]);
-  if (stat.type) rows.push([t("chart.type"), stat.type.toUpperCase()]);
+  if (stat.type) rows.push([t("common.type"), stat.type.toUpperCase()]);
 
   return (
-    <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+    <div className="km-ping-metric-stat grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
       {rows.map(([label, value]) => (
         <div key={label} className="contents">
           <span className="text-muted-foreground">{label}</span>

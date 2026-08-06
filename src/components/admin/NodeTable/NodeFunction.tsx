@@ -120,10 +120,14 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
   };
 
   return (
-    <div className="flex gap-3 justify-center">
+    <div className="km-node-function flex gap-3 justify-center">
       <Dialog.Root>
         <Dialog.Trigger>
-          <IconButton variant="ghost">
+          <IconButton
+            variant="ghost"
+            title={t("admin.nodeTable.installCommand", "Install command")}
+            aria-label={t("admin.nodeTable.installCommand", "Install command")}
+          >
             <Download className="p-1" />
           </IconButton>
         </Dialog.Trigger>
@@ -282,14 +286,18 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
                 onClick={() => copyToClipboard(generateCommand())}
               >
                 <Copy size={16} />
-                {t("copy")}
+                {t("common.copy")}
               </Button>
             </Flex>
           </div>
         </Dialog.Content>
       </Dialog.Root>
       <a href={`/terminal?uuid=${row.original.uuid}`} target="_blank">
-        <IconButton variant="ghost">
+        <IconButton
+          variant="ghost"
+          title={t("terminal.title", "Terminal")}
+          aria-label={t("terminal.title", "Terminal")}
+        >
           <Terminal className="p-1" />
         </IconButton>
       </a>
@@ -298,7 +306,11 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
       {/** Edit Money */}
       <Dialog.Root> 
         <Dialog.Trigger>
-          <IconButton variant="ghost">
+          <IconButton
+            variant="ghost"
+            title={t("admin.nodeTable.editNodePrice", "Edit Price")}
+            aria-label={t("admin.nodeTable.editNodePrice", "Edit Price")}
+          >
            <DollarSign className="p-1" />
           </IconButton>
         </Dialog.Trigger>
@@ -312,18 +324,24 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
       {/** Delete Button */}
       <Dialog.Root>
         <Dialog.Trigger>
-          <IconButton variant="ghost" color="red" className="text-destructive">
+          <IconButton
+            variant="ghost"
+            color="red"
+            className="text-destructive"
+            title={t("common.delete", "Delete")}
+            aria-label={t("common.delete", "Delete")}
+          >
             <Trash2 className="p-1" />
           </IconButton>
         </Dialog.Trigger>
         <Dialog.Content>
-          <Dialog.Title>{t("admin.nodeTable.confirmDelete")}</Dialog.Title>
+          <Dialog.Title>{t("common.confirm_delete")}</Dialog.Title>
           <Dialog.Description>
             {t("admin.nodeTable.cannotUndo")}
           </Dialog.Description>
           <Flex gap="2" justify={"end"}>
             <Dialog.Close>
-              <Button variant="soft">{t("admin.nodeTable.cancel")}</Button>
+              <Button variant="soft">{t("common.cancel")}</Button>
             </Dialog.Close>
             <Dialog.Trigger>
               <Button
@@ -338,7 +356,7 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
               >
                 {removing
                   ? t("admin.nodeTable.deleting")
-                  : t("admin.nodeTable.confirm")}
+                  : t("common.confirm")}
               </Button>
             </Dialog.Trigger>
           </Flex>
