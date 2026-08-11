@@ -29,7 +29,6 @@ const selectorSource = readFileSync(new URL("../src/components/Selector.tsx", im
 const nodeSelectorSource = readFileSync(new URL("../src/components/NodeSelector.tsx", import.meta.url), "utf8");
 const checkboxSource = readFileSync(new URL("../src/components/ui/checkbox.tsx", import.meta.url), "utf8");
 const selectOrInputSource = readFileSync(new URL("../src/components/ui/select-or-input.tsx", import.meta.url), "utf8");
-const accountSource = readFileSync(new URL("../src/pages/admin/account.tsx", import.meta.url), "utf8");
 const zhCN = JSON.parse(
   readFileSync(new URL("../src/i18n/locales/zh_CN.json", import.meta.url), "utf8"),
 );
