@@ -21,6 +21,11 @@
           "icon": "Home"
         },
         {
+          "labelKey": "settings.dashboard.title",
+          "path": "/admin/settings/dashboard",
+          "icon": "LayoutDashboard"
+        },
+        {
           "labelKey": "settings.sign_on.title",
           "path": "/admin/settings/sign-on",
           "icon": "CircleArrowRight"
@@ -107,6 +112,11 @@
           "icon": "BarChart2"
         },
         {
+          "labelKey": "notification.ping_loss.title",
+          "path": "/admin/notification/ping-loss",
+          "icon": "WifiOff"
+        },
+        {
           "labelKey": "settings.general.title",
           "path": "/admin/notification/general",
           "icon": "Ellipsis"
@@ -124,6 +134,11 @@
       "icon": "Activity"
     },
     {
+      "labelKey": "return_route.title",
+      "path": "/admin/return-route",
+      "icon": "Route"
+    },
+    {
       "labelKey": "sessions.title",
       "path": "/admin/sessions",
       "icon": "Users"
@@ -139,21 +154,9 @@
       "icon": "FileText"
     },
     {
-      "labelKey": "common.about",
-      "path": "/admin/about",
-      "icon": "AtSign"
-    },
-    {
-      "labelKey": "common.documentation",
-      "path": "https://komari-document.pages.dev/",
-      "icon": "Book",
-      "newTab": true
-    },
-    {
-      "labelKey": "common.home",
-      "path": "/",
-      "icon": "Home",
-      "newTab": true
+      "labelKey": "pprof.title",
+      "path": "/admin/pprof",
+      "icon": "ChartNoAxesCombined"
     }
   ]
 }

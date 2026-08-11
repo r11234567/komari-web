@@ -16,10 +16,11 @@ import {
 import React from "react";
 import { toast } from "sonner";
 import Loading from "@/components/loading";
+import GeneralConnectivitySettings from "./reverse-proxy";
 
 export default function GeneralSettings() {
   const { t } = useTranslation();
-  const { settings, loading, error } = useSettings();
+  const { settings, loading, error, refetch } = useSettings();
   const [geoip_testResult, setGeoipTestResult] = React.useState<string | null>(
     null
   );
@@ -37,7 +38,48 @@ export default function GeneralSettings() {
         {t("settings.general.auto_discovery")}
       </SettingCardLabel>
       <ApiCard settings={settings} />
-      <label className="text-xl font-bold">{t("settings.geoip.title")}</label>
+      <SettingCardLabel>
+        {t("settings.general.integrations", "Agent 兼容")}
+      </SettingCardLabel>
+      <SettingCardSwitch
+        title={t("settings.general.nezha_compat_title", "哪吒 Agent 兼容")}
+        description={t(
+          "settings.general.nezha_compat_description",
+          "允许哪吒 Agent 使用客户端 UUID 和密钥接入 Komari。",
+        )}
+        defaultChecked={settings.nezha_compat_enabled === true}
+        onChange={async (checked) => {
+          await updateSettingsWithToast({ nezha_compat_enabled: checked }, t);
+          await refetch();
+        }}
+      />
+      <SettingCardShortTextInput
+        title={t(
+          "settings.general.nezha_compat_listen",
+          "哪吒兼容服务监听地址",
+        )}
+        description={t(
+          "settings.general.nezha_compat_listen_description",
+          "修改已启用服务的地址会立即重启兼容服务。",
+        )}
+        defaultValue={settings.nezha_compat_listen || "0.0.0.0:5555"}
+        placeholder="0.0.0.0:5555"
+        OnSave={async (value) => {
+          const listen = value.trim();
+          if (!listen || !listen.includes(":")) {
+            toast.error(
+              t(
+                "settings.general.nezha_compat_listen_invalid",
+                "请输入有效的监听地址。",
+              ),
+            );
+            throw new Error("Invalid Nezha compatibility listen address");
+          }
+          await updateSettingsWithToast({ nezha_compat_listen: listen }, t);
+          await refetch();
+        }}
+      />
+      <SettingCardLabel>{t("settings.geoip.title")}</SettingCardLabel>
       <SettingCardSwitch
         title={t("settings.geoip.enable_title")}
         description={t("settings.geoip.enable_description")}
@@ -118,6 +160,7 @@ export default function GeneralSettings() {
           </Flex>
         </Flex>
       </SettingCardCollapse>
+      <GeneralConnectivitySettings />
     </>
   );
 }

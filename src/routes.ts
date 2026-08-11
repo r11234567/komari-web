@@ -33,6 +33,12 @@ export const routes: RouteObject[] = [
     ),
   },
   {
+    path: "/admin/update/1.2.7",
+    element: React.createElement(
+      lazy(() => import("./pages/admin/update_1_2_7")),
+    ),
+  },
+  {
     path: "/install",
     element: React.createElement(lazy(() => import("./pages/install"))),
   },
@@ -122,6 +128,12 @@ export const routes: RouteObject[] = [
             ),
           },
           {
+            path: "dashboard",
+            element: React.createElement(
+              lazy(() => import("./pages/admin/settings/dashboard")),
+            ),
+          },
+          {
             path: "theme",
             element: React.createElement(
               lazy(() => import("./pages/admin/settings/theme"))
@@ -192,12 +204,24 @@ export const routes: RouteObject[] = [
               lazy(() => import("./pages/admin/notification/traffic_report"))
             ),
           },
+          {
+            path: "ping-loss",
+            element: React.createElement(
+              lazy(() => import("./pages/admin/notification/ping_loss")),
+            ),
+          },
         ],
       },
       {
         path: "ping",
         element: React.createElement(
           lazy(() => import("./pages/admin/pingTask"))
+        ),
+      },
+      {
+        path: "return-route",
+        element: React.createElement(
+          lazy(() => import("./pages/admin/returnRoute")),
         ),
       },
       {

@@ -30,6 +30,7 @@ const App = () => {
   const restrictedPath = window.location.pathname.replace(/\/$/, "");
   const isRestrictedGuideRoute = [
     "/admin/database-migration",
+    "/admin/update/1.2.7",
     "/install",
     "/database-recovery",
   ].includes(restrictedPath);

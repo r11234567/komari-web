@@ -1,72 +1,37 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import Pages from "vite-plugin-pages";
 import { visualizer } from "rollup-plugin-visualizer";
 import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
-import type { Plugin, UserConfig } from "vite";
+import type { UserConfig } from "vite";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
-function localKomariThemePlugin(): Plugin {
-  const themeRequestPath = "/themes/default/komari-theme.json";
-  const localThemeFile = path.resolve(__dirname, "komari-theme.json");
-
-  return {
-    name: "local-komari-theme",
-    apply: "serve",
-    enforce: "pre",
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        if (!req.url) return next();
-
-        const url = new URL(req.url, "http://localhost");
-        if (!url.pathname.endsWith(themeRequestPath)) return next();
-
-        fs.readFile(localThemeFile, (err, data) => {
-          if (err) {
-            res.statusCode = 404;
-            res.setHeader("Content-Type", "application/json; charset=utf-8");
-            res.end(
-              JSON.stringify({
-                error: "Local theme file not found",
-                file: localThemeFile,
-              })
-            );
-            return;
-          }
-
-          res.statusCode = 200;
-          res.setHeader("Content-Type", "application/json; charset=utf-8");
-          res.setHeader("Cache-Control", "no-store");
-          res.end(data);
-        });
-      });
-    },
-  };
-}
+const configDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const buildTime = new Date().toISOString();
+  const systemUiBuild = mode !== "development" && process.env.VITE_SYSTEM_UI_BUILD !== "0";
 
-  // Supports configuring BASE_URL via environment variables, defaulting to the root path.
-  const base: string = process.env.VITE_BASE_URL ? process.env.VITE_BASE_URL : '/';
+  // Production builds are embedded into Komari. An explicit opt-out is required
+  // for a standalone root-path build.
+  const base: string = process.env.VITE_BASE_URL
+    ? process.env.VITE_BASE_URL
+    : systemUiBuild
+      ? "/system-assets/"
+      : "/";
   const baseConfig: UserConfig = {
     base: base,
     plugins: [
-      localKomariThemePlugin(),
       react(),
       tailwindcss(),
-      Pages({
-        dirs: "src/pages",
-        extensions: ["tsx", "jsx"],
-      }),
-      VitePWA({
+      ...(systemUiBuild ? [] : [VitePWA({
         registerType: "autoUpdate",
-        includeAssets: ["favicon.ico", "assets/pwa-icon.png"],
+        includeManifestIcons: false,
         manifest: {
           name: "Komari Monitor",
           short_name: "Komari Monitor",
@@ -78,13 +43,13 @@ export default defineConfig(({ mode }) => {
           start_url: base,
           icons: [
             {
-              src: "${base}assets/pwa-icon.png",
+              src: `${base}assets/pwa-icon.png`,
               sizes: "192x192",
               type: "image/png",
               purpose: "maskable any",
             },
             {
-              src: "${base}assets/pwa-icon.png",
+              src: `${base}assets/pwa-icon.png`,
               sizes: "512x512",
               type: "image/png",
               purpose: "maskable any",
@@ -92,11 +57,15 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
-          navigateFallbackDenylist: [
-            /^\/database-recovery(?:\/|$)/,
-            /^\/admin\/(?:database-migration|update\/1\.2\.7|metric-store\/restructure)(?:\/|$)/,
-          ],
+          cleanupOutdatedCaches: true,
+          // HTML is rendered by Komari so it can inject the current site
+          // title and custom Head/Body content. Precaching the build-time
+          // index would bypass that server-side rendering.
+          globPatterns: ["**/*.{js,css,ico,png,svg}"],
+          // The public document is selected by Komari at request time. A
+          // cached SPA fallback would keep serving the previous theme after
+          // an administrator switches themes.
+          navigateFallback: null,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/api\./i,
@@ -114,7 +83,7 @@ export default defineConfig(({ mode }) => {
             },
           ],
         },
-      }),
+      })]),
       visualizer({
         open: false,
         filename: "bundle-analysis.html",
@@ -127,12 +96,12 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: [
-        { find: "@", replacement: path.resolve(__dirname, "./src") },
+        { find: "@", replacement: path.resolve(configDir, "./src") },
         // Force xterm to use the CJS build to avoid a rollup bug where `||=` in
         // xterm.mjs is incorrectly lowered to `void 0||(i={})` with an undeclared `i`,
         // causing `ReferenceError: i is not defined` at requestMode when vi sends DECRQM sequences.
         // Regex to match only the bare specifier, not subpaths like @xterm/xterm/css/xterm.css.
-        { find: /^@xterm\/xterm$/, replacement: path.resolve(__dirname, "node_modules/@xterm/xterm/lib/xterm.js") },
+        { find: /^@xterm\/xterm$/, replacement: path.resolve(configDir, "node_modules/@xterm/xterm/lib/xterm.js") },
       ],
     },
     build: {
@@ -158,21 +127,30 @@ export default defineConfig(({ mode }) => {
         process.env[k] = envConfig[k];
       }
     }
-    if (!process.env.VITE_API_TARGET) {
-      process.env.VITE_API_TARGET = "http://127.0.0.1:25774";
-    }
+    const apiTarget = process.env.VITE_API_TARGET || "http://127.0.0.1:25774";
+    process.env.VITE_API_TARGET = apiTarget;
+    const apiOrigin = new URL(apiTarget).origin;
+    const proxy = {
+      "/api": {
+        target: apiTarget,
+        changeOrigin: true,
+        rewriteWsOrigin: true,
+        ws: true,
+        headers: {
+          Origin: apiOrigin,
+        },
+      },
+      "/themes": {
+        target: apiTarget,
+        changeOrigin: true,
+      },
+    };
     baseConfig.server = {
+      proxy,
+    };
+    baseConfig.preview = {
       proxy: {
-        "/api": {
-          target: process.env.VITE_API_TARGET,
-          changeOrigin: true,
-          rewriteWsOrigin: true,
-          ws: true,
-        },
-        "/themes": {
-          target: process.env.VITE_API_TARGET,
-          changeOrigin: true,
-        },
+        ...proxy,
       },
     };
   }

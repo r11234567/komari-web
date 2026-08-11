@@ -11,6 +11,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { SettingCard, SettingCardLabel } from "@/components/admin/SettingCard";
+import { HistoryExportCard } from "@/components/admin/HistoryExportCard";
 import { formatBytes } from "@/utils/unitHelper";
 
 const pprofProfileNameSchema = z.enum([
@@ -348,6 +349,8 @@ export default function PprofPage() {
           {t("common.refresh")}
         </Button>
       </Flex>
+
+      <HistoryExportCard />
 
       <Callout.Root color="orange" variant="surface">
         <Callout.Icon>
