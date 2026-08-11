@@ -98,10 +98,7 @@ test("keeps the admin navigation in the intended groups", () => {
 
   assert.deepEqual(
     menuConfig.footer.map((item) => item.path),
-    [
-      "/admin/logs",
-      "https://nuomiiiii.github.io/komari-document/",
-    ],
+    ["/admin/logs"],
   );
   assert.equal(allPaths(menuConfig.footer).includes("/admin/about"), false);
 });

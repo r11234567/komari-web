@@ -5,6 +5,8 @@ import {
   useAdminPagination,
 } from "@/components/admin/AdminPagination";
 import { DatabaseMaintenanceCard } from "@/components/admin/DatabaseMaintenanceCard";
+import { DownsamplingCard } from "@/components/admin/DownsamplingCard";
+import { HistoryExportCard } from "@/components/admin/HistoryExportCard";
 import { Selector } from "@/components/Selector";
 import {
   SettingCard,
@@ -313,6 +315,10 @@ export default function MetricsSettings() {
                 SAFE_RAW_RETENTION_DAYS,
               )}
             />
+
+            <DownsamplingCard />
+
+            <HistoryExportCard />
 
             <SettingCardShortTextInput
               title={t("settings.metrics.table_prefix_title")}

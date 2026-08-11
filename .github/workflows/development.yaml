@@ -1,11 +1,10 @@
-name: Development Environment
+name: Validate Main
 
 on:
-  # Temporarily disabled
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -22,7 +21,10 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
 
       - name: Run tests
         run: npm test
@@ -35,29 +37,3 @@ jobs:
         with:
           name: dist
           path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist
-
-      - name: Setup SSH Key
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          
-      - name: Add host to known hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ vars.PRODUCTION_SERVER }} >> ~/.ssh/known_hosts
-
-      - name: Deploy to production server
-        run: |
-          rsync -avz --delete dist/ root@${{ vars.PRODUCTION_SERVER }}:${{ vars.PRODUCTION_DIR }}
