@@ -1,7 +1,6 @@
 import { useNodeList } from "@/contexts/NodeListContext";
 import { requestAdminData } from "@/lib/adminApi";
-import { Input } from "@/components/ui/input";
-import { Button, Flex, Progress, Select, Text } from "@radix-ui/themes";
+import { Button, Flex, Progress, Select, Text, TextField } from "@radix-ui/themes";
 import { Download, FileDown, RotateCcw, X } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -302,7 +301,7 @@ export function HistoryExportCard() {
                 {t("settings.lts_database.export_custom_range", "自定义范围")}
               </Text>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <Input
+                <TextField.Root
                   type="datetime-local"
                   value={customStart}
                   min={minDatetime}
@@ -310,7 +309,7 @@ export function HistoryExportCard() {
                   onChange={(e) => handleCustomStart(e.target.value)}
                   placeholder={t("settings.lts_database.export_custom_start", "开始时间")}
                 />
-                <Input
+                <TextField.Root
                   type="datetime-local"
                   value={customEnd}
                   min={customStart || minDatetime}
