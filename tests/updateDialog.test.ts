@@ -7,18 +7,17 @@ const source = readFileSync(
   "utf8",
 );
 const brandSource = readFileSync(
-  "src/components/KomariLiteBrand.tsx",
+  "src/components/KomariBrand.tsx",
   "utf8",
 );
 const globalStyles = readFileSync("src/global.css", "utf8");
 const appSource = readFileSync("src/main.tsx", "utf8");
 
-test("admin branding keeps Lite smaller and green on desktop and mobile", () => {
-  assert.match(source, /<KomariLiteBrand size=\{isMobile \? "sm" : "md"\} \/>/);
-  assert.match(brandSource, /text-\[var\(--green-9\)\]/);
-  assert.doesNotMatch(brandSource, /bg-\[var\(--green-a3\)\]/);
-  assert.match(brandSource, /lite: "text-\[13px\]"/);
-  assert.match(brandSource, /lite: "text-base"/);
+test("admin branding uses the upstream Komari title on desktop and mobile", () => {
+  assert.match(source, /<KomariBrand size=\{isMobile \? "sm" : "md"\} \/>/);
+  assert.match(brandSource, /aria-label="Komari"/);
+  assert.match(brandSource, />\s*Komari\s*<\/span>/);
+  assert.doesNotMatch(brandSource, /Lite/);
 });
 
 test("the version link is shared by the desktop and mobile sidebar", () => {

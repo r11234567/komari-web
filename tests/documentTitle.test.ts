@@ -6,8 +6,8 @@ const source = readFileSync("src/components/DocumentTitle.tsx", "utf8");
 const mainSource = readFileSync("src/main.tsx", "utf8");
 
 test("admin and public pages use the expected browser titles", () => {
-  assert.match(source, /const ADMIN_TITLE = "Komari Lite Monitor"/);
-  assert.match(source, /const PUBLIC_TITLE = "Komari Lite"/);
+  assert.match(source, /const ADMIN_TITLE = "Komari Monitor"/);
+  assert.match(source, /const PUBLIC_TITLE = "Komari"/);
   assert.match(source, /publicInfo\?\.sitename\?\.trim\(\) \|\| PUBLIC_TITLE/);
   assert.match(source, /pathname\.startsWith\("\/admin\/"\)/);
 });
