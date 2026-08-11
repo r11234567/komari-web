@@ -2,7 +2,7 @@ import React from "react";
 
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { useAccount } from "@/contexts/AccountContext";
+import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import {
   Badge,
   Button,
@@ -13,10 +13,14 @@ import {
 } from "@radix-ui/themes";
 import { Github, Globe, User } from "lucide-react";
 import Loading from "@/components/loading";
-import { SettingCardLabel } from "@/components/admin/SettingCard";
-import { AdminSectionTitle } from "@/components/admin/AdminPageTitle";
 
-const Account = () => <InnerLayout />;
+const Account = () => {
+  return (
+    <AccountProvider>
+      <InnerLayout />
+    </AccountProvider>
+  );
+};
 
 const InnerLayout = () => {
   const { t } = useTranslation();
@@ -173,7 +177,7 @@ const InnerLayout = () => {
           const error = await response.json();
           toast.error(t("account_settings.unbind_sso_failed", { 
             provider: getSSODisplayName(ssoInfo.platform),
-            error: error.message || t("account_settings.unknown_error")
+            error: error.message || t("common.unknownError")
           }));
         }
       } else {
@@ -185,23 +189,23 @@ const InnerLayout = () => {
     }
   };
   return (
-    <Flex gap="4" direction="column" align="stretch">
-      <Flex gap="4" direction="column" className="w-full">
-        <Flex gap="3" direction="column" className="w-full">
-          <AdminSectionTitle>{t("account.title")}</AdminSectionTitle>
-          <p className="text-sm leading-6 text-muted-foreground">
+    <Flex gap="4" direction="column" align="start">
+      <Flex gap="4" direction="row" className="km-page-admin-account p-4" wrap="wrap">
+        <Flex gap="2" direction="column" className="w-full">
+          <label className="text-2xl font-bold">{t("account.title")}</label>
+          <label className="text-lg">
             {t("account.greeting", { username: account?.username })}
-          </p>
+          </label>
           <form
-            className="flex flex-col gap-3 rounded-md border border-[var(--gray-a5)] bg-[var(--color-panel-solid)] p-4"
+            className="km-account-profile-form flex gap-2 flex-col"
             onSubmit={handleSubmitUsernameChange}
           >
-            <label className="text-base font-semibold leading-6" htmlFor="username">
+            <label className="font-bold" htmlFor="username">
               {t("account.change_username_title")}
             </label>
 
             <TextField.Root
-              className="w-full"
+              className="max-w-128"
               id="username"
               name="username"
               defaultValue={account?.username}
@@ -212,38 +216,33 @@ const InnerLayout = () => {
               </Button>
             </div>
           </form>
-          <form
-            onSubmit={changePassword}
-            className="flex flex-col gap-3 rounded-md border border-[var(--gray-a5)] bg-[var(--color-panel-solid)] p-4"
-          >
-            <label className="text-base font-semibold leading-6" htmlFor="old_password">
+          <form onSubmit={changePassword} className="km-account-password-form flex flex-col gap-2">
+            <label className="font-bold" htmlFor="old_password">
               {t("account.change_password_title")}
             </label>
-            <label className="text-sm font-medium" htmlFor="password">
-              {t("account.new_password")}
-            </label>
+            <label htmlFor="password">{t("account.new_password")}</label>
             <TextField.Root
-              className="w-full"
+              className="max-w-128"
               id="password"
               name="password"
               type="password"
             ></TextField.Root>
-            <label className="text-sm font-medium" htmlFor="password_repeat">
+            <label htmlFor="password_repeat">
               {t("account.new_password_repeat")}
             </label>
             <TextField.Root
-              className="w-full"
+              className="max-w-128"
               id="password_repeat"
               name="password_repeat"
               type="password"
             ></TextField.Root>
             {account?.["2fa_enabled"] ? (
               <>
-                <label className="text-sm font-medium" htmlFor="password_2fa">
+                <label htmlFor="password_2fa">
                   {t("account.2fa_otp_input_prompt")}
                 </label>
                 <TextField.Root
-                  className="w-full"
+                  className="max-w-128"
                   id="password_2fa"
                   name="password_2fa"
                   type="number"
@@ -262,19 +261,19 @@ const InnerLayout = () => {
             </div>
           </form>
         </Flex>
-        <Flex direction="column" className="gap-3">
-          <SettingCardLabel>2FA</SettingCardLabel>
+        <Flex direction="column" className="km-account-2fa gap-2">
+          <label className="font-bold text-2xl">2FA</label>
           {account?.["2fa_enabled"] ? (
             <TwoFactorEnabled />
           ) : (
             <TwoFactorDisabled></TwoFactorDisabled>
           )}
-          <SettingCardLabel>
+          <label className="font-bold text-2xl mt-2">
             {t("settings.sso.title")}
-          </SettingCardLabel>
+          </label>
 
           {/* SSO账户绑定/解绑 */}
-          <div className="flex flex-col gap-3 rounded-md border border-[var(--gray-a5)] bg-[var(--color-panel-solid)] p-4">
+          <div className="km-account-sso mb-8 flex flex-col gap-4 ">
             {(() => {
               const ssoInfo = getSSOInfo();
               const platform = ssoInfo?.platform || '';
@@ -283,12 +282,12 @@ const InnerLayout = () => {
               
               return (
                 <>
-                  <label className="flex items-center gap-2 text-base font-semibold leading-6">
+                  <label className="text-xl font-semibold flex items-center gap-2">
                     {ssoInfo?.isBound ? icon : <User className="size-5" />}
-                    {ssoInfo?.isBound ? `${displayName}账户` : t("account_settings.sso_account")}
+                    {ssoInfo?.isBound ? t("account_settings.sso_account_bound", { name: displayName }) : t("account_settings.sso_account")}
                   </label>
-                  <div className="rounded-md bg-[var(--gray-a2)] p-3 text-sm">
-                    <div>
+                  <div className="p-4 bg-[var(--accent-2)] rounded-lg">
+                    <p>
                       {ssoInfo?.isBound ? (
                         <div className="flex items-center gap-2">
                           <Badge color="green">
@@ -299,12 +298,12 @@ const InnerLayout = () => {
                       ) : (
                         <div className="flex items-center gap-2">
                           <Badge color="gray">
-                            {t("account_settings.sso_unbound")}
+                            {t("account_settings.sso_not_bound")}
                           </Badge>
                           {t("account_settings.sso_not_bound")}
                         </div>
                       )}
-                    </div>
+                    </p>
                   </div>
                   <div>
                     {ssoInfo?.isBound ? (
@@ -322,7 +321,7 @@ const InnerLayout = () => {
                           <Flex gap="2" justify="end" className="mt-4">
                             <Dialog.Close>
                               <Button variant="soft">
-                                {t("account_settings.cancel")}
+                                {t("common.cancel")}
                               </Button>
                             </Dialog.Close>
                             <Button color="red" onClick={handleSSOAuth}>
@@ -409,18 +408,12 @@ const TwoFactorDisabled = () => {
   };
 
   return (
-    <Flex
-      direction="column"
-      gap="3"
-      className="rounded-md border border-[var(--gray-a5)] bg-[var(--color-panel-solid)] p-4"
-    >
-      <label className="text-base font-semibold leading-6">
-        {t("account.2fa_disabled")}
-      </label>
+    <Flex direction="column" gap="2" className="km-account-2fa-enable">
+      <label className="text-lg font-bold">{t("account.2fa_disabled")}</label>
       <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
         <Dialog.Trigger>
           <div>
-            <Button className="w-full sm:w-auto">{t("account.enable_2fa")}</Button>
+            <Button className="w-full">{t("account.enable_2fa")}</Button>
           </div>
         </Dialog.Trigger>
         <Dialog.Content>
@@ -435,7 +428,7 @@ const TwoFactorDisabled = () => {
               )}
             </div>
             <label>{t("account.2fa_otp_input_prompt")}</label>
-            <form className="flex flex-col gap-2" onSubmit={handleEnable2fa}>
+            <form className="km-account-2fa-form flex flex-col gap-2" onSubmit={handleEnable2fa}>
               <TextField.Root
                 type="number"
                 name="code"
@@ -490,18 +483,12 @@ const TwoFactorEnabled = () => {
       });
   };
   return (
-    <Flex
-      direction="column"
-      gap="3"
-      className="rounded-md border border-[var(--gray-a5)] bg-[var(--color-panel-solid)] p-4"
-    >
-      <label className="text-base font-semibold leading-6">
-        {t("account.2fa_enabled")}
-      </label>
+    <Flex direction="column" gap="2" className="km-account-2fa-disable">
+      <label>{t("account.2fa_enabled")}</label>
       <div>
         <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
           <Dialog.Trigger>
-            <Button color="red">
+            <Button className="ml-2" color="red">
               {t("account.disable_2fa")}
             </Button>
           </Dialog.Trigger>

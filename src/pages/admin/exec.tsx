@@ -7,20 +7,14 @@ import {
     Card,
     Flex,
     Text,
+    Separator,
     Badge,
-    Popover,
     TextField
 } from "@radix-ui/themes";
-import { Play, AlertCircle, CheckCircle2, ChevronDown, Copy, Clock } from "lucide-react";
+import { Play, AlertCircle, CheckCircle2, Copy, Clock } from "lucide-react";
 import { toast } from "sonner";
-import RemoteExecNodeSelector from "@/components/remote/RemoteExecNodeSelector";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
+import NodeSelector from "@/components/NodeSelector";
 import { SettingCardCollapse } from "@/components/admin/SettingCard";
-import { useAccount } from "@/contexts/AccountContext";
-import {
-    AdminPagination,
-    useAdminPagination,
-} from "@/components/admin/AdminPagination";
 
 interface TaskResult {
     task_id: string;
@@ -63,7 +57,8 @@ const COMMAND_EDITOR_LINE_HEIGHT_VAR = "--command-editor-line-height";
 const COMMAND_EDITOR_VERTICAL_PADDING_VAR = "--command-editor-vertical-padding";
 const COMMAND_EDITOR_COLLAPSED_HEIGHT = `calc(${COMMAND_EDITOR_COLLAPSED_LINES} * var(${COMMAND_EDITOR_LINE_HEIGHT_VAR}) + var(${COMMAND_EDITOR_VERTICAL_PADDING_VAR}))`;
 const COMMAND_EDITOR_LINE_NUMBER_LIMIT = 500;
-const SELECTED_NODE_PREVIEW_LIMIT = 15;
+// 客户端标记“执行超时”的内部结果（避免在 UI 中展示硬编码中文）
+const TIMEOUT_RESULT_MARKER = "__komari_exec_timeout__";
 
 const parsePixelValue = (value: string) => {
     const parsedValue = Number.parseFloat(value);
@@ -98,7 +93,6 @@ const ExecPage = () => {
 const ExecContent = () => {
     const { t } = useTranslation();
     const { nodeDetail, isLoading, error } = useNodeDetails();
-    const { account } = useAccount();
     const [command, setCommand] = useState("");
     const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
     const [executing, setExecuting] = useState(false);
@@ -107,15 +101,8 @@ const ExecContent = () => {
     const [polling, setPolling] = useState(false);
     const [commandFocused, setCommandFocused] = useState(false);
     const [commandEditorHeight, setCommandEditorHeight] = useState(COMMAND_EDITOR_COLLAPSED_HEIGHT);
+    const [twoFaEnabled, setTwoFaEnabled] = useState(false);
     const [twoFaCode, setTwoFaCode] = useState("");
-    const twoFaEnabled = Boolean(account?.["2fa_enabled"]);
-    const {
-        page: resultPage,
-        setPage: setResultPage,
-        pageItems: pagedResults,
-        pageSize: resultPageSize,
-        setPageSize: setResultPageSize,
-    } = useAdminPagination(results);
 
     // 使用 useRef 来保存轮询相关的引用
     const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -177,6 +164,17 @@ const ExecContent = () => {
         return () => {
             clearPolling();
         };
+    }, []);
+
+    useEffect(() => {
+        fetch("/api/me")
+            .then((response) => response.json())
+            .then((data) => {
+                setTwoFaEnabled(Boolean(data?.["2fa_enabled"]));
+            })
+            .catch(() => {
+                setTwoFaEnabled(false);
+            });
     }, []);
 
     useLayoutEffect(() => {
@@ -266,7 +264,7 @@ const ExecContent = () => {
             setResults(prevResults =>
                 prevResults.map(result =>
                     result.finished_at === null
-                        ? { ...result, finished_at: new Date().toISOString(), exit_code: -1, result: "执行超时" }
+                        ? { ...result, finished_at: new Date().toISOString(), exit_code: -1, result: TIMEOUT_RESULT_MARKER }
                         : result
                 )
             );
@@ -333,7 +331,7 @@ const ExecContent = () => {
                 throw new Error(data.message);
             }
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "未知错误";
+            const errorMessage = err instanceof Error ? err.message : t("common.unknownError");
             toast.error(errorMessage);
         } finally {
             setExecuting(false);
@@ -356,18 +354,22 @@ const ExecContent = () => {
         toast.success(t("common.success"));
     };
 
-    const selectedNodeNames = selectedNodes.map(uuid => {
-        const node = nodeDetail.find(n => n.uuid === uuid);
-        return node ? node.name : uuid;
-    });
-    const selectedNodePreview = selectedNodeNames.slice(0, SELECTED_NODE_PREVIEW_LIMIT);
-    const hiddenSelectedNodeCount = selectedNodeNames.length - selectedNodePreview.length;
+    const getSelectedNodeNames = () => {
+        return selectedNodes.map(uuid => {
+            const node = nodeDetail.find(n => n.uuid === uuid);
+            return node ? node.name : uuid;
+        }).join(", ");
+    };
+
+    // 超时标记结果展示为本地化文案
+    const displayResultText = (result: TaskResult) =>
+        result.result === TIMEOUT_RESULT_MARKER ? t("exec.status.timeout") : result.result;
 
     const getTaskStatus = (result: TaskResult) => {
         if (result.finished_at === null) {
             return { status: "running", color: "blue" as const, text: t("exec.status.running") };
         }
-        if (result.result === "执行超时") {
+        if (result.result === TIMEOUT_RESULT_MARKER) {
             return { status: "timeout", color: "orange" as const, text: t("exec.status.timeout", "超时") };
         }
         if (result.exit_code === 0) {
@@ -377,27 +379,33 @@ const ExecContent = () => {
     };
 
     return (
-        <div className="flex flex-col gap-4 p-0 md:p-4">
-            <AdminPageTitle description={t("exec.description")}>
-                {t("exec.title")}
-            </AdminPageTitle>
+        <div className="km-page-admin-exec km-exec-header p-4 flex flex-col gap-3">
+            {/* 页面标题 */}
+            <div>
+                <h1 className="text-2xl font-bold">{t("exec.title")}</h1>
+                <Text size="2" color="gray" className="mt-1">
+                    {t("exec.description")}
+                </Text>
+            </div>
+
+            <Separator size="4" />
 
             {/* 命令输入区域 */}
-            <section>
+            <Card className="km-exec-editor-card p-6">
                 <Flex direction="column" gap="4">
 
-                    <label htmlFor={COMMAND_EDITOR_ID} className="text-base font-semibold leading-6">
+                    <label htmlFor={COMMAND_EDITOR_ID} className="text-xl font-bold">
                         {t("exec.command")}
                     </label>
                     <div
                         ref={commandEditorRef}
-                        className="grid grid-cols-[3.75rem_minmax(0,1fr)] overflow-hidden rounded-md border border-[var(--gray-a7)] bg-[var(--color-panel-solid)] transition-[height,border-color,box-shadow] duration-200 focus-within:border-[var(--accent-8)] focus-within:shadow-[0_0_0_1px_var(--accent-8)]"
+                        className="grid grid-cols-[3.75rem_minmax(0,1fr)] overflow-hidden rounded-md border border-[var(--gray-a7)] bg-[var(--color-surface)] transition-[height,border-color,box-shadow] duration-200 focus-within:border-[var(--accent-8)] focus-within:shadow-[0_0_0_1px_var(--accent-8)]"
                         style={commandEditorStyle}
                     >
                         <div
                             ref={commandLineGutterRef}
                             aria-hidden="true"
-                            className="select-none overflow-hidden border-r border-[var(--gray-a5)] bg-[var(--gray-2)] px-2 text-right font-mono text-xs text-[var(--gray-11)] [line-height:var(--command-editor-line-height)] [padding-bottom:calc(var(--command-editor-vertical-padding)/2)] [padding-top:calc(var(--command-editor-vertical-padding)/2)]"
+                            className="km-exec-editor-gutter select-none overflow-hidden border-r border-[var(--gray-a5)] bg-[var(--gray-2)] px-2 text-right font-mono text-xs text-[var(--gray-11)] [line-height:var(--command-editor-line-height)] [padding-bottom:calc(var(--command-editor-vertical-padding)/2)] [padding-top:calc(var(--command-editor-vertical-padding)/2)]"
                         >
                             {commandLineLabels.map((label, index) => (
                                 <div
@@ -425,7 +433,7 @@ const ExecContent = () => {
                             rows={COMMAND_EDITOR_COLLAPSED_LINES}
                             wrap="soft"
                             spellCheck={false}
-                            className="h-full w-full resize-none border-0 bg-transparent px-3 font-mono text-sm text-[var(--gray-12)] outline-none placeholder:text-[var(--gray-9)] [line-height:var(--command-editor-line-height)] [padding-bottom:calc(var(--command-editor-vertical-padding)/2)] [padding-top:calc(var(--command-editor-vertical-padding)/2)]"
+                            className="km-exec-editor-input h-full w-full resize-none border-0 bg-transparent px-3 font-mono text-sm text-[var(--gray-12)] outline-none placeholder:text-[var(--gray-9)] [line-height:var(--command-editor-line-height)] [padding-bottom:calc(var(--command-editor-vertical-padding)/2)] [padding-top:calc(var(--command-editor-vertical-padding)/2)]"
                             style={{
                                 maxHeight: commandFocused ? "60vh" : COMMAND_EDITOR_COLLAPSED_HEIGHT,
                                 overflowY: commandFocused ? "auto" : "hidden",
@@ -438,66 +446,30 @@ const ExecContent = () => {
 
                     <div>
                         <SettingCardCollapse title={t("exec.selectNodes")} defaultOpen>
-                            <RemoteExecNodeSelector
-                                nodes={nodeDetail}
+                            <NodeSelector
                                 value={selectedNodes}
                                 onChange={setSelectedNodes}
+                                className="min-h-[200px]"
                             />
                         </SettingCardCollapse>
                         {selectedNodes.length > 0 && (
-                            <Flex align="center" gap="2" wrap="wrap" className="mt-2">
-                                <Text size="2" color="gray">
-                                    {t("exec.selectedNodes", "已选择节点")}
-                                </Text>
-                                {selectedNodePreview.map((name, index) => (
-                                    <Badge key={`${selectedNodes[index]}-${name}`} variant="soft">
-                                        {name}
-                                    </Badge>
-                                ))}
-                                {hiddenSelectedNodeCount > 0 && (
-                                    <Popover.Root>
-                                        <Popover.Trigger>
-                                            <Button size="1" variant="soft" className="tabular-nums">
-                                                +{hiddenSelectedNodeCount}
-                                                <ChevronDown size={13} />
-                                            </Button>
-                                        </Popover.Trigger>
-                                        <Popover.Content
-                                            align="end"
-                                            sideOffset={6}
-                                            className="max-h-72 w-[min(22rem,calc(100vw-2rem))] overflow-y-auto p-3"
-                                        >
-                                            <Text as="div" size="2" weight="medium" className="mb-2">
-                                                {t("exec.selectedNodes", "已选择节点")}
-                                            </Text>
-                                            <Flex gap="1" wrap="wrap">
-                                                {selectedNodeNames.map((name, index) => (
-                                                    <Badge key={`${selectedNodes[index]}-${name}`} color="gray" variant="soft">
-                                                        {name}
-                                                    </Badge>
-                                                ))}
-                                            </Flex>
-                                        </Popover.Content>
-                                    </Popover.Root>
-                                )}
-                            </Flex>
+                            <Text size="2" color="gray" className="mt-2">
+                                {t("exec.selectedNodes", "已选择节点")}: {getSelectedNodeNames()}
+                            </Text>
                         )}
                     </div>
 
-                    <Flex justify="end" gap="2" className="flex-col sm:flex-row">
-                        <TextField.Root
-                            className="w-full sm:w-64"
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            maxLength={6}
-                            aria-label={t("admin.nodeTable.twoFactorCode")}
-                            placeholder={t("admin.nodeTable.twoFactorCode")}
-                            value={twoFaCode}
-                            onChange={(e) => setTwoFaCode((e.target as HTMLInputElement).value.replace(/\D/g, "").slice(0, 6))}
-                        />
+                    <Flex justify="end" gap="2">
+                        {twoFaEnabled ? (
+                            <TextField.Root
+                                className="w-32"
+                                type="number"
+                                placeholder="2FA"
+                                value={twoFaCode}
+                                onChange={(e) => setTwoFaCode((e.target as HTMLInputElement).value)}
+                            />
+                        ) : null}
                         <Button
-                            className="w-full sm:w-auto"
                             onClick={executeCommand}
                             disabled={executing || !command.trim() || selectedNodes.length === 0 || (twoFaEnabled && !twoFaCode.trim())}
                         >
@@ -515,16 +487,16 @@ const ExecContent = () => {
                         </Button>
                     </Flex>
                 </Flex>
-            </section>
+            </Card>
 
             {/* 执行结果区域 */}
             {results.length > 0 && (
-                <section className="space-y-4">
+                <Card className="km-exec-output p-6">
                     <Flex direction="column" gap="4">
-                        <Flex justify="between" align="start" gap="2" wrap="wrap">
-                            <h2 className="text-base font-semibold leading-6 text-foreground">
+                        <Flex justify="between" align="center">
+                            <Text size="4" weight="medium">
                                 {t("exec.results", "执行结果")}
-                            </h2>
+                            </Text>
                             {taskId && (
                                 <Text size="2" color="gray">
                                     Task ID: {taskId}
@@ -533,13 +505,13 @@ const ExecContent = () => {
                         </Flex>
 
                         <div className="space-y-4">
-                            {pagedResults.map((result) => {
+                            {results.map((result) => {
                                 const status = getTaskStatus(result);
                                 return (
                                     <Card key={result.client} className="p-4">
                                         <Flex direction="column" gap="3">
                                             {/* 节点信息和状态 */}
-                                            <label className="text-base font-semibold leading-6">
+                                            <label className="text-xl font-medium">
                                                 {nodeDetail.find(n => n.uuid === result.client)?.name || result.client}
                                             </label>
                                             <Flex justify="between" align="center">
@@ -582,7 +554,9 @@ const ExecContent = () => {
                                                     <Button
                                                         variant="ghost"
                                                         size="1"
-                                                        onClick={() => copyOutput(result.result)}
+                                                        onClick={() => copyOutput(displayResultText(result))}
+                                                        title={t("common.copy", "Copy")}
+                                                        aria-label={t("common.copy", "Copy")}
                                                     >
                                                         <Copy size={14} />
                                                     </Button>
@@ -604,7 +578,7 @@ const ExecContent = () => {
                                             {/* 输出内容 */}
                                             {result.result && (
                                                 <div className="bg-[var(--gray-2)] rounded-md p-3 font-mono text-sm overflow-x-auto">
-                                                    <pre className="whitespace-pre-wrap">{result.result}</pre>
+                                                    <pre className="whitespace-pre-wrap">{displayResultText(result)}</pre>
                                                 </div>
                                             )}
                                         </Flex>
@@ -613,21 +587,13 @@ const ExecContent = () => {
                             })}
                         </div>
 
-                        <AdminPagination
-                            page={resultPage}
-                            total={results.length}
-                            pageSize={resultPageSize}
-                            onPageChange={setResultPage}
-                            onPageSizeChange={setResultPageSize}
-                        />
-
                         {/* 轮询状态提示 */}
                         {polling && (
                             <Flex align="center" justify="between" className="text-sm text-gray-500">
                                 <Flex align="center" gap="2">
                                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent" />
                                     <Text size="2" color="gray">
-                                        正在获取最新执行状态...
+                                        {t("exec.status.polling")}
                                     </Text>
                                 </Flex>
                                 <Button
@@ -635,12 +601,12 @@ const ExecContent = () => {
                                     size="1"
                                     onClick={clearPolling}
                                 >
-                                    停止轮询
+                                    {t("exec.stopPolling")}
                                 </Button>
                             </Flex>
                         )}
                     </Flex>
-                </section>
+                </Card>
             )}
         </div>
     );

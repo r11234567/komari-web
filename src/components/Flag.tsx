@@ -1,12 +1,10 @@
 import * as React from "react";
 import { Box } from "@radix-ui/themes";
-import { getRegionCode } from "@/utils/regionHelper";
-import { getAppAssetUrl } from "@/utils/assetUrl";
+import { useTranslation } from "react-i18next";
 
 interface FlagProps {
-  flag?: string | null; // 地区代码 (例如 "SG", "US") 或旗帜 emoji (例如 "🇸🇬", "🇺🇳")
+  flag: string; // 地区代码 (例如 "SG", "US") 或旗帜 emoji (例如 "🇸🇬", "🇺🇳")
   size?: string; // 可选的尺寸 prop，用于未来扩展
-  compact?: boolean;
 }
 
 /**
@@ -15,10 +13,10 @@ interface FlagProps {
  * @param emoji 输入的 emoji 字符串
  * @returns 转换后的两字母国家代码（例如 "SG"），如果不是有效的旗帜 emoji 则返回 null。
  */
-const getCountryCodeFromFlagEmoji = (emoji?: string | null): string | null => {
+const getCountryCodeFromFlagEmoji = (emoji: string): string | null => {
   // 使用 Array.from() 来正确处理 Unicode 代理对，将 emoji 字符串拆分为逻辑上的字符数组。
   // 对于一个国家旗帜 emoji，chars 数组的长度将是 2 (每个元素是一个区域指示符字符)。
-  const chars = Array.from(emoji ?? "");
+  const chars = Array.from(emoji);
 
   // 国家旗帜 emoji 应该由且仅由两个区域指示符字符组成
   if (chars.length !== 2) {
@@ -47,24 +45,43 @@ const getCountryCodeFromFlagEmoji = (emoji?: string | null): string | null => {
   return null;
 };
 
-const Flag = React.memo(({ flag, size, compact = false }: FlagProps) => {
-  const resolvedFlagFileName = getCountryCodeFromFlagEmoji(flag) ?? getRegionCode(flag);
-  const imgSrc = getAppAssetUrl(`assets/flags/${resolvedFlagFileName}.svg`);
-  const altText = `地区旗帜: ${resolvedFlagFileName}`;
+const Flag = React.memo(({ flag, size }: FlagProps) => {
+  let imgSrc: string;
+  let altText: string;
+  let resolvedFlagFileName: string; // 最终用于构建文件名的字符串 (例如 "SG", "UN")
+
+  // 1. **算法处理：** 尝试将输入作为由区域指示符组成的旗帜 emoji 进行转换
+  const countryCodeFromEmoji = getCountryCodeFromFlagEmoji(flag);
+
+  if (countryCodeFromEmoji) {
+    resolvedFlagFileName = countryCodeFromEmoji; // 例如，如果输入是 "🇸🇬"，则这里得到 "SG"
+  }
+  // 2. **直接识别：** 如果不是区域指示符 emoji，检查是否是两字母的字母组合（ISO 国家代码）
+  else if (flag && flag.length === 2 && /^[a-zA-Z]{2}$/.test(flag)) {
+    resolvedFlagFileName = flag.toUpperCase(); // 例如，如果输入是 "us"，则这里得到 "US"
+  }
+  // 3. **硬编码处理特殊 Emoji：** 对于无法通过算法转换的特殊 emoji（例如 🇺🇳, 🌐），
+  //    因为它们不符合区域指示符模式，且不使用映射表，只能通过硬编码来识别。
+  else if (flag === "🇺🇳" || flag === "🌐") {
+    resolvedFlagFileName = "UN"; // 例如，如果输入是 "🇺🇳"，则这里得到 "UN"
+  }
+  // 4. **回退：** 对于任何其他无法识别的输入（包括不符合上述规则的 emoji 或非两字母代码），
+  //    使用默认的 "UN" 旗帜作为回退。
+  else {
+    resolvedFlagFileName = "UN";
+  }
+
+  // 构建本地图片路径
+  imgSrc = `/assets/flags/${resolvedFlagFileName}.svg`;
+  // 构建 alt 文本和 aria-label
+  const { t } = useTranslation();
+  altText = t("common.region_flag_alt", { name: resolvedFlagFileName });
 
   return (
     <Box
       as="span"
-      className={
-        compact
-          ? "shrink-0 self-center"
-          : `m-2 self-center ${size ? `w-${size} h-${size}` : "w-6 h-6"}`
-      }
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        ...(compact ? { width: 20, height: 15 } : {}),
-      }}
+      className={`km-flag m-2 self-center ${size ? `w-${size} h-${size}` : "w-6 h-6"}`}
+      style={{ display: "inline-flex", alignItems: "center" }}
       aria-label={altText}
     >
       <img

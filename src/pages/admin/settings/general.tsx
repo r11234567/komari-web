@@ -15,22 +15,16 @@ import {
 } from "@/components/admin/SettingCard";
 import React from "react";
 import { toast } from "sonner";
-import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
-import {
-  ADMIN_LIST_PAGE_SIZE_MAX,
-  ADMIN_LIST_PAGE_SIZE_MIN,
-  isValidAdminPageSize,
-} from "@/utils/adminPagination";
+import Loading from "@/components/loading";
 
 export default function GeneralSettings() {
   const { t } = useTranslation();
-  const { settings, loading, error, refetch } = useSettings();
+  const { settings, loading, error } = useSettings();
   const [geoip_testResult, setGeoipTestResult] = React.useState<string | null>(
     null
   );
   if (loading) {
-    return <SettingsPageSkeleton />;
+    return <Loading text="creeper?" />;
   }
 
   if (error) {
@@ -39,100 +33,11 @@ export default function GeneralSettings() {
 
   return (
     <>
-      <AdminPageTitle
-        description={t(
-          "settings.general.page_description",
-          "配置自动发现、GeoIP 与其他全局行为。",
-        )}
-      >
-        {t("settings.general.title")}
-      </AdminPageTitle>
-      <SettingCardLabel>
-        {t("settings.general.admin_default_page_size")}
-      </SettingCardLabel>
-      <SettingCardShortTextInput
-        description={t("settings.general.admin_default_page_size_description")}
-        defaultValue={settings.admin_default_page_size || 10}
-        type="number"
-        min={ADMIN_LIST_PAGE_SIZE_MIN}
-        max={ADMIN_LIST_PAGE_SIZE_MAX}
-        step={1}
-        OnSave={async (data) => {
-          const pageSize = Number(data);
-          if (!isValidAdminPageSize(pageSize)) {
-            toast.error(
-              t("settings.general.admin_default_page_size_invalid", {
-                min: ADMIN_LIST_PAGE_SIZE_MIN,
-                max: ADMIN_LIST_PAGE_SIZE_MAX,
-              }),
-            );
-            throw new Error("Invalid admin default page size");
-          }
-          await updateSettingsWithToast(
-            { admin_default_page_size: pageSize },
-            t,
-          );
-          await refetch();
-        }}
-      />
-      <SettingCardLabel>
-        {t("settings.general.interface_motion")}
-      </SettingCardLabel>
-      <SettingCardSwitch
-        title={t("settings.general.reduce_motion")}
-        description={t("settings.general.reduce_motion_description")}
-        defaultChecked={Boolean(settings.reduce_motion)}
-        onChange={async (checked) => {
-          await updateSettingsWithToast({ reduce_motion: checked }, t);
-          await refetch();
-        }}
-      />
       <SettingCardLabel>
         {t("settings.general.auto_discovery")}
       </SettingCardLabel>
       <ApiCard settings={settings} />
-      <SettingCardLabel>
-        {t("settings.general.integrations", "服务集成")}
-      </SettingCardLabel>
-      <SettingCardSwitch
-        title={t("settings.general.nezha_compat_title", "哪吒 Agent 兼容")}
-        description={t(
-          "settings.general.nezha_compat_description",
-          "允许哪吒 Agent 使用客户端 UUID 和密钥接入 Komari。",
-        )}
-        defaultChecked={settings.nezha_compat_enabled === true}
-        onChange={async (checked) => {
-          await updateSettingsWithToast({ nezha_compat_enabled: checked }, t);
-          await refetch();
-        }}
-      />
-      <SettingCardShortTextInput
-        title={t(
-          "settings.general.nezha_compat_listen",
-          "哪吒兼容服务监听地址",
-        )}
-        description={t(
-          "settings.general.nezha_compat_listen_description",
-          "修改已启用服务的地址会立即重启兼容服务。",
-        )}
-        defaultValue={settings.nezha_compat_listen || "0.0.0.0:5555"}
-        placeholder="0.0.0.0:5555"
-        OnSave={async (value) => {
-          const listen = value.trim();
-          if (!listen || !listen.includes(":")) {
-            toast.error(
-              t(
-                "settings.general.nezha_compat_listen_invalid",
-                "请输入有效的监听地址。",
-              ),
-            );
-            throw new Error("Invalid Nezha compatibility listen address");
-          }
-          await updateSettingsWithToast({ nezha_compat_listen: listen }, t);
-          await refetch();
-        }}
-      />
-      <SettingCardLabel>{t("settings.geoip.title")}</SettingCardLabel>
+      <label className="text-xl font-bold">{t("settings.geoip.title")}</label>
       <SettingCardSwitch
         title={t("settings.geoip.enable_title")}
         description={t("settings.geoip.enable_description")}
@@ -140,6 +45,7 @@ export default function GeneralSettings() {
         onChange={async (checked) => {
           await updateSettingsWithToast({ geo_ip_enabled: checked }, t);
         }}
+        className="km-page-admin-settings-general km-setting-card"
       />
       <SettingCardSelect
         title={t("settings.geoip.provider_title")}
@@ -171,6 +77,7 @@ export default function GeneralSettings() {
             );
           }
         }}
+        className="km-setting-card"
       >
         {t("common.update")}
       </SettingCardButton>
@@ -274,7 +181,7 @@ const ApiCard = ({ settings }: { settings: SettingsResponse }) => {
           color="mint"
           onClick={() => {
             window.open(
-              "https://nuomiiiii.github.io/komari-document/install/agent-ad",
+              "https://komari-document.pages.dev/install/agent-ad.html",
               "_blank"
             );
           }}

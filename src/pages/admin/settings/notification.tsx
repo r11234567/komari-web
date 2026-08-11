@@ -3,15 +3,14 @@ import { Text } from "@radix-ui/themes";
 import { updateSettingsWithToast, useSettings } from "@/lib/api";
 import {
   SettingCardButton,
+  SettingCardLabel,
   SettingCardLongTextInput,
   SettingCardSelect,
   SettingCardSwitch,
 } from "@/components/admin/SettingCard";
 import { toast } from "sonner";
 import Loading from "@/components/loading";
-import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
 import React from "react";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
 import { renderProviderInputs } from "@/utils/renderProviders";
 import { SquareArrowOutUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -98,7 +97,7 @@ const NotificationSettings = () => {
     setMessageLoading(false);
   };
   if (loading || (!messageLoading && messageList.length === 0 && !messageError)) {
-    return <SettingsPageSkeleton />;
+    return <Loading />;
   }
   if (error) {
     return <Text color="red">{error}</Text>;
@@ -109,14 +108,7 @@ const NotificationSettings = () => {
 
   return (
     <>
-      <AdminPageTitle
-        description={t(
-          "settings.notification.page_description",
-          "配置通知渠道、连接参数与消息模板。",
-        )}
-      >
-        {t("settings.notification.title")}
-      </AdminPageTitle>
+      <SettingCardLabel>{t("settings.notification.title")}</SettingCardLabel>
       <SettingCardSwitch
         title={t("settings.notification.enable")}
         description={t("settings.notification.enable_description")}
@@ -124,6 +116,7 @@ const NotificationSettings = () => {
         onChange={async (checked) => {
           await updateSettingsWithToast({ notification_enabled: checked }, t);
         }}
+        className="km-page-admin-settings-notification km-setting-card"
       />
       <SettingCardLongTextInput
         title={t("settings.notification.template")}
@@ -184,8 +177,9 @@ const NotificationSettings = () => {
             );
           }
         }}
+        className="km-setting-card"
       >
-        {t("settings.notification.test_title")}
+        GO
       </SettingCardButton>
       <label className="text-muted-foreground text-sm flex flex-row items-center gap-1">
         {t("settings.notification.moved")}

@@ -17,7 +17,7 @@ import "./i18n/config";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { Suspense } from "react";
 import { useRoutes } from "react-router-dom";
-import { preloadAdminEntry, preloadAdminRoutes, routes } from "./routes";
+import { routes } from "./routes";
 import Loading from "./components/loading";
 import { PublicInfoProvider } from "./contexts/PublicInfoContext";
 import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
@@ -26,59 +26,13 @@ import { OfflineIndicator } from "./components/OfflineIndicator";
 import { Toaster } from "./components/ui/sonner";
 import { RPC2Provider } from "./contexts/RPC2Context";
 import { NodeListProvider } from "./contexts/NodeListContext";
-import { AccountProvider } from "./contexts/AccountContext";
-import { useAccount } from "./contexts/AccountContext";
-import FullPageLoading from "./components/FullPageLoading";
-import DocumentTitle from "./components/DocumentTitle";
-import AccountPreferenceSync from "./components/AccountPreferenceSync";
-
-const AdminRoutePreloader = () => {
-  const { account } = useAccount();
-
-  React.useEffect(() => {
-    if (!account?.logged_in) return;
-
-    let idleHandle: number | undefined;
-    let fallbackHandle: number | undefined;
-    const preloadWhenIdle = () => {
-      if ("requestIdleCallback" in window) {
-        idleHandle = window.requestIdleCallback(() => void preloadAdminRoutes(), {
-          timeout: 2000,
-        });
-        return;
-      }
-      fallbackHandle = Number(globalThis.setTimeout(() => void preloadAdminRoutes(), 800));
-    };
-
-    if (document.readyState === "complete") {
-      preloadWhenIdle();
-    } else {
-      window.addEventListener("load", preloadWhenIdle, { once: true });
-    }
-
-    return () => {
-      window.removeEventListener("load", preloadWhenIdle);
-      if (idleHandle !== undefined) window.cancelIdleCallback(idleHandle);
-      if (fallbackHandle !== undefined) globalThis.clearTimeout(fallbackHandle);
-    };
-  }, [account?.logged_in]);
-
-  return null;
-};
-
 const App = () => {
-	const currentPath = window.location.pathname.replace(/\/$/, "");
-	const isAdminRoute = currentPath === "/admin" || currentPath.startsWith("/admin/");
-	const isUpgradeRoute =
-		currentPath === "/admin/update/1.2.7" ||
-		currentPath === "/admin/update/storage-v4";
-	const isRestrictedGuideRoute =
-		isUpgradeRoute ||
-		currentPath === "/install" ||
-		currentPath === "/database-recovery";
-	if (isAdminRoute) {
-		preloadAdminEntry();
-	}
+  const restrictedPath = window.location.pathname.replace(/\/$/, "");
+  const isRestrictedGuideRoute = [
+    "/admin/database-migration",
+    "/install",
+    "/database-recovery",
+  ].includes(restrictedPath);
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tempKey = params.get("temp_key");
@@ -121,47 +75,39 @@ const App = () => {
   );
   const routing = useRoutes(routes);
   return (
-    <ThemeContext.Provider value={themeContextValue}>
-      <Theme
+    <Suspense fallback={<Loading />}>
+      <ThemeContext.Provider value={themeContextValue}>
+        <Theme
           appearance={resolvedAppearance}
           accentColor={color}
           scaling="110%"
           className="theme-root"
           style={{
             backgroundColor: "transparent",
-            minHeight: "var(--app-viewport-height, 100vh)",
+            minHeight: "100vh",
           }}
         >
-		{isRestrictedGuideRoute ? (
-		  <PublicInfoProvider>
-			<DocumentTitle />
-			<Toaster />
-			<Suspense fallback={<Loading />}>{routing}</Suspense>
-		  </PublicInfoProvider>
-		) : (
-		  <AccountProvider>
-			<AccountPreferenceSync />
-			<AdminRoutePreloader />
-			<RPC2Provider>
-			  <PublicInfoProvider>
-				<DocumentTitle />
-				<NodeListProvider>
-				  <Toaster />
-				  <OfflineIndicator />
-				  <Suspense
-					fallback={isAdminRoute ? <FullPageLoading /> : <Loading />}
-				  >
-					{routing}
-				  </Suspense>
-				  <PWAInstallPrompt />
-				  <PWAUpdatePrompt />
-				</NodeListProvider>
-			  </PublicInfoProvider>
-			</RPC2Provider>
-		  </AccountProvider>
-		)}
-      </Theme>
-    </ThemeContext.Provider>
+          {isRestrictedGuideRoute ? (
+            <>
+              <Toaster />
+              {routing}
+            </>
+          ) : (
+            <RPC2Provider>
+              <PublicInfoProvider>
+                <NodeListProvider>
+                  <Toaster />
+                  <OfflineIndicator />
+                  {routing}
+                  <PWAInstallPrompt />
+                  <PWAUpdatePrompt />
+                </NodeListProvider>
+              </PublicInfoProvider>
+            </RPC2Provider>
+          )}
+        </Theme>
+      </ThemeContext.Provider>
+    </Suspense>
   );
 };
 

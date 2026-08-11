@@ -10,8 +10,7 @@ import {
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { useReduceMotionPreference } from "@/lib/api";
+import { AnimatePresence, motion } from "framer-motion"; // 引入 Framer Motion
 
 interface SettingCardProps {
   title?: string | React.ReactNode;
@@ -49,12 +48,12 @@ export function SettingCard({
       style={{ borderColor: "var(--gray-a5)" }}
       className={
         bordless
-          ? `min-w-0 max-w-full border-0 ${className}`
-          : `min-h-8 min-w-0 max-w-full rounded-md border-1 bg-[var(--color-panel-solid)] px-4 py-2 ${className}`
+          ? "km-setting-card border-0"
+          : "km-setting-card border-1 rounded-md py-2 px-4 bg-transparent  min-h-8 " + className
       }
     >
       <Flex
-        className="setting-card-header w-full min-w-0 max-w-full gap-3"
+        className="w-full"
         direction="row"
         justify="between"
         align="center"
@@ -64,26 +63,19 @@ export function SettingCard({
         <Flex
           direction="column"
           gap="1"
-          className="min-h-10 min-w-0 flex-1"
+          className="min-h-10"
           justify={"center"}
         >
-          <label
-            className="min-w-0 break-words text-base font-medium [overflow-wrap:anywhere]"
-            style={{ fontWeight: 600 }}
-          >
+          <label className="text-base font-medium" style={{ fontWeight: 600 }}>
             {title}
           </label>
           {description && (
-            <label className="min-w-0 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
+            <label className="text-sm text-muted-foreground">
               {description}
             </label>
           )}
         </Flex>
-        {actionChild ? (
-          <div className="setting-card-action min-w-0 shrink-0">
-            {actionChild}
-          </div>
-        ) : null}
+        {actionChild}
       </Flex>
       {otherChildren}
     </Flex>
@@ -143,13 +135,8 @@ export function SettingCardSwitch({
   return (
     <SettingCard {...props} direction="column">
       <SettingCard.Action>
-        <Flex
-          direction="row"
-          gap="2"
-          align="center"
-          className="shrink-0 whitespace-nowrap"
-        >
-          <label className="whitespace-nowrap">{label}</label>
+        <Flex direction="row" gap="2" align="center">
+          <label>{label}</label>
           <Switch
             ref={switchRef}
             checked={checked}
@@ -244,6 +231,7 @@ export function SettingCardIconButton({
               onClick={handleClick}
               variant={variant}
               disabled={disabled}
+              aria-label={resolvedLabel || undefined}
             >
               {children}
             </IconButton>
@@ -340,7 +328,7 @@ export function SettingCardShortTextInput({
   const currentValue = value !== undefined ? normalizedValue : internalValue;
   const inputRef = React.useRef<HTMLInputElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const resolvedLabel = label || t("save");
+  const resolvedLabel = label || t("common.save");
 
   // 当外部value改变时，同步内部状态
   React.useEffect(() => {
@@ -532,7 +520,7 @@ export function SettingCardLongTextInput({
   const [value, setValue] = React.useState(defaultValue);
   const textAreaRef = React.useRef<HTMLTextAreaElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const resolvedLabel = label || t("save");
+  const resolvedLabel = label || t("common.save");
 
   React.useEffect(() => {
     setValue(defaultValue);
@@ -652,7 +640,7 @@ export function SettingCardSelect({
     value !== undefined ? value : defaultValue
   );
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const resolvedLabel = label || t("select");
+  const resolvedLabel = label || t("common.select");
 
   React.useEffect(() => {
     if (value !== undefined) {
@@ -742,7 +730,7 @@ export function SettingCardLabel({
   children: React.ReactNode | null;
 }) {
   return (
-    <label className="text-base font-semibold leading-6 text-foreground">
+    <label className="text-xl font-bold" style={{ fontWeight: 600 }}>
       {children}
     </label>
   );
@@ -762,7 +750,6 @@ export function SettingCardCollapse({
   bordless?: boolean;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
-  const reduceMotion = useReduceMotionPreference();
 
   return (
     <SettingCard
@@ -779,13 +766,9 @@ export function SettingCardCollapse({
           aria-controls="collapsible-content"
         >
           <motion.div
-            initial={reduceMotion ? false : { rotate: 0, scale: 1 }}
+            initial={{ rotate: 0, scale: 1 }}
             animate={{ rotate: open ? 180 : 0, scale: open ? 1.1 : 1 }}
-            transition={
-              reduceMotion
-                ? { duration: 0 }
-                : { duration: 0.25, ease: [0.4, 0, 0.2, 1] }
-            }
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
           >
             <ChevronDownIcon />
           </motion.div>
@@ -795,15 +778,11 @@ export function SettingCardCollapse({
         {open && (
           <motion.div
             className="w-full p-0 md:p-1" // Ensures the content takes full width
-            layout={!reduceMotion}
-            initial={reduceMotion ? false : { height: 0, opacity: 0, y: -10 }}
+            layout // Smoothly handles height changes
+            initial={{ height: 0, opacity: 0, y: -10 }}
             animate={{ height: "auto", opacity: 1, y: 0 }}
             exit={{ height: 0, opacity: 0, y: -10 }}
-            transition={
-              reduceMotion
-                ? { duration: 0 }
-                : { duration: 0.25, ease: [0.4, 0, 0.2, 1] }
-            }
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             style={{ overflow: "hidden" }} // Prevents content clipping during animation
             id="collapsible-content"
           >

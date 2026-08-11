@@ -1,15 +1,12 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { TextField } from "@radix-ui/themes";
-import { ChevronDown } from "lucide-react";
 
 type Primitive = string | number;
-const FLOATING_CONTENT_EXIT_MS = 140;
 
 export type SelectOption<T extends Primitive = string> = {
   label: string;
   value: T;
-  icon?: React.ReactNode;
   disabled?: boolean;
 };
 
@@ -110,60 +107,23 @@ export function SelectOrInput<T extends Primitive = string>(
     defaultValue ?? ""
   );
   const inputValue = isControlled ? (value as string) : innerValue;
-  const selectedOption = React.useMemo(
-    () => normalizedOptions.find((option) => getValue(option) === inputValue),
-    [getValue, inputValue, normalizedOptions],
-  );
 
   const [open, setOpen] = React.useState(false);
-  const [listMounted, setListMounted] = React.useState(false);
-  const [showAllOptions, setShowAllOptions] = React.useState(false);
   const [highlightIndex, setHighlightIndex] = React.useState<number>(-1);
-  const closeTimerRef = React.useRef<number | null>(null);
-
-  const openList = React.useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    setListMounted(true);
-    setOpen(true);
-  }, []);
-
-  const closeList = React.useCallback(() => {
-    setOpen(false);
-    setShowAllOptions(false);
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-    }
-    closeTimerRef.current = window.setTimeout(() => {
-      setListMounted(false);
-      closeTimerRef.current = null;
-    }, FLOATING_CONTENT_EXIT_MS);
-  }, []);
-
-  React.useEffect(
-    () => () => {
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
-      }
-    },
-    [],
-  );
 
   const allowCustom = (allowCustomInput ?? true) === true;
 
   const filtered = React.useMemo(() => {
     const text = (inputValue ?? "").trim().toLowerCase();
     const base = normalizedOptions;
-    if (showAllOptions || !text) return base;
+    if (!text) return base;
     if (filter) return base.filter((o) => filter(o, inputValue));
     return base.filter((o) => {
       const lbl = getLabel(o).toLowerCase();
       const val = getValue(o).toLowerCase();
       return lbl.includes(text) || val.includes(text);
     });
-  }, [normalizedOptions, inputValue, filter, getLabel, getValue, showAllOptions]);
+  }, [normalizedOptions, inputValue, filter, getLabel, getValue]);
 
   const commit = React.useCallback(
     (next: string, option?: SelectOption<T>) => {
@@ -188,23 +148,21 @@ export function SelectOrInput<T extends Primitive = string>(
       if (!opt || opt.disabled) return;
       const v = getValue(opt);
       commit(v, opt);
-      closeList();
+      setOpen(false);
     },
-    [closeList, displayed, getValue, commit]
+    [displayed, getValue, commit]
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     if (!isControlled) setInnerValue(v);
     onChange?.(v);
-    setShowAllOptions(false);
-    if (!open) openList();
+    if (!open) setOpen(true);
     setHighlightIndex(0);
   };
 
   const handleFocus: React.FocusEventHandler<HTMLInputElement> = (e) => {
-    setShowAllOptions(false);
-    openList();
+    setOpen(true);
     onFocus?.(e);
   };
 
@@ -216,8 +174,7 @@ export function SelectOrInput<T extends Primitive = string>(
   const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     onKeyDown?.(e);
     if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-      setShowAllOptions(true);
-      openList();
+      setOpen(true);
       e.preventDefault();
       return;
     }
@@ -236,25 +193,12 @@ export function SelectOrInput<T extends Primitive = string>(
         selectAt(highlightIndex);
       } else if (allowCustom) {
         commit(inputValue);
-        closeList();
+        setOpen(false);
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
-      closeList();
+      setOpen(false);
     }
-  };
-
-  const toggleAllOptions = () => {
-    if (open && showAllOptions) {
-      closeList();
-      return;
-    }
-    const selectedIndex = normalizedOptions.findIndex(
-      (option) => getValue(option) === inputValue,
-    );
-    setShowAllOptions(true);
-    setHighlightIndex(selectedIndex >= 0 ? selectedIndex : 0);
-    openList();
   };
 
   // Scroll highlighted into view
@@ -274,21 +218,22 @@ export function SelectOrInput<T extends Primitive = string>(
       const target = ev.target as Node | null;
       if (!containerRef.current) return;
       if (target && containerRef.current.contains(target)) return;
-      closeList();
+      setOpen(false);
     };
     document.addEventListener("mousedown", onDocDown, { capture: true });
     return () =>
       document.removeEventListener("mousedown", onDocDown, {
         capture: true,
       } as any);
-  }, [closeList, open]);
+  }, [open]);
 
   // Build ARIA ids
   const listId = React.useId();
 
   return (
-    <div ref={containerRef} className={cn("relative", className)}>
+    <div ref={containerRef} className={cn("km-ui-select-or-input relative", className)}>
       <TextField.Root
+        className="km-ui-select"
         //role="combobox"
         //aria-controls={open ? listId : undefined}
         aria-expanded={open}
@@ -304,36 +249,11 @@ export function SelectOrInput<T extends Primitive = string>(
         name={name}
         //autoComplete="off"
         //{...inputProps}
-      >
-        {selectedOption?.icon ? (
-          <TextField.Slot>{selectedOption.icon}</TextField.Slot>
-        ) : null}
-        <TextField.Slot side="right" className="pr-1">
-          <button
-            type="button"
-            aria-label="Show all options"
-            aria-expanded={open && showAllOptions}
-            disabled={disabled}
-            className="flex size-7 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={toggleAllOptions}
-          >
-            <ChevronDown
-              size={16}
-              className={cn(
-                "transition-transform duration-150",
-                open && showAllOptions && "rotate-180",
-              )}
-            />
-          </button>
-        </TextField.Slot>
-      </TextField.Root>
-      {listMounted && (
+      />
+      {open && (
         <div
-          data-side="bottom"
-          data-state={open ? "open" : "closed"}
           className={cn(
-            "admin-select-or-input-content absolute left-0 right-0 z-50 mt-1 rounded-md border bg-accent-1 text-popover-foreground shadow-md data-[state=closed]:pointer-events-none data-[state=closed]:opacity-0",
+            "absolute left-0 right-0 z-50 mt-1 rounded-md border bg-accent-1 text-popover-foreground shadow-md",
             "max-h-60 overflow-auto",
             listClassName
           )}
@@ -361,10 +281,10 @@ export function SelectOrInput<T extends Primitive = string>(
                     aria-selected={isActive}
                     data-disabled={isDisabled || undefined}
                     className={cn(
-                      "flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm font-normal outline-hidden transition-colors duration-150",
+                      "flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden font-semibold",
                       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
                       isActive
-                        ? "bg-accent-9 text-[var(--accent-contrast)]"
+                        ? "bg-accent-10 text-accent-foreground"
                         : "hover:bg-accent hover:text-accent-foreground",
                       optionClassName
                     )}
@@ -375,7 +295,6 @@ export function SelectOrInput<T extends Primitive = string>(
                     }}
                     onClick={() => selectAt(idx)}
                   >
-                    {opt.icon}
                     {getLabel(opt)}
                   </li>
                 );

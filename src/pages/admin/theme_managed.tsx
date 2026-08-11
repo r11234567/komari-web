@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Flex, Callout, Button } from "@radix-ui/themes";
+import { Flex, Heading, Callout, Button } from "@radix-ui/themes";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
-import ThemeConfigTabs from "@/components/admin/ThemeConfigTabs";
+import ConfigFormTabs from "@/components/admin/ConfigFormTabs";
 import { toast } from "sonner";
 import Loading from "@/components/loading";
 import { useTranslation } from "react-i18next";
@@ -11,13 +11,18 @@ import {
   THEME_CONFIGURATION_MANAGED,
   type ThemeConfiguration,
 } from "@/utils/themeConfiguration";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
-import type { ThemeConfigTabField } from "@/utils/themeConfigTabs";
 
-type ThemeFieldBase = ThemeConfigTabField;
+interface ThemeFieldBase {
+  name?: I18nText; // 显示名（字符串或多语言字典）
+  help?: I18nText; // 帮助文本（字符串或多语言字典）
+  type: "title" | "switch" | "select" | "number" | "string" | "richtext";
+  key?: string; // 对应设置键（title 无需）
+  default?: any; // 默认值
+  options?: string; // 仅 select 支持，逗号分隔
+  required?: boolean;
+}
 
 interface ThemeConfigResponse {
-  name?: I18nText;
   configuration?: ThemeConfiguration;
   [k: string]: any;
 }
@@ -37,7 +42,6 @@ const ThemeManaged: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [fields, setFields] = useState<ThemeFieldBase[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
-  const [themeDisplayName, setThemeDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [firstLoading, setFirstLoading] = useState(true);
 
@@ -47,7 +51,6 @@ const ThemeManaged: React.FC = () => {
       if (!theme) {
         setFields([]);
         setValues({});
-        setThemeDisplayName("");
         return;
       }
       setLoading(true);
@@ -59,10 +62,6 @@ const ThemeManaged: React.FC = () => {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data: ThemeConfigResponse = await resp.json();
         const configuration = data.configuration;
-        setThemeDisplayName(
-          resolveI18nText(data.name, currentLanguage) ||
-            (theme === "default" ? "" : theme),
-        );
         if (
           getThemeConfigurationType(configuration) !==
             THEME_CONFIGURATION_MANAGED ||
@@ -72,7 +71,7 @@ const ThemeManaged: React.FC = () => {
           setValues({});
           return;
         }
-        const ds = configuration.data as ThemeFieldBase[];
+        const ds = configuration.data;
         setFields(ds);
         // 初始值：优先 publicInfo.theme_settings，其次 default
         const init: Record<string, any> = {};
@@ -93,7 +92,7 @@ const ThemeManaged: React.FC = () => {
       }
     }
     load();
-  }, [currentLanguage, theme, themeSettings, t]);
+  }, [theme, themeSettings, t]);
 
   const handleValueChange = (key: string, val: any) => {
     setValues((v) => ({ ...v, [key]: val }));
@@ -149,22 +148,8 @@ const ThemeManaged: React.FC = () => {
     <Flex
       direction="column"
       gap="4"
-      className="km-page-admin-theme-managed p-0 md:p-4"
+      className="km-page-admin-theme-managed h-full min-h-0 p-2 md:p-4"
     >
-      <Flex justify="between" align="center" gap="3" wrap="wrap">
-        <AdminPageTitle description={t("theme.manage_description", "调整当前主题提供的显示和功能选项。")}> 
-          {theme
-            ? t("theme.manage_with_name", {
-                name: themeDisplayName,
-              })
-            : t("theme.manage")}
-        </AdminPageTitle>
-        {fields.length > 0 && (
-          <Button onClick={saveAll} disabled={saving}>
-            {t("common.save")}
-          </Button>
-        )}
-      </Flex>
       {error && (
         <Callout.Root color="red">
           <Callout.Text>{error}</Callout.Text>
@@ -176,20 +161,44 @@ const ThemeManaged: React.FC = () => {
           <Callout.Text>{t("theme.no_config")}</Callout.Text>
         </Callout.Root>
       )}
-      {fields.length > 0 && (
-        <ThemeConfigTabs
-          fields={fields}
+      {fields.length > 0 ? (
+        <ConfigFormTabs
+          items={fields}
           values={values}
           onValueChange={handleValueChange}
-          resolveText={(value) => resolveI18nText(value, currentLanguage)}
+          resolveText={(v) => resolveI18nText(v, currentLanguage)}
+          className="km-admin-theme-managed-config min-h-0 flex-1"
+          formClassName="km-theme-managed-form"
+          header={
+            <Flex justify="between" align="center" wrap="wrap" gap="3">
+              <Heading size="4">
+                {theme
+                  ? t("theme.manage_with_name", {
+                      name: theme === "default" ? "" : theme,
+                    })
+                  : t("theme.title")}
+              </Heading>
+              <Button onClick={saveAll} disabled={saving}>
+                {t("common.save")}
+              </Button>
+            </Flex>
+          }
           footer={
-            <Flex>
+            <Flex className="mt-4">
               <Button onClick={saveAll} disabled={saving}>
                 {t("common.save")}
               </Button>
             </Flex>
           }
         />
+      ) : (
+        <Heading size="4">
+          {theme
+            ? t("theme.manage_with_name", {
+                name: theme === "default" ? "" : theme,
+              })
+            : t("theme.title")}
+        </Heading>
       )}
     </Flex>
   );

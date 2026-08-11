@@ -3,7 +3,6 @@ import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { resources } from "../i18n/config";
 import { writeLanguageCookie } from "@/utils/language";
-import { useOptionalAccount } from "@/contexts/AccountContext";
 interface LanguageSwitch {
   icon?: ReactNode;
 }
@@ -15,9 +14,14 @@ const languages: { code: string; name: string }[] = Object.entries(resources)
     name: (res as any).name as string,
   })).sort((a, b) => a.code.localeCompare(b.code));
 
-const LanguageSwitch = ({
-  icon = (
-    <IconButton variant="soft">
+const LanguageSwitch = ({ icon }: LanguageSwitch = {}) => {
+  const { i18n, t } = useTranslation();
+  const trigger = icon ?? (
+    <IconButton
+      variant="soft"
+      title={t("common.language", "Language")}
+      aria-label={t("common.language", "Language")}
+    >
       <svg xmlns="http://www.w3.org/2000/svg" width="50%" viewBox="0 0 24 24">
         <g fill="none">
           <path
@@ -27,27 +31,17 @@ const LanguageSwitch = ({
         </g>
       </svg>
     </IconButton>
-  ),
-}: LanguageSwitch = {}) => {
-  const { i18n } = useTranslation();
-  const accountContext = useOptionalAccount();
+  );
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger>{icon}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger className="km-language-switch">{trigger}</DropdownMenu.Trigger>
       <DropdownMenu.Content>
         {languages.map((lang) => (
           <DropdownMenu.Item
             key={lang.code}
             onClick={() => {
-              void i18n.changeLanguage(lang.code);
+              i18n.changeLanguage(lang.code);
               writeLanguageCookie(lang.code);
-              if (accountContext?.account?.logged_in) {
-                void accountContext
-                  .updatePreferences({ language: lang.code })
-                  .catch((error) => {
-                    console.warn("Failed to save language preference:", error);
-                  });
-              }
             }}
           >
             {lang.name} ({lang.code.slice(0, 2)})

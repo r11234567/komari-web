@@ -8,11 +8,9 @@ import { updateSettingsWithToast, useSettings } from "@/lib/api";
 import { Button, Text } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
-import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
 import React from "react";
 import { renderProviderInputs } from "@/utils/renderProviders";
 import { toast } from "sonner";
-import { AdminSectionTitle } from "@/components/admin/AdminPageTitle";
 
 export default function SignOnSettings() {
   const { t } = useTranslation();
@@ -99,7 +97,7 @@ export default function SignOnSettings() {
   // 渲染 provider 的输入项已抽象到 utils/renderProviders.tsx 中
 
   if (loading || (!providerLoading && providerList.length === 0 && !providerError)) {
-    return <SettingsPageSkeleton />;
+    return <Loading />;
   }
   if (error) {
     return <Text color="red">{error}</Text>;
@@ -110,13 +108,14 @@ export default function SignOnSettings() {
 
   return (
     <>
-      <AdminSectionTitle>{t("settings.sign_on.title")}</AdminSectionTitle>
+      <SettingCardLabel>{t("settings.sign_on.title")}</SettingCardLabel>
       <SettingCardSwitch
         title={t("settings.sign_on.disable_password")}
         defaultChecked={settings.disable_password_login}
         onChange={async (checked) => {
           await updateSettingsWithToast({ disable_password_login: checked }, t);
         }}
+        className="km-page-admin-settings-sign-on km-setting-card"
       />
       <SettingCardLabel>{t("settings.sso.title")}</SettingCardLabel>
       <SettingCardSwitch
@@ -126,6 +125,7 @@ export default function SignOnSettings() {
         onChange={async (checked) => {
           await updateSettingsWithToast({ o_auth_enabled: checked }, t);
         }}
+        className="km-setting-card"
       />
       <SettingCardSelect
         title={String(t("settings.sso.provider"))}

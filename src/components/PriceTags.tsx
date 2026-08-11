@@ -1,18 +1,17 @@
 import { Badge, Flex } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
-import { currencyForDisplay } from "@/lib/currency";
 
 const PriceTags = ({
   price = 0,
   billing_cycle = 30,
   currency = "￥",
-  expired_at,
+  expired_at = Date.now() + 30 * 24 * 60 * 60 * 1000,
   tags = "",
   ip4 = "",
   ip6 = "",
   ...props
 }: {
-  expired_at?: string | number | null;
+  expired_at?: string | number;
   price?: number;
   billing_cycle?: number;
   currency?: string;
@@ -24,26 +23,14 @@ const PriceTags = ({
 
   if (price == 0) {
     return (
-      <Flex gap="1" {...props} wrap="wrap">
+      <Flex gap="1" {...props} wrap="wrap" className="km-price-tags">
         <CustomTags tags={tags} />
       </Flex>
     );
   }
 
-  const expirationDays = (() => {
-    if (expired_at === null || expired_at === undefined || expired_at === "") {
-      return null;
-    }
-    const timestamp = new Date(expired_at).getTime();
-    if (!Number.isFinite(timestamp)) return null;
-    return Math.ceil((timestamp - Date.now()) / (1000 * 60 * 60 * 24));
-  })();
-  const displayPrice = Number.isInteger(price)
-    ? String(price)
-    : price.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-
   return (
-    <Flex gap="1" {...props} wrap="wrap">
+    <Flex gap="1" {...props} wrap="wrap" className="km-price-tags">
       {ip4 && (
         <Badge size="1" variant="soft" className="text-sm" color="green">
           <label className="flex justify-center items-center gap-1 text-xs">
@@ -64,7 +51,7 @@ const PriceTags = ({
 
       <Badge color="iris" size="1" variant="soft" className="text-sm">
         <label className="text-xs">
-          {price == -1 ? t("common.free") : `${currencyForDisplay(currency)}${displayPrice}`}/
+          {price == -1 ? t("common.free") : `${currency}${price}`}/
           {(() => {
             if (billing_cycle >= 27 && billing_cycle <= 32) {
               return t("common.monthly");
@@ -90,11 +77,14 @@ const PriceTags = ({
       </Badge>
       <Badge
         color={(() => {
-          if (expirationDays === null) {
-            return "green";
-          } else if (expirationDays <= 7) {
+          const expiredDate = new Date(expired_at);
+          const now = new Date();
+          const diffTime = expiredDate.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          if (diffDays <= 0 || diffDays <= 7) {
             return "red";
-          } else if (expirationDays <= 15) {
+          } else if (diffDays <= 15) {
             return "orange";
           } else {
             return "green";
@@ -106,13 +96,19 @@ const PriceTags = ({
       >
         <label className="text-xs">
           {(() => {
-            if (expirationDays === null || expirationDays > 36500) {
-              return t("common.long_term");
-            } else if (expirationDays <= 0) {
+            const expiredDate = new Date(expired_at);
+            const now = new Date();
+            const diffTime = expiredDate.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 0) {
               return t("common.expired");
+            } else if (diffDays > 36500) {
+              // 100 years approximately
+              return t("common.long_term");
             } else {
               return t("common.expired_in", {
-                days: expirationDays,
+                days: diffDays,
               });
             }
           })()}

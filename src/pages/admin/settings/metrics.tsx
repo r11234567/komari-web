@@ -1,18 +1,11 @@
-import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
-import {
-  AdminPagination,
-  useAdminPagination,
-} from "@/components/admin/AdminPagination";
-import { DatabaseMaintenanceCard } from "@/components/admin/DatabaseMaintenanceCard";
-import { DownsamplingCard } from "@/components/admin/DownsamplingCard";
-import { HistoryExportCard } from "@/components/admin/HistoryExportCard";
+import Loading from "@/components/loading";
 import { Selector } from "@/components/Selector";
 import {
   SettingCard,
   SettingCardLabel,
   SettingCardShortTextInput,
 } from "@/components/admin/SettingCard";
+import { DatabaseMaintenanceCard } from "@/components/admin/DatabaseMaintenanceCard";
 import {
   Table,
   TableBody,
@@ -32,18 +25,16 @@ import {
   Dialog,
   Flex,
   Progress,
-  Tabs,
   Text,
   TextField,
 } from "@radix-ui/themes";
 import {
   AlertTriangle,
   Database,
-  HardDrive,
-  Info,
   ListChecks,
   RefreshCw,
   Save,
+  Timer,
   X,
 } from "lucide-react";
 import React from "react";
@@ -85,6 +76,19 @@ type MetricRetentionChange = {
 };
 
 const SAFE_RAW_RETENTION_DAYS = 1;
+
+const DEFAULT_ROLLUP_RETENTION = {
+  minute: 600,
+  fiveMinute: 3000,
+  hour: 600,
+};
+
+const ROLLUP_RETENTION_KEYS = {
+  minute: "metric_rollup_minute_retention_minutes",
+  fiveMinute: "metric_rollup_five_minute_retention_minutes",
+  hour: "metric_rollup_hour_retention_hours",
+} as const;
+
 type MetricTextField = "name" | "description";
 type TranslationFunction = ReturnType<typeof useTranslation>["t"];
 
@@ -95,43 +99,6 @@ function toNumber(value: unknown, fallback: number): number {
   const n =
     typeof value === "number" ? value : parseInt(String(value ?? ""), 10);
   return Number.isFinite(n) ? n : fallback;
-}
-
-type MetricDatabaseDriver = "sqlite" | "mysql" | "postgresql";
-
-function resolveMetricDatabaseDriver(
-  settings: SettingsResponse,
-): MetricDatabaseDriver {
-  const dsn = String(settings.metric_db_dsn ?? "").trim().toLowerCase();
-  if (
-    dsn.startsWith("postgres://") ||
-    dsn.startsWith("postgresql://") ||
-    dsn.includes("dbname=") ||
-    (dsn.includes("host=") && dsn.includes("user="))
-  ) {
-    return "postgresql";
-  }
-  if (
-    dsn.startsWith("mysql://") ||
-    dsn.includes("@tcp(") ||
-    dsn.includes("@unix(") ||
-    dsn.includes("@/")
-  ) {
-    return "mysql";
-  }
-  if (
-    !dsn ||
-    dsn === ":memory:" ||
-    dsn.startsWith("file:") ||
-    /\.(db|sqlite|sqlite3)(\?|$)/.test(dsn)
-  ) {
-    return "sqlite";
-  }
-
-  const configured = String(settings.metric_db_driver ?? "").toLowerCase();
-  return configured === "mysql" || configured === "postgresql"
-    ? configured
-    : "sqlite";
 }
 
 function isI18nTextDict(value: unknown): value is Record<string, string> {
@@ -207,14 +174,13 @@ export default function MetricsSettings() {
   const { t } = useTranslation();
   const { settings, loading, error, updateMultipleSettings } = useSettings();
   const [saveError, setSaveError] = React.useState<string | null>(null);
-  const [activeTab, setActiveTab] = React.useState<
-    "overview" | "monitoring" | "migration"
-  >("overview");
-
   const saveMetricSettings = React.useCallback(
     async (changes: Partial<SettingsResponse>) => {
       try {
-        await updateMultipleSettings(changes);
+        const restart = await updateMultipleSettings(changes);
+        if (restart) {
+          return;
+        }
         toast.success(t("settings.settings_saved"));
         setSaveError(null);
       } catch (e) {
@@ -226,10 +192,8 @@ export default function MetricsSettings() {
     [t, updateMultipleSettings],
   );
 
-  const metricDatabaseDriver = resolveMetricDatabaseDriver(settings);
-
   if (loading) {
-    return <SettingsPageSkeleton />;
+    return <Loading />;
   }
 
   if (error) {
@@ -237,166 +201,301 @@ export default function MetricsSettings() {
   }
 
   return (
-    <Flex direction="column" gap="3">
-      <AdminPageTitle
-        description={t(
-          "settings.storage.page_description",
-          "查看数据库占用并管理监控数据、迁移和维护。",
+    <Flex direction="column" gap="3" className="km-page-admin-settings-metrics">
+      <SettingCardLabel>{t("settings.metrics.title")}</SettingCardLabel>
+      <DatabaseMaintenanceCard />
+
+      {/*<Callout.Root color="blue" variant="surface">
+        <Callout.Icon>
+          <Info size={16} />
+        </Callout.Icon>
+        <Callout.Text>{t("settings.metrics.intro")}</Callout.Text>
+      </Callout.Root>*/}
+
+      {saveError && (
+        <Callout.Root color="red" variant="surface">
+          <Callout.Icon>
+            <AlertTriangle size={16} />
+          </Callout.Icon>
+          <Callout.Text>{saveError}</Callout.Text>
+        </Callout.Root>
+      )}
+
+      <SettingCardShortTextInput
+        title={t("settings.metrics.dsn_title")}
+        description={t("settings.metrics.dsn_description")}
+        descriptionPlacement="footer"
+        defaultValue={String(settings.metric_db_dsn || "")}
+        placeholder={DSN_PLACEHOLDER}
+        OnSave={async (value) => {
+          await saveMetricSettings({ metric_db_dsn: value.trim() });
+        }}
+      />
+
+      <SettingCardLabel>
+        {t("settings.metrics.advanced_title")}
+      </SettingCardLabel>
+
+      <MetricRollupRetentionCard
+        settings={settings}
+        onSave={saveMetricSettings}
+      />
+
+      <MetricRetentionTable
+        defaultRetentionDays={toNumber(
+          settings.metric_retention_days,
+          SAFE_RAW_RETENTION_DAYS,
         )}
-      >
-        {t("settings.storage.title")}
-      </AdminPageTitle>
+      />
 
-      <Tabs.Root
-        value={activeTab}
-        onValueChange={(value) =>
-          setActiveTab(value as "overview" | "monitoring" | "migration")
-        }
-      >
-        <div className="w-full overflow-x-auto pb-1">
-          <Tabs.List className="w-max min-w-full">
-            <Tabs.Trigger
-              value="overview"
-              className="min-w-[7.5rem] flex-1"
-            >
-              <HardDrive size={15} />
-              {t("settings.storage.overview")}
-            </Tabs.Trigger>
-            <Tabs.Trigger
-              value="monitoring"
-              className="min-w-[7.5rem] flex-1"
-            >
-              <ListChecks size={15} />
-              {t("settings.storage.monitoring_data")}
-            </Tabs.Trigger>
-            <Tabs.Trigger
-              value="migration"
-              className="min-w-[7.5rem] flex-1"
-            >
-              <RefreshCw size={15} />
-              {t("settings.storage.migration_maintenance")}
-            </Tabs.Trigger>
-          </Tabs.List>
-        </div>
+      <SettingCardShortTextInput
+        title={t("settings.metrics.table_prefix_title")}
+        description={t("settings.metrics.table_prefix_description")}
+        descriptionPlacement="footer"
+        defaultValue={String(settings.metric_table_prefix || "metric_")}
+        placeholder="metric_"
+        OnSave={async (value) => {
+          await saveMetricSettings({
+            metric_table_prefix: value.trim() || "metric_",
+          });
+        }}
+      />
 
-        <Tabs.Content value="overview" className="pt-3">
-          {activeTab === "overview" ? <DatabaseMaintenanceCard /> : null}
-        </Tabs.Content>
+      <SettingCardShortTextInput
+        title={t("settings.metrics.max_open_conns_title")}
+        description={t("settings.metrics.max_open_conns_description")}
+        descriptionPlacement="footer"
+        type="number"
+        defaultValue={String(toNumber(settings.metric_max_open_conns, 25))}
+        placeholder="25"
+        OnSave={async (value) => {
+          const n = parseInt(value, 10);
+          if (isNaN(n) || n <= 0) {
+            toast.error(t("settings.metrics.conns_invalid"));
+            return;
+          }
+          await saveMetricSettings({ metric_max_open_conns: n });
+        }}
+      />
 
-        <Tabs.Content value="monitoring" className="pt-3">
-          <Flex direction="column" gap="3">
-            {saveError && (
-              <Callout.Root color="red" variant="surface">
-                <Callout.Icon>
-                  <AlertTriangle size={16} />
-                </Callout.Icon>
-                <Callout.Text>{saveError}</Callout.Text>
-              </Callout.Root>
-            )}
+      <SettingCardShortTextInput
+        title={t("settings.metrics.max_idle_conns_title")}
+        description={t("settings.metrics.max_idle_conns_description")}
+        descriptionPlacement="footer"
+        type="number"
+        defaultValue={String(toNumber(settings.metric_max_idle_conns, 5))}
+        placeholder="5"
+        OnSave={async (value) => {
+          const n = parseInt(value, 10);
+          if (isNaN(n) || n < 0) {
+            toast.error(t("settings.metrics.conns_invalid"));
+            return;
+          }
+          await saveMetricSettings({ metric_max_idle_conns: n });
+        }}
+      />
 
-            <SettingCardShortTextInput
-              title={t("settings.metrics.dsn_title")}
-              description={t("settings.metrics.dsn_description")}
-              descriptionPlacement="footer"
-              defaultValue={String(settings.metric_db_dsn || "")}
-              placeholder={DSN_PLACEHOLDER}
-              OnSave={async (value) => {
-                await saveMetricSettings({ metric_db_dsn: value.trim() });
-              }}
-            />
+      {/*<Callout.Root color="green" variant="surface">
+        <Callout.Icon>
+          <Info size={16} />
+        </Callout.Icon>
+        <Callout.Text>{t("settings.metrics.restart_hint")}</Callout.Text>
+      </Callout.Root>*/}
 
-            <SettingCardLabel>
-              {t("settings.metrics.advanced_title")}
-            </SettingCardLabel>
+      <SettingCardLabel>
+        {t("settings.metrics.migration_title")}
+      </SettingCardLabel>
+      <MigrationCard />
 
-            <MetricRetentionTable
-              defaultRetentionDays={toNumber(
-                settings.metric_retention_days,
-                SAFE_RAW_RETENTION_DAYS,
-              )}
-            />
-
-            <DownsamplingCard />
-
-            <HistoryExportCard />
-
-            <SettingCardShortTextInput
-              title={t("settings.metrics.table_prefix_title")}
-              description={t("settings.metrics.table_prefix_description")}
-              descriptionPlacement="footer"
-              defaultValue={String(settings.metric_table_prefix || "metric_")}
-              placeholder="metric_"
-              OnSave={async (value) => {
-                await saveMetricSettings({
-                  metric_table_prefix: value.trim() || "metric_",
-                });
-              }}
-            />
-
-            {metricDatabaseDriver === "sqlite" ? (
-              <Callout.Root color="blue" variant="surface">
-                <Callout.Icon>
-                  <Info size={16} />
-                </Callout.Icon>
-                <Callout.Text>
-                  {t("settings.metrics.sqlite_connection_strategy")}
-                </Callout.Text>
-              </Callout.Root>
-            ) : (
-              <>
-                <SettingCardShortTextInput
-                  title={t("settings.metrics.max_open_conns_title")}
-                  description={t("settings.metrics.max_open_conns_description")}
-                  descriptionPlacement="footer"
-                  type="number"
-                  defaultValue={String(
-                    toNumber(settings.metric_max_open_conns, 25),
-                  )}
-                  placeholder="25"
-                  OnSave={async (value) => {
-                    const n = parseInt(value, 10);
-                    if (isNaN(n) || n <= 0) {
-                      toast.error(t("settings.metrics.conns_invalid"));
-                      return;
-                    }
-                    await saveMetricSettings({ metric_max_open_conns: n });
-                  }}
-                />
-
-                <SettingCardShortTextInput
-                  title={t("settings.metrics.max_idle_conns_title")}
-                  description={t("settings.metrics.max_idle_conns_description")}
-                  descriptionPlacement="footer"
-                  type="number"
-                  defaultValue={String(
-                    toNumber(settings.metric_max_idle_conns, 5),
-                  )}
-                  placeholder="5"
-                  OnSave={async (value) => {
-                    const n = parseInt(value, 10);
-                    if (isNaN(n) || n < 0) {
-                      toast.error(t("settings.metrics.conns_invalid"));
-                      return;
-                    }
-                    await saveMetricSettings({ metric_max_idle_conns: n });
-                  }}
-                />
-              </>
-            )}
-          </Flex>
-        </Tabs.Content>
-
-        <Tabs.Content value="migration" className="pt-3">
-          {activeTab === "migration" ? (
-            <Flex direction="column" gap="3">
-              <MigrationCard />
-              <DatabaseMaintenanceCard mode="maintenance" />
-            </Flex>
-          ) : null}
-        </Tabs.Content>
-      </Tabs.Root>
     </Flex>
   );
+}
+
+function MetricRollupRetentionCard({
+  settings,
+  onSave,
+}: {
+  settings: SettingsResponse;
+  onSave: (changes: Partial<SettingsResponse>) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = React.useState({
+    minute: String(
+      toNumber(
+        settings[ROLLUP_RETENTION_KEYS.minute],
+        DEFAULT_ROLLUP_RETENTION.minute,
+      ),
+    ),
+    fiveMinute: String(
+      toNumber(
+        settings[ROLLUP_RETENTION_KEYS.fiveMinute],
+        DEFAULT_ROLLUP_RETENTION.fiveMinute,
+      ),
+    ),
+    hour: String(
+      toNumber(
+        settings[ROLLUP_RETENTION_KEYS.hour],
+        DEFAULT_ROLLUP_RETENTION.hour,
+      ),
+    ),
+  });
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setDraft({
+      minute: String(
+        toNumber(
+          settings[ROLLUP_RETENTION_KEYS.minute],
+          DEFAULT_ROLLUP_RETENTION.minute,
+        ),
+      ),
+      fiveMinute: String(
+        toNumber(
+          settings[ROLLUP_RETENTION_KEYS.fiveMinute],
+          DEFAULT_ROLLUP_RETENTION.fiveMinute,
+        ),
+      ),
+      hour: String(
+        toNumber(
+          settings[ROLLUP_RETENTION_KEYS.hour],
+          DEFAULT_ROLLUP_RETENTION.hour,
+        ),
+      ),
+    });
+  }, [settings]);
+
+  const current = {
+    minute: toNumber(
+      settings[ROLLUP_RETENTION_KEYS.minute],
+      DEFAULT_ROLLUP_RETENTION.minute,
+    ),
+    fiveMinute: toNumber(
+      settings[ROLLUP_RETENTION_KEYS.fiveMinute],
+      DEFAULT_ROLLUP_RETENTION.fiveMinute,
+    ),
+    hour: toNumber(
+      settings[ROLLUP_RETENTION_KEYS.hour],
+      DEFAULT_ROLLUP_RETENTION.hour,
+    ),
+  };
+
+  const hasChanges =
+    draft.minute !== String(current.minute) ||
+    draft.fiveMinute !== String(current.fiveMinute) ||
+    draft.hour !== String(current.hour);
+
+  const updateDraft = (key: keyof typeof draft, value: string) => {
+    setDraft((previous) => ({ ...previous, [key]: value }));
+  };
+
+  const handleSave = async () => {
+    const minute = parseInteger(draft.minute);
+    const fiveMinute = parseInteger(draft.fiveMinute);
+    const hour = parseInteger(draft.hour);
+    if (minute === undefined || fiveMinute === undefined || hour === undefined) {
+      toast.error(t("settings.metrics.rollup_retention_invalid"));
+      return;
+    }
+    if (minute > fiveMinute || fiveMinute > hour * 60) {
+      toast.error(t("settings.metrics.rollup_retention_order_invalid"));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onSave({
+        [ROLLUP_RETENTION_KEYS.minute]: minute,
+        [ROLLUP_RETENTION_KEYS.fiveMinute]: fiveMinute,
+        [ROLLUP_RETENTION_KEYS.hour]: hour,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SettingCard
+      title={
+        <Flex align="center" gap="2">
+          <Timer size={16} />
+          {t("settings.metrics.rollup_retention_title")}
+        </Flex>
+      }
+      description={t("settings.metrics.rollup_retention_description")}
+      direction="column"
+      className="km-setting-card"
+    >
+      <Flex direction="column" gap="3" className="w-full pt-3">
+        <Flex gap="3" wrap="wrap">
+          <RollupRetentionInput
+            label={t("settings.metrics.rollup_minute_label")}
+            unit={t("settings.metrics.minutes_unit")}
+            value={draft.minute}
+            disabled={saving}
+            onChange={(value) => updateDraft("minute", value)}
+          />
+          <RollupRetentionInput
+            label={t("settings.metrics.rollup_five_minute_label")}
+            unit={t("settings.metrics.minutes_unit")}
+            value={draft.fiveMinute}
+            disabled={saving}
+            onChange={(value) => updateDraft("fiveMinute", value)}
+          />
+          <RollupRetentionInput
+            label={t("settings.metrics.rollup_hour_label")}
+            unit={t("settings.metrics.hours_unit")}
+            value={draft.hour}
+            disabled={saving}
+            onChange={(value) => updateDraft("hour", value)}
+          />
+        </Flex>
+        <Flex justify="end">
+          <Button disabled={saving || !hasChanges} onClick={() => void handleSave()}>
+            <Save size={14} />
+            {t("settings.metrics.rollup_retention_save")}
+          </Button>
+        </Flex>
+      </Flex>
+    </SettingCard>
+  );
+}
+
+function RollupRetentionInput({
+  label,
+  unit,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  unit: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Flex direction="column" gap="1" style={{ minWidth: "12rem" }}>
+      <Text size="2" weight="medium">
+        {label}
+      </Text>
+      <TextField.Root
+        type="number"
+        min="1"
+        step="1"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <TextField.Slot side="right">{unit}</TextField.Slot>
+      </TextField.Root>
+    </Flex>
+  );
+}
+
+function parseInteger(value: string): number | undefined {
+  if (!/^\d+$/.test(value.trim())) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function MetricRetentionTable({
@@ -417,8 +516,6 @@ function MetricRetentionTable({
     String(defaultRetentionDays),
   );
   const language = i18n.resolvedLanguage || i18n.language;
-  const { page, setPage, pageItems, pageSize, setPageSize } =
-    useAdminPagination(metrics);
 
   const fetchMetrics = React.useCallback(
     async (silent = false) => {
@@ -574,6 +671,7 @@ function MetricRetentionTable({
         days: defaultRetentionDays,
       })}
       direction="column"
+      className="km-setting-card"
     >
       <Flex direction="column" gap="3" className="w-full pt-3">
         <Flex justify="between" align="center" gap="2" wrap="wrap">
@@ -646,14 +744,14 @@ function MetricRetentionTable({
                     disabled={saving}
                     onClick={() => setBatchDialogOpen(false)}
                   >
-                    {t("cancel")}
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     disabled={saving || batchMetricNames.length === 0}
                     onClick={() => void handleBatchSave()}
                   >
                     <Save size={14} />
-                    {t("save")}
+                    {t("common.save")}
                   </Button>
                 </Flex>
               </Flex>
@@ -679,8 +777,7 @@ function MetricRetentionTable({
           </Callout.Root>
         )}
 
-        <div className="overflow-hidden rounded-md border border-[var(--gray-a5)]">
-          <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg">
           <Table>
             <TableHeader>
               <TableRow>
@@ -691,9 +788,9 @@ function MetricRetentionTable({
                   {t("settings.metrics.metric_key")}
                 </TableHead>
                 <TableHead className="min-w-64">
-                  {t("settings.metrics.metric_description")}
+                  {t("common.description")}
                 </TableHead>
-                <TableHead>{t("settings.metrics.metric_type")}</TableHead>
+                <TableHead>{t("common.type")}</TableHead>
                 <TableHead>{t("settings.metrics.metric_unit")}</TableHead>
                 <TableHead>{t("settings.metrics.retention_days")}</TableHead>
               </TableRow>
@@ -708,7 +805,7 @@ function MetricRetentionTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                pageItems.map((metric) => {
+                metrics.map((metric) => {
                   const description = metricDescription(metric, language, t);
                   return (
                     <TableRow key={metric.name}>
@@ -756,15 +853,6 @@ function MetricRetentionTable({
               )}
             </TableBody>
           </Table>
-          </div>
-          <AdminPagination
-            page={page}
-            total={metrics.length}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-            showSummary={false}
-          />
         </div>
         <Flex justify="end">
           <Button
@@ -904,6 +992,7 @@ function MigrationCard() {
       title={t("settings.metrics.migration_card_title")}
       description={t("settings.metrics.migration_card_description")}
       direction="column"
+      className="km-setting-card"
     >
       <Flex direction="column" gap="3" className="w-full pt-3">
         {/* 状态行 */}
@@ -985,7 +1074,7 @@ function MigrationCard() {
         {status === "completed" && (
           <Callout.Root color="green" variant="surface">
             <Callout.Icon>
-              <Info size={16} />
+              <Database size={16} />
             </Callout.Icon>
             <Callout.Text>
               {t("settings.metrics.migration_completed_hint")}

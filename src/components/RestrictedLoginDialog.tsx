@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Button, Dialog, Text, TextField } from "@radix-ui/themes";
 import { LoaderCircle, LogIn } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import LoginIdentityHeader from "@/components/LoginIdentityHeader";
 
 export type RestrictedAuthStatus = {
   oauth_enabled: boolean;
@@ -71,47 +70,47 @@ export default function RestrictedLoginDialog({
   return (
     <Dialog.Root open={auth !== null && !auth.logged_in}>
       <Dialog.Content
-        maxWidth="420px"
+        className="km-restricted-login-dialog"
+        maxWidth="430px"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
-        <LoginIdentityHeader dialog />
+        <Dialog.Title>{t("login.title")}</Dialog.Title>
+        <Dialog.Description>{t("login.desc")}</Dialog.Description>
         {auth?.password_login_enabled && (
           <form
-            className="space-y-3"
+            className="km-restricted-login-form mt-5 space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
               void login();
             }}
           >
             <label className="block">
-              <Text as="div" size="2" weight="medium" mb="1">
+              <Text as="div" size="2" weight="bold" mb="1">
                 {t("login.username")}
               </Text>
               <TextField.Root
+                id="restricted-login-username"
+                name="username"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder={t("login.username_placeholder")}
                 autoComplete="username"
                 autoFocus
                 disabled={busy}
-                size="3"
-                className="text-[15px]"
               />
             </label>
             <label className="block">
-              <Text as="div" size="2" weight="medium" mb="1">
+              <Text as="div" size="2" weight="bold" mb="1">
                 {t("login.password")}
               </Text>
               <TextField.Root
+                id="restricted-login-password"
+                name="password"
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder={t("login.password_placeholder")}
                 autoComplete="current-password"
                 disabled={busy}
-                size="3"
-                className="text-[15px]"
               />
             </label>
             {requireTwoFactor && (
@@ -120,12 +119,13 @@ export default function RestrictedLoginDialog({
                   {t("login.two_factor")}
                 </Text>
                 <TextField.Root
+                  id="restricted-login-2fa-code"
+                  name="2fa_code"
                   value={twoFactor}
                   onChange={(event) => setTwoFactor(event.target.value)}
                   autoComplete="one-time-code"
                   inputMode="numeric"
                   disabled={busy}
-                  size="3"
                 />
               </label>
             )}
@@ -136,7 +136,6 @@ export default function RestrictedLoginDialog({
             )}
             <Button
               type="submit"
-              size="3"
               className="w-full"
               disabled={busy || !username.trim() || !password}
             >

@@ -1,12 +1,12 @@
 import React from "react";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
 import { Button, Callout, Flex } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
-import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
+import Loading from "@/components/loading";
 import {
   SettingCardButton,
+  SettingCardLabel,
   SettingCardLongTextInput,
   SettingCardShortTextInput,
   SettingCardSwitch,
@@ -133,12 +133,12 @@ export default function XtermjsSettingsPage() {
     !isTransparentBackground(settings.terminalOptions.theme.background);
 
   if (loading) {
-    return <SettingsPageSkeleton />;
+    return <Loading />;
   }
 
   if (error) {
     return (
-      <Flex direction="column" gap="3">
+    <Flex direction="column" gap="3" className="km-page-admin-settings-xtermjs">
         <Callout.Root color="red" size="1">
           <Callout.Icon>
             <AlertTriangle size={16} />
@@ -152,18 +152,12 @@ export default function XtermjsSettingsPage() {
 
   return (
     <Flex direction="column" gap="3">
-      <AdminPageTitle
-        description={t(
-          "settings.xtermjs.page_description",
-          "统一设置远程终端字体、交互和配色。",
-        )}
-      >
-        {t("settings.xtermjs.title")}
-      </AdminPageTitle>
+      <SettingCardLabel>{t("settings.xtermjs.title")}</SettingCardLabel>
       <SettingCardButton
         title={t("settings.xtermjs.title")}
         description={t("settings.xtermjs.reset_defaults")}
         onClick={handleReset}
+        className="km-setting-card"
       >
         {t("common.reset", "Reset")}
       </SettingCardButton>
@@ -226,6 +220,7 @@ export default function XtermjsSettingsPage() {
           );
           toast.success(t("settings.settings_saved"));
         }}
+        className="km-setting-card"
       />
 
       <SettingCardShortTextInput
@@ -266,6 +261,7 @@ export default function XtermjsSettingsPage() {
           );
           toast.success(t("settings.settings_saved"));
         }}
+        className="km-setting-card"
       />
 
       <SettingCardSwitch
@@ -281,6 +277,7 @@ export default function XtermjsSettingsPage() {
           );
           toast.success(t("settings.settings_saved"));
         }}
+        className="km-setting-card"
       />
 
       {themeBackgroundIsOpaque && (

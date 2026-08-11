@@ -5,14 +5,14 @@ import {
   useSettings,
 } from "@/lib/api";
 import { SettingCardLongTextInput } from "@/components/admin/SettingCard";
-import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
+import Loading from "@/components/loading";
 
 export default function CustomSettings() {
   const { t } = useTranslation();
   const { settings, loading, error } = useSettings();
 
   if (loading) {
-    return <SettingsPageSkeleton />;
+    return <Loading />;
   }
 
   if (error) {
@@ -20,7 +20,7 @@ export default function CustomSettings() {
   }
 
   return (
-    <>
+    <div className="km-page-admin-settings-custom">
       <SettingCardLongTextInput
         title={t("settings.custom.header")}
         description={t("settings.custom.header_description")}
@@ -29,6 +29,6 @@ export default function CustomSettings() {
           await updateSettingsWithToast({ custom_head: data },t);
         }}
       />
-    </>
+    </div>
   );
 }

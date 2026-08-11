@@ -8,10 +8,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  AdminPagination,
-  useAdminPagination,
-} from "@/components/admin/AdminPagination";
 import { useNodeDetails } from "@/contexts/NodeDetailsContext";
 import { usePingTask, type PingTask } from "@/contexts/PingTaskContext";
 import {
@@ -32,13 +28,13 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Button,
+  Checkbox,
   Dialog,
   Flex,
   IconButton,
   Select,
   TextField,
 } from "@radix-ui/themes";
-import { Checkbox } from "@/components/ui/checkbox";
 import { MenuIcon, MoreHorizontal, Pencil, Trash } from "lucide-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -48,16 +44,8 @@ const getTaskSortableId = (task: { id?: number; name?: string; target?: string }
   task.id !== undefined
     ? `id-${task.id}`
     : `tmp-${task.name ?? ""}-${task.target ?? ""}`;
-const PREVIOUS_PAGE_DROP_ID = "ping-task-previous-page";
-const NEXT_PAGE_DROP_ID = "ping-task-next-page";
 
-export const TaskView = ({
-  pingTasks,
-  reorderEnabled = true,
-}: {
-  pingTasks: PingTask[];
-  reorderEnabled?: boolean;
-}) => {
+export const TaskView = ({ pingTasks }: { pingTasks: PingTask[] }) => {
   const { t } = useTranslation();
   const { refresh } = usePingTask();
   const { nodeDetail } = useNodeDetails();
@@ -98,36 +86,21 @@ export const TaskView = ({
   }, [pingTasks, nodeDetail]);
 
   const [localTasks, setLocalTasks] = React.useState(processedTasks);
-  const [isDragging, setIsDragging] = React.useState(false);
-  const { page, setPage, pageItems, pageSize, setPageSize } =
-    useAdminPagination(localTasks);
 
   React.useEffect(() => {
     setLocalTasks(processedTasks);
   }, [processedTasks]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
-    setIsDragging(false);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
     const oldIndex = localTasks.findIndex(
       (task) => getTaskSortableId(task) === String(active.id)
     );
-    let newIndex = localTasks.findIndex(
+    const newIndex = localTasks.findIndex(
       (task) => getTaskSortableId(task) === String(over.id)
     );
-    let destinationPage = page;
-    if (over.id === PREVIOUS_PAGE_DROP_ID && page > 1) {
-      destinationPage = page - 1;
-      newIndex = destinationPage * pageSize - 1;
-    } else if (
-      over.id === NEXT_PAGE_DROP_ID &&
-      page < Math.ceil(localTasks.length / pageSize)
-    ) {
-      destinationPage = page + 1;
-      newIndex = (destinationPage - 1) * pageSize;
-    }
     if (oldIndex < 0 || newIndex < 0) return;
 
     const previousTasks = Array.from(localTasks);
@@ -136,7 +109,6 @@ export const TaskView = ({
     reorderedTasks.splice(newIndex, 0, reorderedItem);
 
     setLocalTasks(reorderedTasks);
-    setPage(destinationPage);
 
     const orderData = reorderedTasks.reduce((acc, task, index) => {
       if (task.id !== undefined) {
@@ -164,65 +136,44 @@ export const TaskView = ({
   };
 
   return (
-    <div className="admin-responsive-table-wrap overflow-hidden rounded-md border border-[var(--gray-a5)]">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={() => setIsDragging(true)}
-        onDragEnd={handleDragEnd}
-        onDragCancel={() => setIsDragging(false)}
-      >
-      <div className="overflow-x-auto">
-      <Table className="admin-responsive-table admin-sortable-table min-w-[840px]">
+    <div className="km-page-admin-pingtask-task km-pingtask-task-table rounded-xl overflow-hidden">
+      <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-12 px-3" aria-label={t("common.sort")}></TableHead>
+            <TableHead className="w-10" aria-label={t("common.sort")}></TableHead>
             <TableHead>{t("common.name")}</TableHead>
             <TableHead>{t("common.server")}</TableHead>
             <TableHead>{t("ping.target")}</TableHead>
-            <TableHead>{t("ping.type")}</TableHead>
+            <TableHead>{t("common.type")}</TableHead>
             <TableHead>{t("ping.interval")}</TableHead>
             <TableHead>{t("common.action")}</TableHead>
           </TableRow>
         </TableHeader>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext
-            items={pageItems.map((task) => getTaskSortableId(task))}
+            items={localTasks.map((task) => getTaskSortableId(task))}
             strategy={verticalListSortingStrategy}
           >
             <TableBody>
-              {pageItems.map((task) => (
-                <Row
-                  key={getTaskSortableId(task)}
-                  task={task}
-                  reorderEnabled={reorderEnabled}
-                />
+              {localTasks.map((task) => (
+                <Row key={getTaskSortableId(task)} task={task} />
               ))}
             </TableBody>
           </SortableContext>
+        </DndContext>
       </Table>
-      </div>
-      <AdminPagination
-        page={page}
-        total={localTasks.length}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        previousDropId={PREVIOUS_PAGE_DROP_ID}
-        nextDropId={NEXT_PAGE_DROP_ID}
-        dragging={isDragging}
-        summary={false}
-      />
-      </DndContext>
     </div>
   );
 };
 
 const Row = ({
   task,
-  reorderEnabled,
 }: {
   task: PingTask & { __allClientsDeleted?: boolean; __originalCount?: number };
-  reorderEnabled: boolean;
 }) => {
   const { t } = useTranslation();
   const { refresh } = usePingTask();
@@ -230,7 +181,7 @@ const Row = ({
   const isMobile = useIsMobile();
   const sortableId = getTaskSortableId(task);
   const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: sortableId, disabled: !reorderEnabled });
+    useSortable({ id: sortableId });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -325,7 +276,7 @@ const Row = ({
 
   return (
     <TableRow ref={setNodeRef} style={style}>
-      <TableCell className="w-12 px-3" data-label={t("common.sort", "排序")}>
+      <TableCell>
         <div
           {...attributes}
           {...listeners}
@@ -346,21 +297,24 @@ const Row = ({
           <MenuIcon size={isMobile ? 18 : 16} color={"var(--gray-8)"} />
         </div>
       </TableCell>
-      <TableCell data-label={t("common.name")}>{task.name}</TableCell>
-      <TableCell data-label={t("common.server")}>
-        <div className="flex min-w-0 items-start gap-2">
-          <span className="min-w-0 flex-1 whitespace-normal break-words">
-            {task.clients && task.clients.length > 0
-              ? task.clients
-                  .map(
-                    (uuid) =>
-                      nodeDetail.find((node) => node.uuid === uuid)?.name || uuid,
-                  )
-                  .join(", ")
-              : t("common.none")}
-          </span>
+      <TableCell>{task.name}</TableCell>
+      <TableCell>
+        <Flex gap="2" align="center">
+          {task.clients && task.clients.length > 0
+            ? (() => {
+                const names = task.clients.map((uuid) => {
+                  const name =
+                    nodeDetail.find((node) => node.uuid === uuid)?.name || uuid;
+                  return name;
+                });
+                const joined = names.join(", ");
+                return joined.length > 40
+                  ? joined.slice(0, 40) + "..."
+                  : joined;
+              })()
+            : t("common.none")}
           {task.default_on && (
-            <span className="shrink-0 text-xs text-accent-11">
+            <span className="text-xs text-accent-11">
               {t("ping.default_on_short")}
             </span>
           )}
@@ -372,25 +326,32 @@ const Row = ({
               submitEdit(nextForm);
             }}
           >
-            <IconButton variant="ghost" className="shrink-0">
+            <IconButton
+              variant="ghost"
+              title={t("common.select_clients", "Select clients")}
+              aria-label={t("common.select_clients", "Select clients")}
+            >
               <MoreHorizontal size="16" />
             </IconButton>
           </NodeSelectorDialog>
-        </div>
+        </Flex>
       </TableCell>
-      <TableCell data-label={t("ping.target")}>{task.target}</TableCell>
-      <TableCell data-label={t("ping.type")}>{task.type}</TableCell>
-      <TableCell data-label={t("ping.interval")}>{task.interval}</TableCell>
-      <TableCell data-label={t("common.action")}>
-        <div className="admin-card-actions admin-dual-actions flex items-center gap-3">
+      <TableCell>{task.target}</TableCell>
+      <TableCell>{task.type}</TableCell>
+      <TableCell>{task.interval}</TableCell>
+      <TableCell className="flex items-center gap-2">
         {/* 编辑按钮 */}
         <Dialog.Root open={editOpen} onOpenChange={setEditOpen}>
           <Dialog.Trigger>
-            <IconButton variant="soft">
+            <IconButton
+              variant="soft"
+              title={t("common.edit", "Edit")}
+              aria-label={t("common.edit", "Edit")}
+            >
               <Pencil size="16" />
             </IconButton>
           </Dialog.Trigger>
-          <Dialog.Content>
+          <Dialog.Content className="km-pingtask-task-form">
             <Dialog.Title>{t("common.edit")}</Dialog.Title>
             <form onSubmit={handleEdit} className="flex flex-col gap-2">
               <label>{t("common.name")}</label>
@@ -401,7 +362,7 @@ const Row = ({
                 }
                 required
               />
-              <label>{t("ping.type")}</label>
+              <label>{t("common.type")}</label>
               <Select.Root
                 value={form.type}
                 onValueChange={(v) =>
@@ -477,7 +438,12 @@ const Row = ({
         {/* 删除按钮 */}
         <Dialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
           <Dialog.Trigger>
-            <IconButton variant="soft" color="red">
+            <IconButton
+              variant="soft"
+              color="red"
+              title={t("common.delete", "Delete")}
+              aria-label={t("common.delete", "Delete")}
+            >
               <Trash size="16" />
             </IconButton>
           </Dialog.Trigger>
@@ -505,7 +471,6 @@ const Row = ({
             </Flex>
           </Dialog.Content>
         </Dialog.Root>
-        </div>
       </TableCell>
     </TableRow>
   );

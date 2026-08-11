@@ -9,10 +9,9 @@ import {
   SettingCardSwitch,
 } from "@/components/admin/SettingCard";
 import { toast } from "sonner";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
 const GeneralNotification = () => {
   return (
-    <Flex direction="column" gap="3" className="p-0 md:p-4">
+    <Flex direction="column" gap="3" className="km-page-admin-notification-general km-notification-general-form p-0 md:p-4">
       <Inner />
     </Flex>
   );
@@ -31,14 +30,6 @@ const Inner = () => {
   }
   return (
     <>
-      <AdminPageTitle
-        description={t(
-          "admin.notification.page_description",
-          "管理到期、登录和流量用量等通用通知规则。",
-        )}
-      >
-        {t("settings.general.title")}
-      </AdminPageTitle>
       <SettingCardLabel>
         {t("admin.notification.expire_title")}
       </SettingCardLabel>

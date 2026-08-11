@@ -12,11 +12,6 @@ import { useTranslation } from "react-i18next";
 import { Dialog, Flex, Button } from "@radix-ui/themes";
 import { UserAgentHelper } from "@/utils/UserAgentHelper";
 import Loading from "@/components/loading";
-import { AdminSectionTitle } from "@/components/admin/AdminPageTitle";
-import {
-  AdminPagination,
-  useAdminPagination,
-} from "@/components/admin/AdminPagination";
 type Resp = {
   current: string;
   data: Array<{
@@ -36,9 +31,6 @@ type Resp = {
 export default function Sessions() {
   const [t] = useTranslation();
   const [sessions, setSessions] = React.useState<Resp | null>(null);
-  const sessionItems = sessions?.data ?? [];
-  const { page, setPage, pageItems, pageSize, setPageSize } =
-    useAdminPagination(sessionItems);
   React.useEffect(() => {
     fetch("/api/admin/session/get")
       .then((response) => {
@@ -114,9 +106,9 @@ export default function Sessions() {
   }
 
   return (
-    <Flex direction="column" gap="3" className="w-full min-w-0">
-      <AdminSectionTitle>{t("sessions.title")}</AdminSectionTitle>
-      <div>
+    <div className="km-page-admin-sessions p-4">
+      <h1 className="text-2xl font-semibold mb-4">{t("sessions.title")}</h1>
+      <div className="mb-4">
         <Dialog.Root>
           <Dialog.Trigger>
             <Button color="red">{t("sessions.delete_all")}</Button>
@@ -128,19 +120,18 @@ export default function Sessions() {
             </Dialog.Description>
             <Flex gap="2" justify={"end"}>
               <Dialog.Trigger>
-                <Button variant="soft">{t("sessions.cancel")}</Button>
+                <Button variant="soft">{t("common.cancel")}</Button>
               </Dialog.Trigger>
               <Dialog.Trigger>
                 <Button color="red" onClick={deleteAllSessions}>
-                  {t("delete")}
+                  {t("common.delete")}
                 </Button>
               </Dialog.Trigger>
             </Flex>
           </Dialog.Content>
         </Dialog.Root>
       </div>
-      <div className="w-full min-w-0 overflow-hidden rounded-md border border-[var(--gray-a5)]">
-        <div className="overflow-x-auto">
+      <div className="km-sessions-table overflow-hidden rounded-lg">
         <Table>
           <TableHeader>
             <TableRow>
@@ -154,10 +145,10 @@ export default function Sessions() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pageItems.map((s) => {
+            {sessions.data.map((s) => {
               const isCurrent = s.session === sessions.current;
               return (
-                <TableRow key={s.uuid}>
+                <TableRow key={s.uuid} className="km-session-item">
                   <TableCell>
                     <Dialog.Root>
                       <Dialog.Trigger>
@@ -227,7 +218,7 @@ export default function Sessions() {
                           </label>
                           <Flex justify={"end"}>
                             <Dialog.Trigger>
-                              <Button variant="soft">{t("close")}</Button>
+                              <Button variant="soft">{t("common.close")}</Button>
                             </Dialog.Trigger>
                           </Flex>
                         </Flex>
@@ -246,13 +237,13 @@ export default function Sessions() {
                       {!isCurrent && (
                         <Dialog.Trigger>
                           <Button color="red" variant="ghost">
-                            {t("delete")}
+                            {t("common.delete")}
                           </Button>
                         </Dialog.Trigger>
                       )}
                       <Dialog.Content>
                         <Dialog.Title>
-                          {t("sessions.confirm_delete")}
+                          {t("common.confirm_delete")}
                         </Dialog.Title>
                         <Dialog.Description>
                           {t("sessions.delete_one_desc")}
@@ -260,7 +251,7 @@ export default function Sessions() {
                         <Flex gap="2" justify={"end"}>
                           <Dialog.Trigger>
                             <Button variant="soft">
-                              {t("sessions.cancel")}
+                              {t("common.cancel")}
                             </Button>
                           </Dialog.Trigger>
                           <Dialog.Trigger>
@@ -268,7 +259,7 @@ export default function Sessions() {
                               color="red"
                               onClick={() => deleteSession(s.session)}
                             >
-                              {t("delete")}
+                              {t("common.delete")}
                             </Button>
                           </Dialog.Trigger>
                         </Flex>
@@ -280,17 +271,8 @@ export default function Sessions() {
             })}
           </TableBody>
         </Table>
-        </div>
-        <AdminPagination
-          page={page}
-          total={sessionItems.length}
-          pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-          showSummary={false}
-        />
       </div>
-    </Flex>
+    </div>
   );
 }
 

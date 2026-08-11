@@ -31,7 +31,7 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
 
   return (
     <Selector
-      className={className}
+      className={`km-node-selector ${className}`}
       hiddenDescription={hiddenDescription}
       value={nodesFiltered}
       onChange={onChange}
@@ -41,7 +41,6 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
       getLabel={(n) => n.name}
       searchPlaceholder={t("common.search")}
       headerLabel={t("common.server")}
-      showHeaderSelectAll={false}
     />
   );
 };

@@ -1,76 +1,35 @@
 // routes.js
 import { lazy } from "react";
-import { Navigate, type RouteObject } from "react-router-dom";
+import type { RouteObject } from "react-router-dom";
 import React from "react";
+import { Navigate } from "react-router-dom";
 
-const importAdminLayout = () => import("./pages/admin/_layout");
-const importAdminDashboard = () => import("./pages/admin/dashboard");
-let adminLayoutModule: ReturnType<typeof importAdminLayout> | undefined;
-let adminDashboardModule: ReturnType<typeof importAdminDashboard> | undefined;
-const loadAdminLayout = () => (adminLayoutModule ??= importAdminLayout());
-const loadAdminDashboard = () =>
-  (adminDashboardModule ??= importAdminDashboard());
-
-export const preloadAdminEntry = () => {
-  void loadAdminLayout();
-  void loadAdminDashboard();
-};
-
-const adminRoutePreloaders: Record<string, () => Promise<unknown>> = {
-  "/admin": loadAdminDashboard,
-  "/admin/servers": () => import("./pages/admin"),
-  "/admin/ping": () => import("./pages/admin/pingTask"),
-  "/admin/return-route": () => import("./pages/admin/returnRoute"),
-  "/admin/logs": () => import("./pages/admin/log"),
-  "/admin/exec": () => import("./pages/admin/exec"),
-  "/admin/terminal": () => import("./pages/admin/terminal"),
-  "/admin/theme_managed": () => import("./pages/admin/theme_managed.tsx"),
-  "/admin/theme_raw": () => import("./pages/admin/theme_raw.tsx"),
-  "/admin/market/themes": () => import("./pages/admin/market/themes"),
-  "/admin/settings/site": () => import("./pages/admin/settings/site"),
-  "/admin/settings/dashboard": () => import("./pages/admin/settings/dashboard"),
-  "/admin/settings/theme": () => import("./pages/admin/settings/theme"),
-  "/admin/settings/custom": () => import("./pages/admin/settings/custom"),
-  "/admin/settings/notification": () => import("./pages/admin/settings/notification"),
-  "/admin/settings/general": () => import("./pages/admin/settings/general"),
-  "/admin/settings/xtermjs": () => import("./pages/admin/settings/xtermjs"),
-  "/admin/settings/reverse-proxy": () => import("./pages/admin/settings/reverse-proxy"),
-  "/admin/settings/metrics": () => import("./pages/admin/settings/metrics"),
-  "/admin/settings/account-security": () => import("./pages/admin/settings/account-security"),
-  "/admin/notification/offline": () => import("./pages/admin/notification/offline"),
-  "/admin/notification/load": () => import("./pages/admin/notification/load"),
-  "/admin/notification/general": () => import("./pages/admin/notification/general"),
-  "/admin/notification/traffic-report": () => import("./pages/admin/notification/traffic_report"),
-  "/admin/notification/ping-loss": () => import("./pages/admin/notification/ping_loss"),
-};
-
-export const preloadAdminRoute = async (target: string): Promise<void> => {
-  const pathname = target.split(/[?#]/, 1)[0].replace(/\/$/, "") || "/admin";
-  const preload = adminRoutePreloaders[pathname];
-  if (preload) await preload();
-};
-
-export const preloadAdminRoutes = async (): Promise<void> => {
-  await Promise.allSettled(
-    Array.from(new Set(Object.values(adminRoutePreloaders))).map((preload) => preload()),
-  );
-};
-
-const AdminLayout = lazy(loadAdminLayout);
-const AdminDashboard = lazy(loadAdminDashboard);
+const Index = lazy(() => import("./pages/Index"));
+const AdminLayout = lazy(() => import("./pages/admin/_layout"));
+const Admin = lazy(() => import("./pages/admin"));
+const Dashboard = lazy(() => import("./pages/admin/dashboard"));
 const NotFound = lazy(() => import("./pages/404"));
 
 export const routes: RouteObject[] = [
   {
-    path: "/admin/update/1.2.7",
-    element: React.createElement(
-      lazy(() => import("./pages/admin/update_1_2_7"))
-    ),
+    path: "/",
+    element: React.createElement(lazy(() => import("./pages/_layout"))),
+    children: [
+      { index: true, element: React.createElement(Index) },
+      {
+        path: "instance/:uuid",
+        element: React.createElement(lazy(() => import("./pages/instance"))),
+      },
+      {
+        path: "plugin/:short/*filepath",
+        element: React.createElement(lazy(() => import("./pages/plugin_page"))),
+      },
+    ],
   },
   {
-    path: "/admin/update/storage-v4",
+    path: "/admin/database-migration",
     element: React.createElement(
-      lazy(() => import("./pages/admin/update_storage_v4"))
+      lazy(() => import("./pages/database_migration")),
     ),
   },
   {
@@ -78,13 +37,23 @@ export const routes: RouteObject[] = [
     element: React.createElement(lazy(() => import("./pages/install"))),
   },
   {
+    path: "/database-recovery",
+    element: React.createElement(
+      lazy(() => import("./pages/database_recovery")),
+    ),
+  },
+  {
     path: "/admin",
     element: React.createElement(AdminLayout),
     children: [
-      { index: true, element: React.createElement(AdminDashboard) },
+      { index: true, element: React.createElement(Navigate, { to: "/admin/dashboard", replace: true }) },
+      {
+        path: "dashboard",
+        element: React.createElement(Dashboard),
+      },
       {
         path: "servers",
-        element: React.createElement(lazy(() => import("./pages/admin"))),
+        element: React.createElement(Admin),
       },
       {
         path: "theme_managed",
@@ -99,24 +68,46 @@ export const routes: RouteObject[] = [
         ),
       },
       {
+        path: "plugins",
+        element: React.createElement(
+          lazy(() => import("./pages/admin/plugins"))
+        ),
+      },
+      {
+        path: "plugins/config",
+        element: React.createElement(
+          lazy(() => import("./pages/admin/plugin_config"))
+        ),
+      },
+      {
+        path: "plugin-page",
+        element: React.createElement(
+          lazy(() => import("./pages/admin/plugin_page"))
+        ),
+      },
+      {
         path: "market/themes",
         element: React.createElement(
           lazy(() => import("./pages/admin/market/themes"))
         ),
       },
       {
+        path: "market/plugins",
+        element: React.createElement(
+          lazy(() => import("./pages/admin/market/plugins"))
+        ),
+      },
+      {
         path: "sessions",
-        element: React.createElement(Navigate, {
-          replace: true,
-          to: "/admin/settings/account-security?tab=sessions",
-        }),
+        element: React.createElement(
+          lazy(() => import("./pages/admin/sessions"))
+        ),
       },
       {
         path: "account",
-        element: React.createElement(Navigate, {
-          replace: true,
-          to: "/admin/settings/account-security?tab=account",
-        }),
+        element: React.createElement(
+          lazy(() => import("./pages/admin/account"))
+        ),
       },
       {
         path: "settings",
@@ -128,12 +119,6 @@ export const routes: RouteObject[] = [
             path: "site",
             element: React.createElement(
               lazy(() => import("./pages/admin/settings/site"))
-            ),
-          },
-          {
-            path: "dashboard",
-            element: React.createElement(
-              lazy(() => import("./pages/admin/settings/dashboard"))
             ),
           },
           {
@@ -150,10 +135,9 @@ export const routes: RouteObject[] = [
           },
           {
             path: "sign-on",
-            element: React.createElement(Navigate, {
-              replace: true,
-              to: "/admin/settings/account-security?tab=sign-on",
-            }),
+            element: React.createElement(
+              lazy(() => import("./pages/admin/settings/sign-on"))
+            ),
           },
           {
             path: "notification",
@@ -174,21 +158,9 @@ export const routes: RouteObject[] = [
             ),
           },
           {
-            path: "reverse-proxy",
-            element: React.createElement(
-              lazy(() => import("./pages/admin/settings/reverse-proxy"))
-            ),
-          },
-          {
             path: "metrics",
             element: React.createElement(
               lazy(() => import("./pages/admin/settings/metrics"))
-            ),
-          },
-          {
-            path: "account-security",
-            element: React.createElement(
-              lazy(() => import("./pages/admin/settings/account-security"))
             ),
           },
         ],
@@ -220,12 +192,6 @@ export const routes: RouteObject[] = [
               lazy(() => import("./pages/admin/notification/traffic_report"))
             ),
           },
-          {
-            path: "ping-loss",
-            element: React.createElement(
-              lazy(() => import("./pages/admin/notification/ping_loss"))
-            ),
-          },
         ],
       },
       {
@@ -235,10 +201,8 @@ export const routes: RouteObject[] = [
         ),
       },
       {
-        path: "return-route",
-        element: React.createElement(
-          lazy(() => import("./pages/admin/returnRoute"))
-        ),
+        path: "about",
+        element: React.createElement(lazy(() => import("./pages/admin/about"))),
       },
       {
         path: "logs",
@@ -251,12 +215,6 @@ export const routes: RouteObject[] = [
       {
         path: "exec",
         element: React.createElement(lazy(() => import("./pages/admin/exec"))),
-      },
-      {
-        path: "terminal",
-        element: React.createElement(
-          lazy(() => import("./pages/admin/terminal")),
-        ),
       }
     ],
   },

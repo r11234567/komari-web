@@ -21,52 +21,50 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-type CommandClipboardPanelProps = {
-  className?: string;
-};
+const CommandClipboardPanel = ({ ...props }: { [key: string]: any }) => {
+  const InnerLayout = () => {
+    const { t } = useTranslation();
+    const { commands, loading, error } = useCommandClipboard();
+    if (loading) {
+      return <Loading />;
+    }
+    if (error) {
+      return <div>Error loading commands: {error.message}</div>;
+    }
+    return (
+      <Flex
+        {...props}
+        direction="column"
+        gap="2"
+        overflowX={"clip"}
+        overflowY={"scroll"}
+        style={{ height: "100%" }}
+        className="km-command-clipboard km-command-clipboard-list command-clipboard-container"
+      >
+        <Flex>
+          <label className="text-lg font-semibold">
+            {t("command_clipboard.title")}
+          </label>
+        </Flex>
+        <Flex justify="between" align="center" className="mr-2">
+          <AddButton />
+          <LanguageSwitch />
+        </Flex>
 
-const CommandClipboardContent = ({ className }: CommandClipboardPanelProps) => {
-  const { t } = useTranslation();
-  const { commands, loading, error } = useCommandClipboard();
-  if (loading) {
-    return <Loading />;
-  }
-  if (error) {
-    return <div>Error loading commands: {error.message}</div>;
-  }
+        {commands
+          .sort((a, b) => b.weight - a.weight)
+          .map((item) => (
+            <CommandCard key={item.id} {...item} />
+          ))}
+      </Flex>
+    );
+  };
   return (
-    <Flex
-      direction="column"
-      gap="2"
-      overflowX="clip"
-      overflowY="scroll"
-      style={{ height: "100%" }}
-      className={`command-clipboard-container${className ? ` ${className}` : ""}`}
-    >
-      <Flex>
-        <label className="text-lg font-semibold">
-          {t("command_clipboard.title")}
-        </label>
-      </Flex>
-      <Flex justify="between" align="center" className="mr-2">
-        <AddButton />
-        <LanguageSwitch />
-      </Flex>
-
-      {[...commands]
-        .sort((a, b) => b.weight - a.weight)
-        .map((item) => (
-          <CommandCard key={item.id} {...item} />
-        ))}
-    </Flex>
+    <CommandClipboardProvider>
+      <InnerLayout />
+    </CommandClipboardProvider>
   );
 };
-
-const CommandClipboardPanel = (props: CommandClipboardPanelProps) => (
-  <CommandClipboardProvider>
-    <CommandClipboardContent {...props} />
-  </CommandClipboardProvider>
-);
 
 const AddButton = () => {
   const { t } = useTranslation();
@@ -100,19 +98,18 @@ const AddButton = () => {
           <PlusIcon size="16" />
         </IconButton>
       </Dialog.Trigger>
-      <Dialog.Content className="remote-command-dialog">
+      <Dialog.Content className="km-command-clipboard-input">
         <Dialog.Title>{t("common.add")}</Dialog.Title>
         <form onSubmit={handleAddCommand}>
           <Flex direction="column" gap="2">
             <label htmlFor="name">{t("common.name")}</label>
             <TextField.Root
-              autoFocus
-              required
               id="name"
               name="name"
+              defaultValue={Math.random().toString(36).substring(7)}
             />
             <label htmlFor="text">{t("common.content")}</label>
-            <TextArea id="text" name="text" required />
+            <TextArea id="text" name="text" />
             <label htmlFor="remark">{t("common.remark")}</label>
             <TextField.Root id="remark" name="remark" />
             <label htmlFor="weight">{t("common.weight")}</label>
@@ -247,7 +244,7 @@ const CommandCard = (item: CommandClipboard) => {
   const { t } = useTranslation();
   const { sendCommand } = useTerminal();
   return (
-    <Flex key={item.id} direction="column">
+    <Flex key={item.id} direction="column" className="km-command-clipboard-item">
       <Card>
         <Flex direction="column" gap="2">
           <Flex justify="between" align="center">

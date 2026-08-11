@@ -24,19 +24,18 @@ import {
   Search,
   AlertTriangle,
   Loader2,
-  Store,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
-import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
+import Loading from "@/components/loading";
 import { useSettings } from "@/lib/api";
 import UploadDialog from "@/components/UploadDialog";
 import {
   getThemeConfigurationType,
   THEME_CONFIGURATION_MANAGED,
 } from "@/utils/themeConfiguration";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
 
 interface Theme {
   id: string;
@@ -50,19 +49,6 @@ interface Theme {
   active: boolean;
   createdAt: string;
   configuration?: any;
-}
-
-const THEME_CHANGE_STORAGE_KEY = "komari-active-theme-changed";
-
-async function clearThemeNavigationCache() {
-  if ("serviceWorker" in navigator) {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.map((registration) => registration.unregister()));
-  }
-  if ("caches" in window) {
-    const cacheNames = await caches.keys();
-    await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
-  }
 }
 
 const ThemePage = () => {
@@ -98,7 +84,8 @@ const ThemePage = () => {
   } = useSettings();
   const currentTheme = settings?.theme;
   const navigate = useNavigate();
-  const { publicInfo } = usePublicInfo();
+  const { publicInfo, refresh: refreshPublicInfo } = usePublicInfo();
+  const { refreshNavigation } = useAdminNavigation();
   const [activeThemeHasConfig, setActiveThemeHasConfig] = useState(false);
 
   // 当 currentTheme 或 publicInfo.theme 变化时重新检测当前主题是否有配置文件
@@ -195,7 +182,7 @@ const ThemePage = () => {
       // 监听请求完成
       xhr.addEventListener("load", async () => {
         if (xhr.status === 413) {
-          toast.error(t("theme.uploda_413_content_too_large"));
+          toast.error(t("theme.upload_413_content_too_large"));
           setUploading(false);
           setUploadProgress(0);
           setUploadXhr(null);
@@ -273,18 +260,10 @@ const ThemePage = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      await clearThemeNavigationCache();
-      try {
-        window.localStorage.setItem(
-          THEME_CHANGE_STORAGE_KEY,
-          `${themeShort}:${Date.now()}`,
-        );
-      } catch {
-        // Theme switching still works when browser storage is unavailable.
-      }
-
       // 刷新 settings 以获取最新的主题设置
       await refetchSettings();
+      await refreshPublicInfo();
+      refreshNavigation();
 
       // 更新主题列表中的活跃状态
       setThemes((prevThemes) =>
@@ -293,17 +272,6 @@ const ThemePage = () => {
           active: theme.short === themeShort,
         })),
       );
-
-      const theme = themes.find((t) => t.short === themeShort);
-      if (
-        theme &&
-        getThemeConfigurationType(theme.configuration) ===
-          THEME_CONFIGURATION_MANAGED &&
-        Array.isArray(theme.configuration.data) &&
-        theme.configuration.data.length > 0
-      ) {
-        window.location.reload();
-      }
 
       toast.success(t("theme.set_success"));
     } catch (err) {
@@ -339,6 +307,10 @@ const ThemePage = () => {
 
       // 重新获取主题列表
       await fetchThemes();
+      if (themeShort === currentTheme) {
+        await refreshPublicInfo();
+        refreshNavigation();
+      }
 
       setUpdateDialogOpen(false);
       setPreviewDialogOpen(false);
@@ -357,6 +329,12 @@ const ThemePage = () => {
   // 删除主题
   const deleteTheme = async (themeShort: string) => {
     try {
+      // 如果删除的是当前活跃主题，先切换到默认主题
+      if (themeShort === currentTheme) {
+        await setActiveTheme("default");
+        await refetchSettings();
+      }
+
       const response = await fetch("/api/admin/theme/delete", {
         method: "POST",
         headers: {
@@ -370,20 +348,7 @@ const ThemePage = () => {
         throw new Error(errorData.message || "Delete failed");
       }
 
-      const payload = await response.json();
-      if (themeShort === currentTheme) {
-        await clearThemeNavigationCache();
-        try {
-          window.localStorage.setItem(
-            THEME_CHANGE_STORAGE_KEY,
-            `${payload?.data?.theme || "fallback"}:${Date.now()}`,
-          );
-        } catch {
-          // Other public tabs will update on their next navigation.
-        }
-      }
-
-      await refetchSettings();
+      // 重新获取主题列表
       await fetchThemes();
 
       setDeleteDialogOpen(false);
@@ -472,7 +437,7 @@ const ThemePage = () => {
   }, [currentTheme, settingsLoading, themes.length]);
 
   if (loading) {
-    return <SettingsPageSkeleton />;
+    return <Loading />;
   }
 
   if (error) {
@@ -480,25 +445,12 @@ const ThemePage = () => {
   }
 
   return (
-    <Box className="space-y-6">
+    <Box className="km-page-admin-settings-theme p-6 space-y-6">
       <Flex justify="between" align="center" gap="3" wrap="wrap">
-        <AdminPageTitle
-          description={t(
-            "theme.page_description",
-            "管理已安装主题、切换当前主题并维护主题配置。",
-          )}
-        >
+        <Text size="6" weight="bold">
           {t("theme.title")}
-        </AdminPageTitle>
-        <Flex gap="2" wrap="wrap" className="w-full sm:w-auto [&>button]:min-w-[8rem] [&>button]:flex-1 sm:[&>button]:min-w-0 sm:[&>button]:flex-none">
-          <Button
-            variant="soft"
-            className="gap-2"
-            onClick={() => navigate("/admin/market/themes")}
-          >
-            <Store size={16} />
-            {t("market.themes")}
-          </Button>
+        </Text>
+        <Flex gap="2">
           {activeThemeHasConfig && (
             <Button
               variant="soft"
@@ -506,7 +458,7 @@ const ThemePage = () => {
               onClick={() => navigate("/admin/theme_managed")}
             >
               <Settings size={16} />
-              {`${currentTheme}设置`}
+              {t("theme.settings_with_name", { name: currentTheme })}
             </Button>
           )}
           <Button onClick={() => setUploadDialogOpen(true)} className="gap-2">
@@ -617,6 +569,8 @@ const ThemePage = () => {
                     variant="ghost"
                     onClick={() => setActiveTheme(theme.short)}
                     disabled={settingTheme === theme.short}
+                    title={t("theme.set_active", "Set as Active Theme")}
+                    aria-label={t("theme.set_active", "Set as Active Theme")}
                   >
                     {settingTheme === theme.short ? (
                       <Box className="animate-spin">
@@ -637,7 +591,7 @@ const ThemePage = () => {
       <UploadDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
-        title={t("theme.upload_theme")}
+        title={t("theme.upload")}
         description={t("theme.upload_description")}
         accept=".zip"
         dragDropText={t("theme.drag_drop")}
@@ -687,7 +641,7 @@ const ThemePage = () => {
               </Flex>
               <Flex gap="2" justify="start" align="center">
                 <Text size="2" weight="bold" color="gray" wrap="nowrap">
-                  {t("theme.description")}
+                  {t("common.description")}
                 </Text>
                 <Text size="3">{selectedTheme?.description}</Text>
               </Flex>
@@ -699,7 +653,13 @@ const ThemePage = () => {
                   <Text size="1" className="overflow-hidden text-ellipsis">
                     {selectedTheme?.url}
                   </Text>
-                  <a href={selectedTheme.url} target="_blank">
+                  <a
+                    href={selectedTheme.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={t("theme.theme_url", "Theme URL")}
+                    aria-label={t("theme.theme_url", "Theme URL")}
+                  >
                     <SquareArrowOutUpRight size={12} />
                   </a>
                 </Flex>
@@ -707,7 +667,7 @@ const ThemePage = () => {
             </Flex>
           </Box>
 
-          <Flex gap="3" mt="4" justify="end" wrap="wrap" className="km-theme-preview-actions">
+          <Flex gap="3" mt="4" justify="end">
             <Dialog.Close>
               <Button variant="soft" color="gray">
                 {t("common.close")}
@@ -723,7 +683,7 @@ const ThemePage = () => {
                 {t("theme.set_active")}
               </Button>
             )}
-            {selectedTheme && (
+            {selectedTheme && selectedTheme.short !== "default" && (
               <Button
                 variant="soft"
                 color="blue"
@@ -737,12 +697,11 @@ const ThemePage = () => {
                 {t("theme.update")}
               </Button>
             )}
-            {selectedTheme && (
+            {selectedTheme && selectedTheme.short !== "default" && (
               <Button
                 size="2"
                 variant="solid"
                 color="red"
-                disabled={themes.length <= 1}
                 onClick={() => {
                   setThemeToDelete(selectedTheme);
                   setDeleteDialogOpen(true);
@@ -787,7 +746,7 @@ const ThemePage = () => {
       {/* 更新主题对话框 */}
       <Dialog.Root open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
         <Dialog.Content maxWidth="500px">
-          <Dialog.Title>{t("theme.update_theme")}</Dialog.Title>
+          <Dialog.Title>{t("theme.update")}</Dialog.Title>
           <Dialog.Description>
             {t("theme.update_description")}
           </Dialog.Description>
@@ -920,7 +879,7 @@ const ThemePage = () => {
                           color="gray"
                           wrap="nowrap"
                         >
-                          {t("theme.description")}
+                          {t("common.description")}
                         </Text>
                         <Text size="3">
                           {importPreview.theme.description}
@@ -966,6 +925,15 @@ const ThemePage = () => {
         </Dialog.Content>
       </Dialog.Root>
 
+      <label className="text-muted-foreground text-sm">
+        {t("theme.find_more")}
+        <a
+          href="/admin/market/themes"
+          className="text-accent-9"
+        >
+          {t("market.themes")}
+        </a>
+      </label>
     </Box>
   );
 };

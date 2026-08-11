@@ -4,154 +4,214 @@ import { updateSettingsWithToast, useSettings } from "@/lib/api";
 import {
   SettingCardButton,
   SettingCardCollapse,
+  SettingCardIconButton,
   SettingCardLabel,
   SettingCardLongTextInput,
   SettingCardShortTextInput,
   SettingCardSwitch,
 } from "@/components/admin/SettingCard";
 import { toast } from "sonner";
-import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
-import { useState } from "react";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
+import Loading from "@/components/loading";
+import { DownloadIcon } from "lucide-react";
+import { useRef, useState } from "react";
 import UploadDialog from "@/components/UploadDialog";
 
 export default function SiteSettings() {
   const { t } = useTranslation();
   const { settings, loading, error, refetch } = useSettings();
   const [shareHours, setShareHours] = useState(1);
-  const [faviconRevision, setFaviconRevision] = useState(() => Date.now());
-
-  const refreshFavicon = () => {
-    const revision = Date.now();
-    setFaviconRevision(revision);
-    document.querySelectorAll<HTMLLinkElement>('link[rel*="icon"]').forEach((link) => {
-      const href = link.getAttribute("href") || "/favicon.ico";
-      const url = new URL(href, window.location.origin);
-      if (url.pathname.endsWith("/favicon.ico")) {
-        url.searchParams.set("v", String(revision));
-        link.href = `${url.pathname}${url.search}${url.hash}`;
-      }
-    });
-  };
 
   // 恢复备份对话框与上传状态
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreProgress, setRestoreProgress] = useState(0);
-  const [restoreXhr, setRestoreXhr] = useState<XMLHttpRequest | null>(null);
+  const cancelledRef = useRef(false);
+  const restoreXhrsRef = useRef<Set<XMLHttpRequest>>(new Set());
+  const restoreAbortControllerRef = useRef<AbortController | null>(null);
 
-  const downloadBackup = async (scope: "full" | "config") => {
-    const response = await fetch(`/api/admin/download/backup?scope=${scope}`);
-    if (!response.ok) {
-      const body = await response.text();
-      let message = body || `HTTP ${response.status}`;
-      try {
-        message = JSON.parse(body)?.message || message;
-      } catch {
-        // Keep the server response as-is when it is not JSON.
-      }
-      toast.error(message);
-      throw new Error(message);
-    }
-
-    const disposition = response.headers.get("content-disposition") || "";
-    const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1]
-      || `Komari-Lite-${scope}.zip`;
-    const objectURL = URL.createObjectURL(await response.blob());
-    const anchor = document.createElement("a");
-    anchor.href = objectURL;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(objectURL), 1_000);
-  };
-
-  const uploadBackup = async (file: File) => {
-    if (!file.name.endsWith(".zip")) {
-      toast.error(t("theme.invalid_file_type", "仅支持 .zip 文件"));
-      return;
-    }
-
-    setRestoring(true);
-    setRestoreProgress(0);
-    const formData = new FormData();
-    formData.append("backup", file);
-
-    return new Promise<void>((resolve, reject) => {
+  // 上传单个分块，返回 Promise，通过 onProgress 回调汇报块内进度
+  const uploadChunk = (
+    uploadID: string,
+    chunkIndex: number,
+    chunk: Blob,
+    onProgress: (pct: number) => void,
+  ): Promise<void> => {
+    return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      setRestoreXhr(xhr);
+      restoreXhrsRef.current.add(xhr);
+
+      const complete = (callback: () => void) => {
+        restoreXhrsRef.current.delete(xhr);
+        callback();
+      };
 
       xhr.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable) {
-          const percent = (e.loaded / e.total) * 100;
-          setRestoreProgress(Math.round(percent));
+          onProgress((e.loaded / e.total) * 100);
         }
       });
 
       xhr.addEventListener("load", () => {
-        try {
-          const ok = xhr.status >= 200 && xhr.status < 300;
-          const data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-          if (ok) {
-            if (data && data.status && data.status !== "success") {
-              // 服务器返回了非 success 状态
-              const msg =
-                data.message ||
-                t("settings.site.backup_restore_error", "恢复备份失败");
-              toast.error(msg);
-              reject(new Error(msg));
-            } else {
-              toast.success(t("account_settings.upload_success", "上传成功"));
-              setRestoreOpen(false);
-              setRestoreProgress(0);
-              resolve();
-            }
-          } else {
-            const msg =
-              (data && data.message) ||
-              t("settings.site.backup_restore_error", "恢复备份失败");
-            toast.error(msg);
-            reject(new Error(msg));
+        if (xhr.status >= 200 && xhr.status < 300) {
+          complete(resolve);
+        } else {
+          let message = `Chunk ${chunkIndex} upload failed: ${xhr.status}`;
+          try {
+            const data = JSON.parse(xhr.responseText);
+            message = data.message || message;
+          } catch {
+            // Keep the HTTP status message when the response is not JSON.
           }
-        } catch (err) {
-          toast.error(t("settings.site.backup_restore_error", "恢复备份失败"));
-          reject(err as Error);
-        } finally {
-          setRestoring(false);
-          setRestoreXhr(null);
+          complete(() => reject(new Error(message)));
         }
       });
 
-      xhr.addEventListener("error", () => {
-        toast.error(t("settings.site.backup_restore_error", "恢复备份失败"));
-        setRestoring(false);
-        setRestoreProgress(0);
-        setRestoreXhr(null);
-        reject(new Error("Network error"));
-      });
+      xhr.addEventListener("error", () =>
+        complete(() => reject(new Error(`Chunk ${chunkIndex} network error`))),
+      );
+      xhr.addEventListener("abort", () =>
+        complete(() => reject(new Error("Upload cancelled"))),
+      );
 
-      xhr.addEventListener("abort", () => {
-        toast.error(
-          t("theme.upload_failed", "上传失败") + ": Upload cancelled",
-        );
-        setRestoring(false);
-        setRestoreProgress(0);
-        setRestoreXhr(null);
-        reject(new Error("Upload cancelled"));
-      });
+      const form = new FormData();
+      form.append("upload_id", uploadID);
+      form.append("chunk_index", String(chunkIndex));
+      form.append("chunk_data", chunk, `chunk-${chunkIndex}`);
 
-      xhr.open("POST", "/api/admin/upload/backup");
-      xhr.send(formData);
+      xhr.open("POST", "/api/admin/upload/backup/chunk");
+      xhr.send(form);
     });
   };
 
+  const uploadChunkWithRetry = async (
+    uploadID: string,
+    chunkIndex: number,
+    chunk: Blob,
+    onProgress: (pct: number) => void,
+  ): Promise<void> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await uploadChunk(uploadID, chunkIndex, chunk, onProgress);
+        return;
+      } catch (error) {
+        if (cancelledRef.current || attempt === 1) throw error;
+      }
+    }
+  };
+
+  const uploadBackup = async (file: File) => {
+    if (restoring) return;
+
+    if (!file.name.toLowerCase().endsWith(".zip") || file.size === 0) {
+      toast.error(t("theme.invalid_file_type", "仅支持 .zip 文件"));
+      return;
+    }
+
+    cancelledRef.current = false;
+    setRestoring(true);
+    setRestoreProgress(0);
+    try {
+      // 1. 初始化分块上传
+      const initAbortController = new AbortController();
+      restoreAbortControllerRef.current = initAbortController;
+      const initRes = await fetch("/api/admin/upload/backup/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size: file.size }),
+        signal: initAbortController.signal,
+      });
+      if (!initRes.ok) {
+        throw new Error("Failed to init chunk upload");
+      }
+      const initData: unknown = await initRes.json();
+      if (
+        !initData ||
+        typeof initData !== "object" ||
+        typeof (initData as { upload_id?: unknown }).upload_id !== "string" ||
+        typeof (initData as { chunk_size?: unknown }).chunk_size !== "number" ||
+        (initData as { chunk_size: number }).chunk_size <= 0
+      ) {
+        throw new Error("Invalid chunk upload configuration");
+      }
+      const { upload_id, chunk_size } = initData as {
+        upload_id: string;
+        chunk_size: number;
+      };
+      restoreAbortControllerRef.current = null;
+
+      // 2. 并行上传分块；单个分块最多自动重试一次
+      const totalChunks = Math.ceil(file.size / chunk_size);
+      const chunkProgress = new Map<number, number>();
+      let nextChunk = 0;
+      const worker = async () => {
+        while (!cancelledRef.current) {
+          const chunkIndex = nextChunk++;
+          if (chunkIndex >= totalChunks) return;
+
+          const start = chunkIndex * chunk_size;
+          const end = Math.min(start + chunk_size, file.size);
+          const chunk = file.slice(start, end);
+          await uploadChunkWithRetry(upload_id, chunkIndex, chunk, (chunkPct) => {
+            chunkProgress.set(chunkIndex, chunkPct);
+            let totalPct = 0;
+            for (const pct of chunkProgress.values()) totalPct += pct;
+            setRestoreProgress(Math.round(totalPct / totalChunks));
+          });
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(3, totalChunks) }, () => worker()),
+      );
+
+      if (cancelledRef.current) return;
+
+      // 3. 合并分块并触发恢复
+      const mergeAbortController = new AbortController();
+      restoreAbortControllerRef.current = mergeAbortController;
+      const mergeRes = await fetch("/api/admin/upload/backup/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_id }),
+        signal: mergeAbortController.signal,
+      });
+      const mergeData = await mergeRes.json();
+      if (!mergeRes.ok || (mergeData.status && mergeData.status !== "success")) {
+        throw new Error(mergeData.message || "Merge failed");
+      }
+
+      toast.success(t("account_settings.upload_success", "上传成功"));
+      setRestoreOpen(false);
+      setRestoreProgress(0);
+    } catch (err) {
+      const userCancelled = cancelledRef.current;
+      if (!userCancelled) {
+        cancelledRef.current = true;
+        for (const xhr of restoreXhrsRef.current) xhr.abort();
+      }
+      if (userCancelled) return;
+      const msg =
+        err instanceof Error
+          ? err.message
+          : t("settings.site.backup_restore_error", "恢复备份失败");
+      toast.error(msg);
+    } finally {
+      setRestoring(false);
+      restoreXhrsRef.current.clear();
+      restoreAbortControllerRef.current = null;
+      if (cancelledRef.current) {
+        setRestoreProgress(0);
+      }
+    }
+  };
+
   const cancelRestore = () => {
-    if (restoreXhr) restoreXhr.abort();
+    cancelledRef.current = true;
+    for (const xhr of restoreXhrsRef.current) xhr.abort();
+    restoreAbortControllerRef.current?.abort();
   };
 
   if (loading) {
-    return <SettingsPageSkeleton />;
+    return <Loading />;
   }
 
   if (error) {
@@ -160,14 +220,7 @@ export default function SiteSettings() {
 
   return (
     <>
-      <AdminPageTitle
-        description={t(
-          "settings.site.page_description",
-          "管理站点信息、访问策略、备份与接口安全设置。",
-        )}
-      >
-        {t("settings.site.title")}
-      </AdminPageTitle>
+      <SettingCardLabel>{t("settings.site.title")}</SettingCardLabel>
       <SettingCardShortTextInput
         title={t("settings.site.name")}
         description={t("settings.site.name_description")}
@@ -191,11 +244,11 @@ export default function SiteSettings() {
         onChange={async (checked) => {
           await updateSettingsWithToast({ cors_origin_check_enabled: checked }, t);
         }}
+        className="km-page-admin-settings-site km-setting-card"
       />
       <SettingCardLongTextInput
         title={t("settings.site.cors_allowed_origins", "API CORS 允许列表")}
-        description={t(
-          "settings.site.cors_allowed_origins_description",
+        description={t("settings.site.origins_list_description",
           "每行或用逗号分隔一个 Origin，例如 https://example.com",
         )}
         defaultValue={settings.cors_allowed_origins || ""}
@@ -216,11 +269,11 @@ export default function SiteSettings() {
             t,
           );
         }}
+        className="km-setting-card"
       />
       <SettingCardLongTextInput
         title={t("settings.site.ws_allowed_origins", "WebSocket Origin 允许列表")}
-        description={t(
-          "settings.site.ws_allowed_origins_description",
+        description={t("settings.site.origins_list_description",
           "每行或用逗号分隔一个 Origin，例如 https://example.com",
         )}
         defaultValue={settings.ws_allowed_origins || ""}
@@ -235,6 +288,7 @@ export default function SiteSettings() {
         onChange={async (checked) => {
           await updateSettingsWithToast({ send_ip_addr_to_guest: checked }, t);
         }}
+        className="km-setting-card"
       />
       <SettingCardShortTextInput
         title={t("settings.site.script_domain")}
@@ -253,14 +307,15 @@ export default function SiteSettings() {
         onChange={async (checked) => {
           await updateSettingsWithToast({ private_site: checked }, t);
         }}
+        className="km-setting-card"
       />
       <SettingCardCollapse
-        title={t("settings.site.tempory_share")}
-        description={t("settings.site.tempory_share_description")}
+        title={t("settings.site.temporary_share")}
+        description={t("settings.site.temporary_share_description")}
       >
         <div className="flex w-full flex-col gap-4">
           <SettingCardShortTextInput
-            title={t("settings.site.tempory_share_current_link")}
+            title={t("settings.site.temporary_share_current_link")}
             value={
               settings.tempory_share_token
                 ? `${window.location.origin}/?temp_key=${settings.tempory_share_token}`
@@ -277,14 +332,14 @@ export default function SiteSettings() {
                 navigator.clipboard.writeText(
                   `${window.location.origin}/?temp_key=${settings.tempory_share_token}`,
                 );
-                toast.success(t("copy"));
+                toast.success(t("common.copy"));
               }}
             >
-              {t("copy")}
+              {t("common.copy")}
             </Button>
           </SettingCardShortTextInput>
           <SettingCardShortTextInput
-            title={t("settings.site.tempory_share_hours")}
+            title={t("settings.site.temporary_share_hours")}
             bordless
             showSaveButton={false}
             value={shareHours}
@@ -329,7 +384,7 @@ export default function SiteSettings() {
                 await refetch();
               }}
             >
-              {t("settings.site.tempory_share_revoke")}
+              {t("settings.site.temporary_share_revoke")}
             </Button>
           </div>
         </div>
@@ -375,7 +430,7 @@ export default function SiteSettings() {
           <Flex gap="2" align="center">
             {t("settings.custom.favicon_current", "当前 Favicon")}
             <img
-              src={`/favicon.ico?v=${faviconRevision}`}
+              src="/favicon.ico"
               alt="Favicon"
               style={{ width: 32, height: 32 }}
             />
@@ -419,7 +474,6 @@ export default function SiteSettings() {
                           })
                           .then((data) => {
                             if (data.status === "success") {
-                              refreshFavicon();
                               toast.success(t("settings.custom.favicon_default_success"));
                             } else {
                               toast.error(
@@ -432,7 +486,7 @@ export default function SiteSettings() {
                           });
                       }}
                     >
-                      {t("settings.custom.favicon_confirm")}
+                      {t("common.confirm")}
                     </Button>
                   </Dialog.Trigger>
                 </Flex>
@@ -459,7 +513,6 @@ export default function SiteSettings() {
                       );
                       const data = await response.json();
                       if (data.status === "success") {
-                        refreshFavicon();
                         toast.success(
                           t(
                             "settings.custom.favicon_update_success"
@@ -482,24 +535,21 @@ export default function SiteSettings() {
         </Flex>
       </SettingCardCollapse>
       <SettingCardLabel>{t("settings.site.backup")}</SettingCardLabel>
-      <SettingCardButton
-        title={t("settings.site.backup_full_download")}
-        description={t("settings.site.backup_full_download_description")}
-        onClick={() => downloadBackup("full")}
+      <SettingCardIconButton
+        title={t("settings.site.backup_download")}
+        description={t("settings.site.backup_download_description")}
+        onClick={() => {
+          window.open("/api/admin/download/backup", "_blank");
+        }}
+        className="km-setting-card"
       >
-        {t("common.export")}
-      </SettingCardButton>
-      <SettingCardButton
-        title={t("settings.site.backup_config_download")}
-        description={t("settings.site.backup_config_download_description")}
-        onClick={() => downloadBackup("config")}
-      >
-        {t("common.export")}
-      </SettingCardButton>
+        <DownloadIcon size={16} />
+      </SettingCardIconButton>
       <SettingCardButton
         title={t("settings.site.backup_restore")}
         description={t("settings.site.backup_restore_description")}
         onClick={() => setRestoreOpen(true)}
+        className="km-setting-card"
       >
         {t("common.select")}
       </SettingCardButton>
@@ -507,7 +557,13 @@ export default function SiteSettings() {
       {/* 上传备份对话框 */}
       <UploadDialog
         open={restoreOpen}
-        onOpenChange={setRestoreOpen}
+        onOpenChange={(open) => {
+          if (!open && restoring) {
+            cancelRestore();
+            return;
+          }
+          setRestoreOpen(open);
+        }}
         title={t("settings.site.backup_restore")}
         description={t("settings.site.backup_restore_description")}
         accept=".zip"

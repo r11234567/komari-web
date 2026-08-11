@@ -609,29 +609,6 @@ export const getRegionDisplayName = (regionEmoji: string, language: 'en' | 'zh' 
   return language === 'zh' ? regionInfo.zh : regionInfo.en;
 };
 
-/** Convert a flag emoji or an existing ISO value to a two-letter region code. */
-export const getRegionCode = (region?: string | null): string => {
-  const normalized = typeof region === "string" ? region.trim() : "";
-  if (/^[a-z]{2}$/i.test(normalized)) {
-    return normalized.toUpperCase();
-  }
-
-  const indicators = Array.from(normalized);
-  if (indicators.length !== 2) {
-    return "UN";
-  }
-
-  const start = 0x1f1e6;
-  const codePoints = indicators.map((indicator) => indicator.codePointAt(0) ?? 0);
-  if (codePoints.some((codePoint) => codePoint < start || codePoint > 0x1f1ff)) {
-    return "UN";
-  }
-
-  return codePoints
-    .map((codePoint) => String.fromCharCode(0x41 + codePoint - start))
-    .join("");
-};
-
 /**
  * 获取所有支持的地区emoji列表
  * @returns 地区emoji数组

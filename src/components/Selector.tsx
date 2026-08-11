@@ -1,8 +1,7 @@
 import React from "react";
-import { TextField } from "@radix-ui/themes";
+import { Checkbox, TextField } from "@radix-ui/themes";
 import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Checkbox } from "./ui/checkbox";
 import {
   Table,
   TableBody,
@@ -37,8 +36,6 @@ export interface SelectorProps<T> {
   searchPlaceholder?: string;
   /** 表头标题（第二列） */
   headerLabel?: React.ReactNode;
-  /** 是否在标题行显示全选框 */
-  showHeaderSelectAll?: boolean;
 }
 
 function SelectorInner<T>(props: SelectorProps<T>) {
@@ -54,7 +51,6 @@ function SelectorInner<T>(props: SelectorProps<T>) {
     filterItem,
     searchPlaceholder,
     headerLabel,
-    showHeaderSelectAll = true,
   } = props;
   const { t } = useTranslation();
 
@@ -109,7 +105,7 @@ function SelectorInner<T>(props: SelectorProps<T>) {
   };
 
   return (
-    <div className={`flex flex-col ${className}`}>
+    <div className={`km-selector flex flex-col ${className}`}>
       <TextField.Root
         className="mb-2 flex items-center gap-1"
         placeholder={resolvedSearchPlaceholder}
@@ -126,14 +122,11 @@ function SelectorInner<T>(props: SelectorProps<T>) {
         <Table>
           <TableHeader>
             <TableHead>
-              {showHeaderSelectAll ? (
-                <Checkbox
-                  checked={checkAllState}
-                  onClick={(event) => event.stopPropagation()}
-                  onCheckedChange={(checked) => handleCheckAll(checked === true)}
-                  aria-label={t("common.select_all")}
-                />
-              ) : null}
+              <Checkbox
+                checked={checkAllState}
+                onCheckedChange={(checked) => handleCheckAll(!!checked)}
+                aria-label={t("common.select_all")}
+              />
             </TableHead>
             <TableHead>{resolvedHeaderLabel}</TableHead>
           </TableHeader>
@@ -142,6 +135,7 @@ function SelectorInner<T>(props: SelectorProps<T>) {
               const id = getId(it);
               return (
                 <TableRow
+                  className="km-node-selector-item"
                   key={id}
                   onClick={() => {
                     handleCheck(id, !value.includes(id));
@@ -150,8 +144,7 @@ function SelectorInner<T>(props: SelectorProps<T>) {
                   <TableCell>
                     <Checkbox
                       checked={value.includes(id)}
-                      onClick={(event) => event.stopPropagation()}
-                      onCheckedChange={(checked) => handleCheck(id, checked === true)}
+                      onCheckedChange={(checked) => handleCheck(id, !!checked)}
                       aria-label={`${t("common.select")} ${id}`}
                     />
                   </TableCell>
@@ -161,6 +154,7 @@ function SelectorInner<T>(props: SelectorProps<T>) {
             })}
             {orphanIds.map((id) => (
               <TableRow
+                className="km-node-selector-item"
                 key={id}
                 onClick={() => {
                   handleCheck(id, !value.includes(id));
@@ -169,8 +163,7 @@ function SelectorInner<T>(props: SelectorProps<T>) {
                 <TableCell>
                   <Checkbox
                     checked={value.includes(id)}
-                    onClick={(event) => event.stopPropagation()}
-                    onCheckedChange={(checked) => handleCheck(id, checked === true)}
+                    onCheckedChange={(checked) => handleCheck(id, !!checked)}
                     aria-label={`${t("common.select")} ${id}`}
                   />
                 </TableCell>

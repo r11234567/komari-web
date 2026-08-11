@@ -3,9 +3,6 @@ import {
   quoteShellArg,
   quoteShellArgs,
 } from "@/utils/shellQuote";
-import { publicVersion } from "@/utils/version";
-import { normalizeOptionalServiceUrl } from "@/utils/serviceUrl";
-import { writeClipboardText } from "@/utils/clipboard";
 import React, { useEffect, useState } from "react";
 import {
   NodeDetailsProvider,
@@ -16,6 +13,7 @@ import {
   Flex,
   TextField,
   Button,
+  Checkbox,
   Text,
   Dialog,
   IconButton,
@@ -23,29 +21,21 @@ import {
   SegmentedControl,
   Callout,
 } from "@radix-ui/themes";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   CircleDollarSign,
-  CheckCircle2,
-  Clock3,
   Copy,
   CornerRightUp,
   Download,
-  Gauge,
-  GripVertical,
+  MenuIcon,
   Pencil,
   Plus,
   Radar,
-  RotateCw,
-  Save,
-  Send,
   Settings,
   Terminal,
   Trash2Icon,
-  XCircle,
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Trans, useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   DndContext,
   closestCenter,
@@ -72,6 +62,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 import { formatBytes, stringToBytes } from "@/utils/unitHelper";
 import PriceTags from "@/components/PriceTags";
 import Loading from "@/components/loading";
@@ -83,39 +83,7 @@ import {
   SettingCardSwitch,
 } from "@/components/admin/SettingCard";
 import { useSettings } from "@/lib/api";
-import {
-  dateInputToISOString,
-  timestampToDateInput,
-} from "@/lib/dateInput";
-import { currencyForDisplay, currencyForStorage } from "@/lib/currency";
-import { openRemoteTerminal } from "@/utils/remoteLaunch";
-import { localizeTokenRotationError } from "@/utils/tokenRotation";
 import { SelectOrInput } from "@/components/ui/select-or-input";
-import AdminPageTitle from "@/components/admin/AdminPageTitle";
-import AdminActiveFilter from "@/components/admin/AdminActiveFilter";
-import AdminNodeStatusSummary, {
-  type AdminNodeStatusFilter,
-} from "@/components/admin/AdminNodeStatusSummary";
-import {
-  AdminPagination,
-} from "@/components/admin/AdminPagination";
-import { useAdminDefaultPageSize } from "@/hooks/useAdminDefaultPageSize";
-import { useAdminNodeLiveData } from "@/hooks/use-admin-node-live-data";
-import {
-  getDashboardAlertItemsSnapshot,
-  requestDashboardAlertItems,
-  serverAlertKinds,
-} from "@/utils/adminAlertFilters";
-import { useAccount } from "@/contexts/AccountContext";
-import type {
-  DashboardAlertAffectedItem,
-  DashboardAlertKind,
-} from "@/utils/dashboard";
-import {
-  getRegionCode,
-  getRegionDisplayName,
-  getSupportedRegions,
-} from "@/utils/regionHelper";
 
 
 const NodeDetailsPage = () => {
@@ -126,120 +94,23 @@ const NodeDetailsPage = () => {
   );
 };
 
-const PREVIOUS_PAGE_DROP_ID = "admin-node-previous-page";
-const NEXT_PAGE_DROP_ID = "admin-node-next-page";
-
 const Layout = () => {
-  const { t } = useTranslation();
-  const { account } = useAccount();
-  const accountKey = account?.uuid || account?.username || "authenticated";
   const { nodeDetail, isLoading, error, refresh } = useNodeDetails();
   const { settings, loading: settingsLoading } = useSettings();
-  const { liveData, available } = useAdminNodeLiveData();
-  const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<AdminNodeStatusFilter>("all");
-  const routeNode = searchParams.get("node")?.trim() || "";
-  const alertParam = searchParams.get("alert")?.trim() as DashboardAlertKind | null;
-  const routeAlert = alertParam && serverAlertKinds.has(alertParam) ? alertParam : null;
-  const initialAlertSnapshot = routeAlert
-    ? getDashboardAlertItemsSnapshot(routeAlert, accountKey)
-    : null;
-  const [alertItems, setAlertItems] = useState<DashboardAlertAffectedItem[]>(
-    initialAlertSnapshot?.items ?? [],
-  );
-  const [alertFilterLoading, setAlertFilterLoading] = useState(
-    Boolean(routeAlert && !initialAlertSnapshot),
-  );
-  const [alertFilterError, setAlertFilterError] = useState("");
-  const onlineSet = React.useMemo(
-    () => new Set(liveData?.data.online ?? []),
-    [liveData?.data.online],
-  );
+  const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  const filteredNodes = Array.isArray(nodeDetail)
+    ? nodeDetail
+        .filter((node) =>
+          node.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        .sort((a, b) => a.weight - b.weight)
+    : [];
 
   useEffect(() => {
-    if (!routeAlert) {
-      setAlertItems([]);
-      setAlertFilterLoading(false);
-      setAlertFilterError("");
-      return;
-    }
-    const snapshot = getDashboardAlertItemsSnapshot(routeAlert, accountKey);
-    if (snapshot) {
-      setAlertItems(snapshot.items);
-      setAlertFilterLoading(false);
-      setAlertFilterError("");
-      return;
-    }
-    const controller = new AbortController();
-    setAlertFilterLoading(true);
-    setAlertFilterError("");
-    void requestDashboardAlertItems(routeAlert, controller.signal, accountKey)
-      .then((response) => setAlertItems(response.items))
-      .catch((requestError) => {
-        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
-        setAlertItems([]);
-        setAlertFilterError(requestError instanceof Error ? requestError.message : String(requestError));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setAlertFilterLoading(false);
-      });
-    return () => controller.abort();
-  }, [accountKey, routeAlert]);
-
-  const alertItemOrder = React.useMemo(
-    () => new Map(alertItems.map((item, index) => [item.node_uuid, index])),
-    [alertItems],
-  );
-  const filteredNodes = React.useMemo(
-    () => {
-      if (!Array.isArray(nodeDetail)) return [];
-      const filtered = nodeDetail.filter((node) => {
-        const matchesSearch = node.name
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase());
-        const isOnline = onlineSet.has(node.uuid);
-        const matchesStatus =
-          statusFilter === "all" ||
-          (statusFilter === "online" && isOnline) ||
-          (statusFilter === "offline" && !isOnline);
-        const matchesNode = !routeNode || node.uuid === routeNode;
-        const matchesAlert = !routeAlert || alertItemOrder.has(node.uuid);
-        return matchesSearch && matchesStatus && matchesNode && matchesAlert;
-      });
-      if (routeAlert === "billing") {
-        filtered.sort((left, right) => (
-          (alertItemOrder.get(left.uuid) ?? Number.MAX_SAFE_INTEGER)
-          - (alertItemOrder.get(right.uuid) ?? Number.MAX_SAFE_INTEGER)
-        ));
-      }
-      return filtered;
-    },
-    [alertItemOrder, nodeDetail, onlineSet, routeAlert, routeNode, searchTerm, statusFilter],
-  );
-
-  const activeFilterLabel = React.useMemo(() => {
-    if (routeNode) {
-      return nodeDetail.find((node) => node.uuid === routeNode)?.name || routeNode;
-    }
-    if (!routeAlert) return "";
-    const keys: Record<DashboardAlertKind, string> = {
-      offline: "alert_offline",
-      resource: "alert_resource",
-      latency_loss: "alert_latency_loss",
-      traffic: "alert_traffic",
-      return_route: "alert_return_route",
-      billing: "alert_billing",
-    };
-    return t(`admin_dashboard.${keys[routeAlert]}`);
-  }, [nodeDetail, routeAlert, routeNode, t]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refresh();
-    }, 15000);
+    const interval = setInterval(() => { refresh() }, 5000);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [nodeDetail]);
 
   if (isLoading) return <Loading text="" />;
   if (error) return <div>{error}</div>;
@@ -247,40 +118,24 @@ const Layout = () => {
   const isEmpty = Array.isArray(nodeDetail) && nodeDetail.length === 0;
 
   return (
-    <Flex direction="column" gap="4" className="p-0 md:p-4">
+    <Flex direction="column" gap="4" p="4" className="km-page-admin-index">
       <Header
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        selectedNodes={selectedNodes}
         settings={settings}
         settingsLoading={settingsLoading}
-        showStatusSummary={!isEmpty}
-        total={nodeDetail.length}
-        online={onlineSet.size}
-        available={available}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
       />
 
-      {activeFilterLabel ? (
-        <AdminActiveFilter label={activeFilterLabel} clearTo="/admin/servers" />
-      ) : null}
-      {alertFilterError ? (
-        <Callout.Root color="red" size="1"><Callout.Text>{alertFilterError}</Callout.Text></Callout.Root>
-      ) : null}
-
-      {alertFilterLoading ? null : isEmpty ? (
+      {isEmpty ? (
         <EmptyNodesGuide />
-      ) : filteredNodes.length === 0 ? (
-        <Callout.Root color="gray"><Callout.Text>{t("common.no_data", "没有符合当前筛选的服务器")}</Callout.Text></Callout.Root>
       ) : (
-        <>
-          <NodeTable
-            nodes={filteredNodes}
-            settings={settings}
-            onlineSet={onlineSet}
-            reorderEnabled={!searchTerm.trim() && statusFilter === "all" && !routeNode && !routeAlert}
-          />
-        </>
+        <NodeTable
+          nodes={filteredNodes}
+          selectedNodes={selectedNodes}
+          setSelectedNodes={setSelectedNodes}
+          settings={settings}
+        />
       )}
     </Flex>
   );
@@ -384,7 +239,10 @@ const AutoDiscoverySection = ({
       if (!settings?.script_domain) {
         return window.location.origin;
       }
-      return normalizeOptionalServiceUrl(settings.script_domain);
+      if (settings.script_domain.startsWith("http")) {
+        return settings.script_domain.replace(/\/+$/, "");
+      }
+      return `http://${settings.script_domain.replace(/\/+$/, "")}`;
     })();
     const args: string[] = ["-e", host, "--auto-discovery", adKey];
     if (installOptions.disableWebSsh) {
@@ -407,7 +265,9 @@ const AutoDiscoverySection = ({
     }
     const ghproxy = installOptions.ghproxy.trim();
     if (enableGhproxy && ghproxy) {
-      const finalUrl = normalizeOptionalServiceUrl(ghproxy);
+      const finalUrl = (
+        ghproxy.startsWith("http") ? ghproxy : `http://${ghproxy}`
+      ).replace(/\/+$/, "");
       args.push(`--install-ghproxy`);
       args.push(finalUrl);
     }
@@ -457,7 +317,7 @@ const AutoDiscoverySection = ({
     if (selectedPlatform === "windows") {
       scriptFile = "install.ps1";
     }
-    let scriptUrl = `https://raw.githubusercontent.com/nuomiiiii/komari-agent/refs/heads/main/${scriptFile}`;
+    let scriptUrl = `https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/${scriptFile}`;
     if (enableGhproxy && ghproxy) {
       scriptUrl = scriptUrl.slice(8); // 去掉 https://
       if (ghproxy.endsWith("/")) {
@@ -515,7 +375,7 @@ const AutoDiscoverySection = ({
           `touch .komari-auto-discovery.json && ` +
           `docker run -d --name komari-agent --restart=always ` +
           `-v .komari-auto-discovery.json:/app/auto-discovery.json ` +
-          `ghcr.io/nuomiiiii/komari-agent:latest ` +
+          `ghcr.io/komari-monitor/komari-agent:latest ` +
           quoteShellArgs(dockerArgs);
         break;
       }
@@ -525,7 +385,7 @@ const AutoDiscoverySection = ({
 
   const copyToClipboard = async (text: string) => {
     try {
-      await writeClipboardText(text);
+      await navigator.clipboard.writeText(text);
       toast.success(t("copy_success", "已复制到剪贴板"));
     } catch (err) {
       console.error("Failed to copy text: ", err);
@@ -562,7 +422,7 @@ const AutoDiscoverySection = ({
                 <Settings size={14} />
                 {t(
                   "admin.nodeTable.autoDiscovery.goToSettings",
-                  "前往“通用设置”开启自动发现"
+                  "前往“常规设置”开启自动发现"
                 )}
               </Button>
             </Link>
@@ -590,7 +450,6 @@ const AutoDiscoverySection = ({
       </Flex>
 
       <SegmentedControl.Root
-        className="admin-install-platforms"
         value={selectedPlatform}
         onValueChange={(value) => setSelectedPlatform(value as Platform)}
       >
@@ -615,7 +474,7 @@ const AutoDiscoverySection = ({
 
       {showOptions && (
         <Flex direction="column" gap="2">
-          <div className="admin-install-options-grid grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Flex gap="2" align="center">
               <Checkbox
                 checked={installOptions.disableWebSsh}
@@ -753,7 +612,7 @@ const AutoDiscoverySection = ({
             </Flex>
           </div>
 
-          <Flex direction="column" gap="2" className="[&_label]:font-normal">
+          <Flex direction="column" gap="2">
             <Flex gap="2" align="center">
               <Checkbox
                 checked={enableGhproxy}
@@ -1057,7 +916,7 @@ const AutoDiscoverySection = ({
                   }));
                 }}
               >
-                {t("admin.nodeTable.monthRotate", "流量重置日")}
+                {t("admin.nodeTable.monthRotate", "网络统计月重置")}
               </label>
             </Flex>
             {enableMonthRotate && (
@@ -1095,7 +954,7 @@ const AutoDiscoverySection = ({
         onClick={() => copyToClipboard(generateCommand())}
       >
         <Copy size={16} />
-        {t("copy")}
+        {t("common.copy")}
       </Button>
     </Flex>
   );
@@ -1104,25 +963,15 @@ const AutoDiscoverySection = ({
 const Header = ({
   searchTerm,
   setSearchTerm,
+  selectedNodes,
   settings,
   settingsLoading,
-  showStatusSummary,
-  total,
-  online,
-  available,
-  statusFilter,
-  setStatusFilter,
 }: {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
+  selectedNodes: string[];
   settings: any;
   settingsLoading: boolean;
-  showStatusSummary: boolean;
-  total: number;
-  online: number;
-  available: boolean;
-  statusFilter: AdminNodeStatusFilter;
-  setStatusFilter: (filter: AdminNodeStatusFilter) => void;
 }) => {
   const { t } = useTranslation();
   const { refresh } = useNodeDetails();
@@ -1151,36 +1000,24 @@ const Header = ({
     }
   };
   return (
-    <Flex direction="column" gap="3">
-      <AdminPageTitle
-        description={t(
-          "admin.nodeTable.description",
-          "集中查看节点连接、网络、分组、备注与账单信息，拖动可调整全局显示顺序。",
+    <Flex justify="between" align="center" gap="4" wrap="wrap">
+      <Flex gap="2" align="center">
+        <Text size="5" weight="bold">
+          {t("admin.nodeTable.nodeList")}
+        </Text>
+        {selectedNodes.length > 0 && (
+          <Text size="2">({selectedNodes.length} selected)</Text>
         )}
-      >
-        {t("admin.nodeTable.nodeList")}
-      </AdminPageTitle>
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        {showStatusSummary ? (
-          <AdminNodeStatusSummary
-            total={total}
-            online={online}
-            available={available}
-            value={statusFilter}
-            onValueChange={setStatusFilter}
-          />
-        ) : null}
-        <Flex gap="2" className="w-full md:ml-auto md:w-auto">
+      </Flex>
+      <Flex gap="2">
         <TextField.Root
-          size="2"
-          className="min-w-0 flex-1 text-sm md:w-56"
           placeholder={t("admin.nodeTable.searchByName")}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
         <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
           <Dialog.Trigger>
-            <Button size="2" className="px-3 text-sm" onClick={() => setDialogOpen(true)}>
+            <Button onClick={() => setDialogOpen(true)}>
               <Plus size={16} />
               {t("admin.nodeTable.addNode")}
             </Button>
@@ -1205,155 +1042,134 @@ const Header = ({
             />
           </Dialog.Content>
         </Dialog.Root>
-        </Flex>
-      </div>
+      </Flex>
     </Flex>
   );
 };
 
-const compactIPv6 = (value: string) => {
-  if (value.length <= 22) return value;
-  const segments = value.split(":");
-  return segments.length > 3
-    ? `${segments.slice(0, 2).join(":")}:...${segments[segments.length - 1]}`
-    : value;
-};
-
-const SortableRow = React.memo(({
+const SortableRow = ({
   node,
-  settings,
-  online,
-  reorderEnabled,
+  selectedNodes,
+  handleSelectNode,
+  settings
 }: {
   node: NodeDetail;
+  selectedNodes: string[];
+  handleSelectNode: (uuid: string, checked: boolean) => void;
   settings: any;
-  online: boolean;
-  reorderEnabled: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: node.uuid, disabled: !reorderEnabled });
+    useSortable({ id: node.uuid });
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    borderColor: "var(--gray-a5)",
   };
-  async function copy(text: string) {
-    try {
-      await writeClipboardText(text);
-      toast.success(t("copy_success"));
-    } catch (err) {
-      console.error("Failed to copy text:", err);
-    }
+  function copy(text: string) {
+    navigator.clipboard.writeText(text);
+    toast.success(t("copy_success"));
   }
-  const networkAddresses = ([
-    ["IPv4", node.ipv4?.trim()],
-    ["IPv6", node.ipv6?.trim()],
-  ] as const).filter(
-    (entry): entry is readonly ["IPv4" | "IPv6", string] => Boolean(entry[1]),
-  );
-  const deploymentStatusLabel = (() => {
-    switch (node.deployment_status) {
-      case "saved":
-        return t("admin.nodeTable.deliverySaved", "已保存");
-      case "sent":
-        return t("admin.nodeTable.deliverySent", "已发送");
-      case "applied":
-        return t("admin.nodeTable.deliveryApplied", "已生效");
-      case "failed":
-        return t("admin.nodeTable.deliveryFailed", "应用失败");
-      default:
-        return "";
-    }
-  })();
   return (
-    <TableRow
-      ref={setNodeRef}
-      style={style}
-      className="text-sm hover:bg-[var(--accent-a2)] [&>td]:align-middle [&>td]:py-1.5"
-      data-node-status={online ? "online" : "offline"}
-    >
-      <TableCell className="w-[44px] px-2 !align-middle" data-label={t("common.sort", "排序")}>
-        <div className="flex items-center">
-          <button
-            type="button"
-            {...attributes}
-            {...listeners}
-            disabled={!reorderEnabled}
-            className={`inline-flex size-8 shrink-0 items-center justify-center rounded-md text-[var(--gray-9)] transition-colors ${
-              reorderEnabled
-                ? "cursor-grab hover:bg-[var(--accent-a3)] hover:text-[var(--accent-11)] active:cursor-grabbing"
-                : "cursor-not-allowed opacity-40"
-            } ${isMobile ? "touch-manipulation select-none" : ""}`}
-            style={{ touchAction: "none" }}
-            title={
-              reorderEnabled
-                ? t("admin.nodeTable.dragToReorder", "长按拖拽重新排序")
-                : t("admin.nodeTable.clearFilterToReorder", "清除搜索和筛选后可调整顺序")
-            }
-            aria-label={t("admin.nodeTable.dragToReorder", "长按拖拽重新排序")}
-          >
-            <GripVertical size={isMobile ? 18 : 16} />
-          </button>
+    <TableRow ref={setNodeRef} style={style} className="hover:bg-accent-a2">
+      <TableCell>
+        <div
+          {...attributes}
+          {...listeners}
+          className={`cursor-move p-2 rounded hover:bg-accent-a3 transition-colors ${
+            isMobile ? "touch-manipulation select-none" : ""
+          }`}
+          style={{
+            touchAction: "none", // 禁用移动端的默认手势
+            WebkitUserSelect: "none",
+            userSelect: "none",
+          }}
+          title={
+            isMobile
+              ? t("admin.nodeTable.dragToReorder", "长按拖拽重新排序")
+              : undefined
+          }
+        >
+          <MenuIcon size={isMobile ? 18 : 16} color={"var(--gray-8)"} />
         </div>
       </TableCell>
-      <TableCell
-        className="overflow-hidden !align-middle"
-        data-label={t("admin.nodeTable.name")}
-        title={node.name}
-      >
-        <DetailView node={node} online={online} />
+      <TableCell>
+        <Checkbox
+          checked={selectedNodes.includes(node.uuid)}
+          onCheckedChange={(checked) => handleSelectNode(node.uuid, !!checked)}
+        />
       </TableCell>
-      <TableCell className="!align-middle" data-label={t("admin.nodeTable.network", "网络")}>
-        <div className="flex min-w-0 flex-col justify-center text-sm leading-[1.125rem] text-muted-foreground">
-          {networkAddresses.length > 0 ? networkAddresses.map(([type, address]) => (
-            <div key={type} className="flex min-w-0 items-center gap-1" title={address}>
-              <span className="whitespace-nowrap tabular-nums">
-                {type} {type === "IPv6" ? compactIPv6(address) : address}
-              </span>
-              <button
-                type="button"
-                className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-[var(--accent-a3)] hover:text-[var(--accent-11)]"
-                onClick={() => copy(address)}
-                aria-label={t("copy", "复制")}
-                title={t("copy", "复制")}
-              >
-                <Copy size={13} />
-              </button>
-            </div>
-          )) : <span className="tabular-nums">--</span>}
-        </div>
+      <TableCell>
+        <DetailView node={node} />
       </TableCell>
-      <TableCell className="!align-middle" data-label={t("admin.nodeTable.agent", "Agent")}>
-        <div className="admin-node-agent-cell flex min-w-0 flex-col items-center justify-center gap-0.5 text-center leading-none">
-          <span className="block max-w-full truncate text-sm leading-5 text-muted-foreground" title={publicVersion(node.version) || "--"}>
-            {publicVersion(node.version) || "--"}
-          </span>
-          {deploymentStatusLabel ? (
-            <span
-              className="admin-agent-config-status"
-              data-status={node.deployment_status}
-              title={deploymentStatusLabel}
+      <TableCell>
+        <Flex direction="column">
+          {node.ipv4 && (
+            <Text size="2" className="flex items-center gap-1">
+              {node.ipv4}
+              <IconButton variant="ghost" onClick={() => copy(node.ipv4)}>
+                <Copy size="16" />
+              </IconButton>
+            </Text>
+          )}
+          {node.ipv6 && (
+            <Text
+              size="2"
+              className="flex items-center gap-1"
+              title={node.ipv6}
             >
-              {deploymentStatusLabel}
-            </span>
-          ) : null}
-        </div>
+              {node.ipv6.length > 20
+                ? (() => {
+                    const segments = node.ipv6.split(":");
+                    return segments.length > 3
+                      ? `${segments.slice(0, 2).join(":")}:...${
+                          segments[segments.length - 1]
+                        }`
+                      : node.ipv6;
+                  })()
+                : node.ipv6}
+              <IconButton variant="ghost" onClick={() => copy(node.ipv6)}>
+                <Copy size="16" />
+              </IconButton>
+            </Text>
+          )}
+        </Flex>
       </TableCell>
-      <TableCell className="!align-middle" data-label={t("common.group", "分组")}>
-        <span className="block truncate text-sm font-normal text-muted-foreground" title={node.group || ""}>
-          {node.group || "--"}
-        </span>
+      <TableCell>{node.version}</TableCell>
+      <TableCell>
+        <Text
+          size="2"
+          title={node.group}
+          style={{
+            maxWidth: "150px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {node.group && node.group.length > 10
+            ? `${node.group.slice(0, 10)}...`
+            : node.group}
+        </Text>
       </TableCell>
-      <TableCell className="!align-middle" data-label={t("common.remark", "备注")}>
-        <span className="block whitespace-normal break-words text-sm text-muted-foreground" title={node.remark || ""}>
-          {node.remark || "--"}
-        </span>
+      <TableCell>
+        <Text
+          size="2"
+          title={node.remark}
+          style={{
+            maxWidth: "150px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {node.remark && node.remark.length > 10
+            ? `${node.remark.slice(0, 10)}...`
+            : node.remark}
+        </Text>
       </TableCell>
-      <TableCell className="!align-middle" data-label={t("admin.nodeTable.billing")}>
+      <TableCell>
         <PriceTags
-          className="[&_label]:!text-xs"
           price={node.price}
           billing_cycle={node.billing_cycle}
           expired_at={node.expired_at}
@@ -1361,24 +1177,23 @@ const SortableRow = React.memo(({
           tags={node.tags || ""}
         />
       </TableCell>
-      <TableCell className="!align-middle" data-label={t("common.action", "操作")}>
+      <TableCell>
         <ActionButtons node={node} settings={settings} />
       </TableCell>
     </TableRow>
   );
-});
-SortableRow.displayName = "SortableRow";
+};
 
 const NodeTable = ({
   nodes,
+  selectedNodes,
+  setSelectedNodes,
   settings,
-  onlineSet,
-  reorderEnabled,
 }: {
   nodes: NodeDetail[];
+  selectedNodes: string[];
+  setSelectedNodes: (nodes: string[]) => void;
   settings: any;
-  onlineSet: ReadonlySet<string>;
-  reorderEnabled: boolean;
 }) => {
   const { t } = useTranslation();
   const sensors = useSensors(
@@ -1400,34 +1215,10 @@ const NodeTable = ({
   // 添加 localNodes 状态，实现即时 UI 更新
   const [localNodes, setLocalNodes] = useState<NodeDetail[]>(nodes);
   const [isDragging, setIsDragging] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const defaultPageSize = useAdminDefaultPageSize();
-  const [pageSize, setPageSize] = useState(defaultPageSize);
-  const pageSizeCustomized = React.useRef(false);
-  const totalPages = Math.max(
-    1,
-    Math.ceil(localNodes.length / pageSize),
-  );
-  const visiblePage = Math.min(currentPage, totalPages);
-  const pageStart = (visiblePage - 1) * pageSize;
-  const visibleNodes = localNodes.slice(
-    pageStart,
-    pageStart + pageSize,
-  );
-
   React.useEffect(() => {
     setLocalNodes(nodes);
   }, [nodes]);
-  React.useEffect(() => {
-    setCurrentPage((page) => Math.min(page, totalPages));
-  }, [totalPages]);
-  React.useEffect(() => {
-    if (pageSizeCustomized.current) return;
-    setPageSize(defaultPageSize);
-    setCurrentPage(1);
-  }, [defaultPageSize]);
   const handleDragStart = () => {
-    if (!reorderEnabled) return;
     setIsDragging(true);
     if ("vibrate" in navigator) {
       navigator.vibrate(50);
@@ -1436,31 +1227,17 @@ const NodeTable = ({
 
   const handleDragEnd = async (event: any) => {
     setIsDragging(false);
-    if (!reorderEnabled) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
     const oldIndex = localNodes.findIndex((node) => node.uuid === active.id);
-    if (oldIndex < 0) return;
-
-    let newIndex = localNodes.findIndex((node) => node.uuid === over.id);
-    let destinationPage = visiblePage;
-    if (over.id === PREVIOUS_PAGE_DROP_ID && visiblePage > 1) {
-      destinationPage = visiblePage - 1;
-      newIndex = destinationPage * pageSize - 1;
-    } else if (over.id === NEXT_PAGE_DROP_ID && visiblePage < totalPages) {
-      destinationPage = visiblePage + 1;
-      newIndex = (destinationPage - 1) * pageSize;
-    }
-    if (newIndex < 0) return;
-
+    const newIndex = localNodes.findIndex((node) => node.uuid === over.id);
     const reorderedNodes = Array.from(localNodes);
     const [reorderedItem] = reorderedNodes.splice(oldIndex, 1);
-    reorderedNodes.splice(Math.min(newIndex, reorderedNodes.length), 0, reorderedItem);
+    reorderedNodes.splice(newIndex, 0, reorderedItem);
 
     // 立即更新 UI
     setLocalNodes(reorderedNodes);
-    setCurrentPage(destinationPage);
 
     if ("vibrate" in navigator) {
       navigator.vibrate([30, 10, 30]);
@@ -1483,9 +1260,21 @@ const NodeTable = ({
     }
   };
 
+  // 更新全选逻辑，使用 localNodes
+  const handleSelectAll = (checked: boolean) => {
+    setSelectedNodes(checked ? localNodes.map((node) => node.uuid) : []);
+  };
+
+  const handleSelectNode = (uuid: string, checked: boolean) => {
+    setSelectedNodes(
+      checked
+        ? [...selectedNodes, uuid]
+        : selectedNodes.filter((id) => id !== uuid)
+    );
+  };
   return (
     <div
-      className={`admin-responsive-table-wrap overflow-x-auto overflow-y-hidden rounded-md border border-[var(--gray-a5)] ${
+      className={`rounded-md overflow-hidden ${
         isDragging ? "select-none" : ""
       }`}
     >
@@ -1494,485 +1283,72 @@ const NodeTable = ({
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        onDragCancel={() => setIsDragging(false)}
       >
-        <Table className="admin-responsive-table admin-node-table min-w-[1136px] table-fixed text-sm">
-          <TableHeader>
+        <Table>
+          <TableHeader style={{ backgroundColor: "var(--accent-4)" }}>
             <TableRow>
-              <TableHead className="w-[44px]">
-                <span className="sr-only">{t("common.sort", "排序")}</span>
+              <TableHead></TableHead>
+              <TableHead>
+                <Checkbox
+                  checked={
+                    selectedNodes.length === localNodes.length &&
+                    localNodes.length > 0
+                  }
+                  onCheckedChange={handleSelectAll}
+                />
               </TableHead>
-              <TableHead className="w-[190px]">{t("admin.nodeTable.name")}</TableHead>
-              <TableHead className="w-[190px]">
-                {t("admin.nodeTable.network", "网络")}
-              </TableHead>
-              <TableHead className="w-[72px] text-center">
-                {t("admin.nodeTable.agent", "Agent")}
-              </TableHead>
-              <TableHead className="w-[72px]">
-                {t("common.group", "分组")}
-              </TableHead>
-              <TableHead className="w-[72px]">
-                {t("common.remark", "备注")}
-              </TableHead>
-              <TableHead className="w-[224px]">{t("admin.nodeTable.billing")}</TableHead>
-              <TableHead className="w-[272px]">{t("common.action", "操作")}</TableHead>
+              <TableHead>{t("admin.nodeTable.name")}</TableHead>
+              <TableHead>{t("admin.nodeDetail.ipAddress")}</TableHead>
+              <TableHead>{t("admin.nodeDetail.clientVersion")}</TableHead>
+              <TableHead>{t("common.group")}</TableHead>
+              <TableHead>{t("admin.nodeEdit.remark")}</TableHead>
+              <TableHead>{t("admin.nodeTable.billing")}</TableHead>
+              <TableHead></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <SortableContext
-              items={visibleNodes.map((node) => node.uuid)}
+              items={localNodes.map((node) => node.uuid)}
               strategy={verticalListSortingStrategy}
             >
-              {visibleNodes.map((node) => (
+              {localNodes.map((node) => (
                 <SortableRow
                   key={node.uuid}
                   node={node}
+                  selectedNodes={selectedNodes}
+                  handleSelectNode={handleSelectNode}
                   settings={settings}
-                  online={onlineSet.has(node.uuid)}
-                  reorderEnabled={reorderEnabled}
                 />
               ))}
             </SortableContext>
           </TableBody>
         </Table>
-      <AdminPagination
-        page={visiblePage}
-        total={localNodes.length}
-        onPageChange={setCurrentPage}
-        pageSize={pageSize}
-        onPageSizeChange={(value) => {
-          pageSizeCustomized.current = true;
-          setPageSize(value);
-          setCurrentPage(1);
-        }}
-        previousDropId={PREVIOUS_PAGE_DROP_ID}
-        nextDropId={NEXT_PAGE_DROP_ID}
-        dragging={isDragging}
-        showSummary={false}
-      />
       </DndContext>
     </div>
   );
 };
 
 type Platform = "linux" | "windows" | "macos" | "docker";
-
-type TrafficUsage = { up: number; down: number };
-type SignedTrafficUsage = { up: number; down: number };
-type TrafficCalibrationHistory = {
-  calibration_id: string;
-  target: TrafficUsage;
-  adjustment: SignedTrafficUsage;
-  operator?: string;
-  created_at: string;
-};
-type TrafficCalibrationSnapshot = {
-  client: string;
-  cycle: string;
-  cycle_start: string;
-  cycle_end: string;
-  raw: TrafficUsage;
-  adjustment: SignedTrafficUsage;
-  effective: TrafficUsage;
-  history: TrafficCalibrationHistory[];
-};
-
-const trafficInputPattern = /^\s*(\d+(?:\.\d+)?)\s*(b|kb|kib|mb|mib|gb|gib|tb|tib|pb|pib)?\s*$/i;
-
-function parseTrafficInput(value: string): number | null {
-  if (!trafficInputPattern.test(value)) return null;
-  const bytes = stringToBytes(value);
-  if (!Number.isSafeInteger(bytes) || bytes < 0) return null;
-  return bytes;
-}
-
-function formatSignedTraffic(value: number): string {
-  if (value === 0) return formatBytes(0);
-  return `${value > 0 ? "+" : "-"}${formatBytes(Math.abs(value))}`;
-}
-
-function formatTrafficCycleRange(snapshot: TrafficCalibrationSnapshot, language: string): string {
-  const locale = language.replace("_", "-");
-  const formatter = new Intl.DateTimeFormat(locale, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Shanghai",
-  });
-  return `${formatter.format(new Date(snapshot.cycle_start))}-${formatter.format(new Date(snapshot.cycle_end))}`;
-}
-
 const ActionButtons = ({ node, settings }: { node: NodeDetail, settings: any }) => {
   const { t } = useTranslation();
   return (
-    <div className="flex h-10 items-center justify-start gap-1.5 max-md:h-auto max-md:flex-wrap admin-node-actions max-md:w-full">
-      <RotateTokenButton node={node} />
+    <div className="flex items-center gap-4">
       <GenerateCommandButton node={node} settings={settings} />
       <IconButton
         title={t("terminal.title")}
         variant="ghost"
         onClick={() => {
-          if (!openRemoteTerminal(node.uuid)) toast.error("浏览器阻止了远程管理窗口");
+          window.open(`/terminal?uuid=${node.uuid}`, "_blank");
         }}
       >
         <Terminal size="18" />
       </IconButton>
       <EditButton node={node} />
       <BillingButton node={node} />
-      <TrafficCalibrationButton node={node} />
       <DeleteButton node={node} />
     </div>
   );
 };
-
-function TrafficCalibrationButton({ node }: { node: NodeDetail }) {
-  const { t, i18n } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [available, setAvailable] = useState(true);
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState("");
-  const [snapshot, setSnapshot] = useState<TrafficCalibrationSnapshot | null>(null);
-  const [targetUp, setTargetUp] = useState("");
-  const [targetDown, setTargetDown] = useState("");
-  const requestRef = React.useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    return () => requestRef.current?.abort();
-  }, []);
-
-  const prepareCalibration = async () => {
-    if (requestRef.current) return;
-    const controller = new AbortController();
-    requestRef.current = controller;
-    setLoading(true);
-    setError("");
-    setReason("");
-    setAvailable(true);
-    setSnapshot(null);
-    try {
-      const response = await fetch(`/api/admin/client/${node.uuid}/traffic-calibration`, {
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.message || `HTTP ${response.status}`);
-      }
-      const data = payload?.data;
-      const nextAvailable = data?.available !== false;
-      setAvailable(nextAvailable);
-      setReason(data?.reason || "");
-      if (nextAvailable && data?.snapshot) {
-        const next = data.snapshot as TrafficCalibrationSnapshot;
-        setSnapshot(next);
-        setTargetUp(formatBytes(next.effective.up));
-        setTargetDown(formatBytes(next.effective.down));
-      }
-      setOpen(true);
-    } catch (cause: unknown) {
-      if (!controller.signal.aborted) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-        setOpen(true);
-      }
-    } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setLoading(false);
-      }
-    }
-  };
-
-  const saveCalibration = async () => {
-    const up = parseTrafficInput(targetUp);
-    const down = parseTrafficInput(targetDown);
-    if (up === null || down === null) {
-      setError(t("admin.nodeTable.trafficCalibration.invalidValue"));
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/admin/client/${node.uuid}/traffic-calibration`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          target_up: up,
-          target_down: down,
-        }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.message || `HTTP ${response.status}`);
-      }
-      const next = payload?.data?.snapshot as TrafficCalibrationSnapshot | undefined;
-      if (!next) throw new Error(t("admin.nodeTable.trafficCalibration.invalidResponse"));
-      setSnapshot(next);
-      setTargetUp(formatBytes(next.effective.up));
-      setTargetDown(formatBytes(next.effective.down));
-      toast.success(t("admin.nodeTable.trafficCalibration.saved"));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const summaryItems = snapshot
-    ? [
-        [t("admin.nodeTable.trafficCalibration.raw"), snapshot.raw],
-        [t("admin.nodeTable.trafficCalibration.adjustment"), snapshot.adjustment],
-        [t("admin.nodeTable.trafficCalibration.effective"), snapshot.effective],
-      ]
-    : [];
-
-  return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (nextOpen) void prepareCalibration();
-        else setOpen(false);
-      }}
-    >
-      <Dialog.Trigger>
-        <IconButton
-          variant="ghost"
-          disabled={loading}
-          title={t("admin.nodeTable.trafficCalibration.title")}
-        >
-          <Gauge size="18" className={loading ? "animate-pulse" : undefined} />
-        </IconButton>
-      </Dialog.Trigger>
-      <Dialog.Content maxWidth="720px" className="max-h-[88vh] overflow-y-auto">
-        <Dialog.Title>{t("admin.nodeTable.trafficCalibration.title")}</Dialog.Title>
-        <Dialog.Description>
-          <Trans
-            i18nKey="admin.nodeTable.trafficCalibration.description"
-            values={{ name: node.name }}
-            components={{ strong: <strong className="font-semibold" /> }}
-          />
-        </Dialog.Description>
-
-        {loading ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            {t("common.loading")}
-          </div>
-        ) : (
-          <Flex direction="column" gap="4" mt="4">
-            {!available && (
-              <Callout.Root color="amber" role="alert">
-                <Callout.Text>{reason || t("admin.nodeTable.trafficCalibration.resetDayRequired")}</Callout.Text>
-              </Callout.Root>
-            )}
-            {error && (
-              <Callout.Root color="red" role="alert">
-                <Callout.Text>{error}</Callout.Text>
-              </Callout.Root>
-            )}
-
-            {snapshot && (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-                  <Text size="2" color="gray">{t("admin.nodeTable.trafficCalibration.currentCycle")}</Text>
-                  <Text size="2" weight="bold">
-                    {formatTrafficCycleRange(snapshot, i18n.resolvedLanguage || i18n.language)}
-                  </Text>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  {summaryItems.map(([label, usage]) => {
-                    const value = usage as TrafficUsage & SignedTrafficUsage;
-                    const signed = label === t("admin.nodeTable.trafficCalibration.adjustment");
-                    return (
-                      <div key={label as string} className="min-w-0 border-l-2 border-[var(--accent-7)] pl-3">
-                        <Text as="div" size="2" weight="bold">{label as string}</Text>
-                        <Text as="div" size="2" color="gray" className="mt-1 break-words">
-                          {t("admin.nodeTable.trafficCalibration.upload")}: {signed ? formatSignedTraffic(value.up) : formatBytes(value.up)}
-                        </Text>
-                        <Text as="div" size="2" color="gray" className="break-words">
-                          {t("admin.nodeTable.trafficCalibration.download")}: {signed ? formatSignedTraffic(value.down) : formatBytes(value.down)}
-                        </Text>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className="flex min-w-0 flex-col gap-2 text-sm font-semibold">
-                    {t("admin.nodeTable.trafficCalibration.targetUp")}
-                    <TextField.Root value={targetUp} onChange={(event) => setTargetUp(event.target.value)} placeholder="10 GB" />
-                  </label>
-                  <label className="flex min-w-0 flex-col gap-2 text-sm font-semibold">
-                    {t("admin.nodeTable.trafficCalibration.targetDown")}
-                    <TextField.Root value={targetDown} onChange={(event) => setTargetDown(event.target.value)} placeholder="10 GB" />
-                  </label>
-                </div>
-
-                <Callout.Root color="blue" size="1">
-                  <Callout.Text>{t("admin.nodeTable.trafficCalibration.syncNotice")}</Callout.Text>
-                </Callout.Root>
-
-                <div>
-                  <Text as="div" size="2" weight="bold" mb="2">
-                    {t("admin.nodeTable.trafficCalibration.history")}
-                  </Text>
-                  {snapshot.history?.length ? (
-                    <div className="overflow-x-auto rounded border">
-                      <table className="w-full min-w-[560px] text-left text-sm">
-                        <thead className="admin-table-header">
-                          <tr>
-                            <th className="px-3 py-2 font-medium">{t("admin.nodeTable.trafficCalibration.time")}</th>
-                            <th className="px-3 py-2 font-medium">{t("admin.nodeTable.trafficCalibration.targetUp")}</th>
-                            <th className="px-3 py-2 font-medium">{t("admin.nodeTable.trafficCalibration.targetDown")}</th>
-                            <th className="px-3 py-2 font-medium">{t("admin.nodeTable.trafficCalibration.change")}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {snapshot.history.map((item) => (
-                            <tr key={item.calibration_id} className="border-t">
-                              <td className="whitespace-nowrap px-3 py-2">{new Date(item.created_at).toLocaleString()}</td>
-                              <td className="whitespace-nowrap px-3 py-2">{formatBytes(item.target.up)}</td>
-                              <td className="whitespace-nowrap px-3 py-2">{formatBytes(item.target.down)}</td>
-                              <td className="whitespace-nowrap px-3 py-2">↑ {formatSignedTraffic(item.adjustment.up)} / ↓ {formatSignedTraffic(item.adjustment.down)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <Text size="2" color="gray">{t("admin.nodeTable.trafficCalibration.noHistory")}</Text>
-                  )}
-                </div>
-              </>
-            )}
-
-            <Flex gap="2" justify="end" wrap="wrap">
-              <Dialog.Close>
-                <Button variant="soft">{t("admin.nodeTable.cancel")}</Button>
-              </Dialog.Close>
-              <Button disabled={!snapshot || !available || saving} onClick={() => void saveCalibration()}>
-                {saving ? t("common.loading") : t("admin.nodeTable.trafficCalibration.save")}
-              </Button>
-            </Flex>
-          </Flex>
-        )}
-      </Dialog.Content>
-    </Dialog.Root>
-  );
-}
-
-function RotateTokenButton({ node }: { node: NodeDetail }) {
-  const { t } = useTranslation();
-  const { refresh } = useNodeDetails();
-  const [open, setOpen] = React.useState(false);
-  const [twoFactorCode, setTwoFactorCode] = React.useState("");
-  const [error, setError] = React.useState("");
-  const [rotating, setRotating] = React.useState(false);
-
-  const rotateToken = async () => {
-    setRotating(true);
-    setError("");
-    try {
-      const response = await fetch("/api/admin/client/token/rotate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uuid: node.uuid,
-          ...(twoFactorCode ? { "2fa_code": twoFactorCode } : {}),
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error(
-            payload?.message === "Invalid 2FA code"
-              ? "动态口令无效"
-              : "请输入动态口令",
-          );
-        }
-        throw new Error(localizeTokenRotationError(payload?.message));
-      }
-      if (!(payload?.data?.token || payload?.token)) {
-        throw new Error("Server 未返回新 Token");
-      }
-      setTwoFactorCode("");
-      setOpen(false);
-      toast.success("Token 已重置，请使用新指令更新 Agent；新 Token 连接后旧 Token 自动失效");
-      refresh();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Token 重置失败");
-    } finally {
-      setRotating(false);
-    }
-  };
-
-  return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <IconButton
-        type="button"
-        size="2"
-        variant="ghost"
-        title={t("admin.nodeTable.rotateToken", "重置 Token")}
-        aria-label={t("admin.nodeTable.rotateToken", "重置 Token")}
-        onClick={() => setOpen(true)}
-      >
-        <RotateCw size={18} />
-      </IconButton>
-      <Dialog.Content maxWidth="440px">
-        <Dialog.Title>
-          {t("admin.nodeTable.rotateToken", "重置 Token")}
-        </Dialog.Title>
-        <Dialog.Description>
-          {t(
-            "admin.nodeTable.rotateTokenDescription",
-            "生成新 Token 后，旧 Token 最多保留 24 小时；新 Token 首次成功连接后旧 Token 会立即失效。",
-          )}
-          <br />
-          {t(
-            "admin.nodeTable.rotateTokenInstructions",
-            "重置后在节点上重新执行更新后的部署指令即可，无需手动卸载；自动更新只替换程序文件，不会修改 Token。",
-          )}
-        </Dialog.Description>
-        <Flex direction="column" gap="2">
-          <label className="text-sm font-normal">
-            {t(
-              "admin.nodeTable.twoFactorCode",
-              "动态口令（未开启 2FA 可留空）",
-            )}
-          </label>
-          <TextField.Root
-            value={twoFactorCode}
-            inputMode="numeric"
-            autoFocus
-            onChange={(event) =>
-              setTwoFactorCode(event.target.value.replace(/\D/g, ""))
-            }
-            onKeyDown={(event) =>
-              event.key === "Enter" && !rotating && void rotateToken()
-            }
-          />
-          {error && <p className="text-sm text-red-500">{error}</p>}
-        </Flex>
-        <Flex gap="2" justify="end" mt="4">
-          <Button variant="soft" onClick={() => setOpen(false)}>
-            {t("common.cancel", "取消")}
-          </Button>
-          <Button
-            color="orange"
-            disabled={rotating}
-            onClick={() => void rotateToken()}
-          >
-            {rotating
-              ? t("common.loading", "处理中...")
-              : t("admin.nodeTable.confirmRotateToken", "确认重置")}
-          </Button>
-        </Flex>
-      </Dialog.Content>
-    </Dialog.Root>
-  );
-}
 
 export default NodeDetailsPage;
 function DeleteButton({ node }: { node: NodeDetail }) {
@@ -2000,22 +1376,21 @@ function DeleteButton({ node }: { node: NodeDetail }) {
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
-        <IconButton variant="ghost" color="red" title={t("delete")}>
+        <IconButton variant="ghost" color="red" title={t("common.delete")}>
           <Trash2Icon size="18" />
         </IconButton>
       </Dialog.Trigger>
-      <Dialog.Content className="admin-install-dialog">
-        <Dialog.Title>{t("delete")}</Dialog.Title>
+      <Dialog.Content>
+        <Dialog.Title>{t("common.delete")}</Dialog.Title>
         <Dialog.Description>
-          <Text as="span" weight="bold">{node.name}</Text>{" "}
-          {t("admin.nodeTable.confirmDeleteQuestion")}
+          {t("common.confirm_delete")}
         </Dialog.Description>
         <Flex justify="end" gap="2" mt="4">
           <Dialog.Trigger>
-            <Button variant="soft">{t("admin.nodeTable.cancel")}</Button>
+            <Button variant="soft">{t("common.cancel")}</Button>
           </Dialog.Trigger>
           <Button disabled={deleting} color="red" onClick={handleDelete}>
-            {t("admin.nodeTable.confirmDelete")}
+            {t("common.confirm_delete")}
           </Button>
         </Flex>
       </Dialog.Content>
@@ -2038,62 +1413,7 @@ type InstallOptions = {
   interval: string;
   monthRotate: string;
 };
-
-type DeploymentProfilePayload = {
-  platform: Platform;
-  disable_web_ssh: boolean;
-  disable_auto_update: boolean;
-  ignore_unsafe_cert: boolean;
-  get_ip_addr_from_nic: boolean;
-  memory_include_cache: boolean;
-  enable_gpu: boolean;
-  enable_ghproxy: boolean;
-  ghproxy: string;
-  enable_custom_dir: boolean;
-  dir: string;
-  enable_custom_service_name: boolean;
-  service_name: string;
-  enable_include_nics: boolean;
-  include_nics: string;
-  enable_exclude_nics: boolean;
-  exclude_nics: string;
-  enable_include_mountpoints: boolean;
-  include_mountpoints: string;
-  enable_interval: boolean;
-  interval: number;
-  enable_month_rotate: boolean;
-  month_rotate: number;
-};
-
-type DeploymentProfileResponse = {
-  profile: DeploymentProfilePayload;
-  saved?: boolean;
-  delivery?: "saved" | "sent" | "applied" | "failed" | "agent_upgrade_required";
-  delivery_state?: DeploymentDeliveryState;
-  runtime_changed?: boolean;
-};
-
-type DeploymentDeliveryState = {
-  revision: number;
-  status: "saved" | "sent" | "applied" | "failed";
-  error?: string;
-  saved_at?: string;
-  updated_at?: string;
-  sent_at?: string;
-  finished_at?: string;
-};
-
 function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings: any }) {
-  const { t } = useTranslation();
-  const { refresh } = useNodeDetails();
-  const isMobile = useIsMobile();
-  const configuredResetDay = Number(node.traffic_reset_day);
-  const initialResetDay =
-    Number.isInteger(configuredResetDay) &&
-    configuredResetDay >= 1 &&
-    configuredResetDay <= 31
-      ? String(configuredResetDay)
-      : "";
   const [selectedPlatform, setSelectedPlatform] =
     React.useState<Platform>("linux");
   const [installOptions, setInstallOptions] = React.useState<InstallOptions>({
@@ -2110,7 +1430,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
     excludeNics: "",
     includeMountpoints: "",
     interval: "",
-    monthRotate: initialResetDay,
+    monthRotate: "",
   });
 
   const [enableGhproxy, setEnableGhproxy] = React.useState(false);
@@ -2122,162 +1442,17 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
   const [enableIncludeMountpoints, setEnableIncludeMountpoints] =
     React.useState(false);
   const [enableInterval, setEnableInterval] = React.useState(false);
-  const [enableMonthRotate, setEnableMonthRotate] = React.useState(
-    initialResetDay !== "",
-  );
-  const [open, setOpen] = React.useState(false);
-  const [loadingProfile, setLoadingProfile] = React.useState(false);
-  const [profileAction, setProfileAction] = React.useState<"dispatch" | "copy" | null>(null);
-  const [deliveryState, setDeliveryState] = React.useState<DeploymentDeliveryState>();
-  const [copyFeedback, setCopyFeedback] = React.useState<{
-    kind: "success" | "warning" | "error";
-    message: string;
-  }>();
-  const commandTextAreaRef = React.useRef<HTMLTextAreaElement>(null);
-  const deliveryStatus = deliveryState?.status;
-
-  React.useEffect(() => {
-    setEnableMonthRotate(initialResetDay !== "");
-    setInstallOptions((previous) => ({
-      ...previous,
-      monthRotate: initialResetDay,
-    }));
-  }, [node.uuid, initialResetDay]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    const controller = new AbortController();
-    setLoadingProfile(true);
-    fetch(`/api/admin/client/${node.uuid}/deployment-profile`, {
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error((await response.text()) || `HTTP ${response.status}`);
-        }
-        return response.json() as Promise<DeploymentProfileResponse>;
-      })
-      .then(({ profile, saved, delivery_state }) => {
-        setSelectedPlatform(profile.platform || "linux");
-        setInstallOptions({
-          disableWebSsh: profile.disable_web_ssh,
-          disableAutoUpdate: profile.disable_auto_update,
-          ignoreUnsafeCert: profile.ignore_unsafe_cert,
-          memoryIncludeCache: profile.memory_include_cache,
-          getIpAddrFromNic: profile.get_ip_addr_from_nic,
-          enableGpu: profile.enable_gpu,
-          ghproxy: profile.ghproxy || "",
-          dir: profile.dir || "",
-          serviceName: profile.service_name || "",
-          includeNics: profile.include_nics || "",
-          excludeNics: profile.exclude_nics || "",
-          includeMountpoints: profile.include_mountpoints || "",
-          interval: profile.enable_interval ? String(profile.interval) : "",
-          monthRotate: profile.enable_month_rotate ? String(profile.month_rotate) : "",
-        });
-        setEnableGhproxy(profile.enable_ghproxy);
-        setEnableCustomDir(profile.enable_custom_dir);
-        setEnableCustomServiceName(profile.enable_custom_service_name);
-        setEnableIncludeNics(profile.enable_include_nics);
-        setEnableExcludeNics(profile.enable_exclude_nics);
-        setEnableIncludeMountpoints(profile.enable_include_mountpoints);
-        setEnableInterval(profile.enable_interval);
-        setEnableMonthRotate(profile.enable_month_rotate);
-        setDeliveryState(saved ? delivery_state : undefined);
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : t("admin.nodeTable.deploymentProfileLoadFailed", "读取部署配置失败"),
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoadingProfile(false);
-      });
-    return () => controller.abort();
-  }, [node.uuid, open, t]);
-
-  React.useEffect(() => {
-    if (!open || !deliveryStatus || !["saved", "sent"].includes(deliveryStatus)) {
-      return;
-    }
-    const controller = new AbortController();
-    let attempts = 0;
-    const timer = window.setInterval(() => {
-      attempts += 1;
-      if (attempts > 30) {
-        window.clearInterval(timer);
-        return;
-      }
-      void fetch(`/api/admin/client/${node.uuid}/deployment-profile`, {
-        cache: "no-store",
-        signal: controller.signal,
-      })
-        .then((response) => response.ok ? response.json() as Promise<DeploymentProfileResponse> : undefined)
-        .then((result) => {
-          if (!result?.delivery_state) return;
-          if (result.delivery_state.status !== deliveryStatus) refresh();
-          setDeliveryState(result.delivery_state);
-        })
-        .catch(() => undefined);
-    }, 2000);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-    };
-  }, [deliveryStatus, node.uuid, open, refresh]);
-
-  const selectedTrafficResetDay = () => {
-    if (!enableMonthRotate) return 0;
-    const value = Number(installOptions.monthRotate);
-    return Number.isInteger(value) && value >= 1 && value <= 31
-      ? value
-      : null;
-  };
-
-  const selectedInterval = () => {
-    if (!enableInterval) return 0;
-    const value = Number(installOptions.interval);
-    return Number.isFinite(value) && value >= 1 && value <= 3600
-      ? value
-      : null;
-  };
-
-  const deploymentProfile = (): DeploymentProfilePayload => ({
-    platform: selectedPlatform,
-    disable_web_ssh: installOptions.disableWebSsh,
-    disable_auto_update: installOptions.disableAutoUpdate,
-    ignore_unsafe_cert: installOptions.ignoreUnsafeCert,
-    get_ip_addr_from_nic: installOptions.getIpAddrFromNic,
-    memory_include_cache: installOptions.memoryIncludeCache,
-    enable_gpu: installOptions.enableGpu,
-    enable_ghproxy: enableGhproxy,
-    ghproxy: installOptions.ghproxy,
-    enable_custom_dir: enableCustomDir,
-    dir: installOptions.dir,
-    enable_custom_service_name: enableCustomServiceName,
-    service_name: installOptions.serviceName,
-    enable_include_nics: enableIncludeNics,
-    include_nics: installOptions.includeNics,
-    enable_exclude_nics: enableExcludeNics,
-    exclude_nics: installOptions.excludeNics,
-    enable_include_mountpoints: enableIncludeMountpoints,
-    include_mountpoints: installOptions.includeMountpoints,
-    enable_interval: enableInterval,
-    interval: selectedInterval() ?? 0,
-    enable_month_rotate: enableMonthRotate,
-    month_rotate: selectedTrafficResetDay() ?? 0,
-  });
+  const [enableMonthRotate, setEnableMonthRotate] = React.useState(false);
 
   const generateCommand = () => {
     const host = function () {
       if (!settings.script_domain) {
         return window.location.origin;
       }
-      return normalizeOptionalServiceUrl(settings.script_domain);
+      if (settings.script_domain.startsWith("http")) {
+        return settings.script_domain.replace(/\/+$/, "");
+      }
+      return `http://${settings.script_domain.replace(/\/+$/, "")}`;
     }();
     const token = node.token || "";
     let args = ["-e", host, "-t", token];
@@ -2302,7 +1477,11 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
     }
     const ghproxy = installOptions.ghproxy.trim();
     if (enableGhproxy && ghproxy) {
-      const finalUrl = normalizeOptionalServiceUrl(ghproxy);
+      const finalUrl = (
+        ghproxy.startsWith("http")
+          ? ghproxy
+          : `http://${ghproxy}`
+      ).replace(/\/+$/, "");
       args.push(`--install-ghproxy`);
       args.push(finalUrl);
     }
@@ -2346,7 +1525,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
       scriptFile = "install.ps1";
     }
     let scriptUrl =
-      `https://raw.githubusercontent.com/nuomiiiii/komari-agent/refs/heads/main/${scriptFile}`;
+      `https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/${scriptFile}`;
     if (enableGhproxy) {
       if (enableGhproxy && ghproxy) {
         scriptUrl = scriptUrl.slice(8); // 去掉 https://
@@ -2399,7 +1578,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
         }
         finalCommand =
           `docker run -d --name komari-agent --restart=always ` +
-          `ghcr.io/nuomiiiii/komari-agent:latest ` +
+          `ghcr.io/komari-monitor/komari-agent:latest ` +
           quoteShellArgs(dockerArgs);
         break;
       }
@@ -2407,155 +1586,17 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
     return finalCommand;
   };
 
-  const saveProfile = async (copyCommand: boolean) => {
-    if (profileAction) return;
-    setCopyFeedback(undefined);
-    const trafficResetDay = selectedTrafficResetDay();
-    if (trafficResetDay === null) {
-      toast.error(
-        t(
-          "admin.nodeTable.invalidMonthRotate",
-          "流量重置日必须是 1 到 31 的整数",
-        ),
-      );
-      return;
-    }
-
-    if (selectedInterval() === null) {
-      toast.error(
-        t(
-          "admin.nodeTable.invalidInterval",
-          "采集间隔必须在 1 到 3600 秒之间",
-        ),
-      );
-      return;
-    }
-
-    const action = copyCommand ? "copy" : "dispatch";
-    setProfileAction(action);
-    const copyAttempt = copyCommand
-      ? writeClipboardText(generateCommand()).then(
-          (value) => ({ ok: true as const, value }),
-          (error: unknown) => ({ ok: false as const, error }),
-        )
-      : null;
+  const copyToClipboard = async (text: string) => {
     try {
-      const response = await fetch(
-        `/api/admin/client/${node.uuid}/deployment-profile`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile: deploymentProfile() }),
-        },
-      );
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || `HTTP ${response.status}`);
-      }
-      const result = (await response.json()) as DeploymentProfileResponse;
-      setDeliveryState(result.delivery_state);
-      const deliveryMessage = result.delivery_state?.status === "applied"
-        ? t("admin.nodeTable.deliveryApplied", "已生效")
-        : result.delivery_state?.status === "failed"
-          ? t("admin.nodeTable.deliveryFailed", "应用失败")
-          : result.delivery_state?.status === "sent" || result.delivery === "sent"
-            ? t("admin.nodeTable.deliverySent", "已发送")
-        : result.delivery === "agent_upgrade_required"
-          ? t("admin.nodeTable.runtimeConfigUpgradeRequired", "配置已保存，Agent 升级后应用")
-          : t("admin.nodeTable.deliverySaved", "已保存");
-
-      if (copyAttempt) {
-        const copyResult = await copyAttempt;
-        if (!copyResult.ok) {
-          refresh();
-          const message = `${deliveryMessage}；${t(
-              "admin.nodeTable.installCommandCopyDenied",
-              "浏览器拒绝访问剪贴板，请检查网站权限后重试",
-            )}`;
-          setCopyFeedback({ kind: "error", message });
-          commandTextAreaRef.current?.focus();
-          commandTextAreaRef.current?.select();
-          toast.warning(message);
-          return;
-        }
-        if (!copyResult.value.confirmed) {
-          refresh();
-          const message = `${deliveryMessage}；${t(
-              "admin.nodeTable.installCommandCopyUnconfirmed",
-              "浏览器无法确认复制，请从上方指令框手动复制",
-            )}`;
-          setCopyFeedback({ kind: "warning", message });
-          commandTextAreaRef.current?.focus();
-          commandTextAreaRef.current?.select();
-          toast.warning(message);
-          return;
-        }
-      }
-      refresh();
-      const message = copyCommand
-          ? `${deliveryMessage}；${t(
-              "admin.nodeTable.installCommandSaved",
-              "部署指令已复制到剪贴板",
-            )}`
-          : deliveryMessage;
-      if (copyCommand) {
-        setCopyFeedback({ kind: "success", message });
-      }
-      toast.success(message);
+      await navigator.clipboard.writeText(text);
+      toast.success(t("copy_success", "已复制到剪贴板"));
     } catch (err) {
-      console.error("Failed to save install options or copy command:", err);
-      const message = err instanceof Error
-          ? err.message
-          : t("admin.nodeTable.installCommandSaveFailed", "保存配置失败");
-      if (copyCommand) {
-        setCopyFeedback({ kind: "error", message });
-        commandTextAreaRef.current?.focus();
-        commandTextAreaRef.current?.select();
-      }
-      toast.error(message);
-    } finally {
-      setProfileAction(null);
+      console.error("Failed to copy text: ", err);
     }
   };
-  const deliveryPresentation = (() => {
-    switch (deliveryState?.status) {
-      case "sent":
-        return {
-          Icon: Send,
-          label: t("admin.nodeTable.deliverySent", "已发送"),
-          hint: t("admin.nodeTable.deliverySentHint", "等待 Agent 返回应用结果"),
-        };
-      case "applied":
-        return {
-          Icon: CheckCircle2,
-          label: t("admin.nodeTable.deliveryApplied", "已生效"),
-          hint: t("admin.nodeTable.deliveryAppliedHint", "Agent 已确认配置生效"),
-        };
-      case "failed":
-        return {
-          Icon: XCircle,
-          label: t("admin.nodeTable.deliveryFailed", "应用失败"),
-          hint: deliveryState.error || t("admin.nodeTable.deliveryFailedHint", "Agent 未能应用此配置"),
-        };
-      case "saved":
-        return {
-          Icon: Clock3,
-          label: t("admin.nodeTable.deliverySaved", "已保存"),
-          hint: t("admin.nodeTable.deliverySavedHint", "等待 Agent 上线后发送"),
-        };
-      default:
-        return {
-          Icon: Clock3,
-          label: t("admin.nodeTable.deliveryNotStarted", "尚未下发"),
-          hint: t(
-            "admin.nodeTable.deliveryNotStartedHint",
-            "保存在线采集配置后，可在这里查看发送和 Agent 应用结果",
-          ),
-        };
-    }
-  })();
+  const { t } = useTranslation();
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root>
       <Dialog.Trigger>
         <IconButton variant="ghost" title={t("admin.nodeTable.installCommand")}>
           <Download size="18" />
@@ -2565,16 +1606,8 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
         <Dialog.Title>
           {t("admin.nodeTable.installCommand", "一键部署指令")}
         </Dialog.Title>
-        <div
-          className="flex flex-col gap-4"
-          aria-busy={loadingProfile}
-          style={{
-            opacity: loadingProfile ? 0.55 : 1,
-            pointerEvents: loadingProfile ? "none" : undefined,
-          }}
-        >
+        <div className="flex flex-col gap-4">
           <SegmentedControl.Root
-            className="admin-install-platforms"
             value={selectedPlatform}
             onValueChange={(value) => setSelectedPlatform(value as Platform)}
           >
@@ -2587,15 +1620,10 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
           </SegmentedControl.Root>
 
           <Flex direction="column" gap="2">
-            <Flex justify="between" align="center">
-              <Text size="3" weight="bold">
-                {t("admin.nodeTable.installationSettings", "安装配置")}
-              </Text>
-              <Text size="1" color="gray">
-                {t("admin.nodeTable.reinstallRequired", "重装后生效")}
-              </Text>
-            </Flex>
-            <div className="admin-install-options-grid grid grid-cols-2 gap-2">
+            <label className="text-base font-bold">
+              {t("admin.nodeTable.installOptions", "安装选项")}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
               <Flex gap="2" align="center">
                 <Checkbox
                   checked={installOptions.disableWebSsh}
@@ -2664,6 +1692,31 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
               </Flex>
               <Flex gap="2" align="center">
                 <Checkbox
+                  checked={installOptions.memoryIncludeCache}
+                  onCheckedChange={(checked) => {
+                    setInstallOptions((prev) => ({
+                      ...prev,
+                      memoryIncludeCache: Boolean(checked),
+                    }));
+                  }}
+                />
+                <label
+                  className="text-sm font-normal"
+                  onClick={() => {
+                    setInstallOptions((prev) => ({
+                      ...prev,
+                      memoryIncludeCache: !prev.memoryIncludeCache,
+                    }));
+                  }}
+                >
+                  {t("admin.nodeTable.memoryModeAvailable", "监测可用内存")}
+                </label>
+                <Tips size="14">
+                  {t("admin.nodeTable.memoryModeAvailable_tip")}
+                </Tips>
+              </Flex>
+              <Flex gap="2" align="center">
+                <Checkbox
                   checked={installOptions.getIpAddrFromNic}
                   onCheckedChange={(checked) => {
                     setInstallOptions((prev) => ({
@@ -2684,8 +1737,30 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
                   {t("admin.nodeTable.getIpAddrFromNic", "从网卡获取 IP 地址")}
                 </label>
               </Flex>
+              <Flex gap="2" align="center">
+                <Checkbox
+                  checked={installOptions.enableGpu}
+                  onCheckedChange={(checked) => {
+                    setInstallOptions((prev) => ({
+                      ...prev,
+                      enableGpu: Boolean(checked),
+                    }));
+                  }}
+                />
+                <label
+                  className="text-sm font-normal"
+                  onClick={() => {
+                    setInstallOptions((prev) => ({
+                      ...prev,
+                      enableGpu: !prev.enableGpu,
+                    }));
+                  }}
+                >
+                  {t("admin.nodeTable.enableGpuMonitoring", "启用详细 GPU 监控")}
+                </label>
+              </Flex>
             </div>
-            <Flex direction="column" gap="2" className="[&_label]:font-normal">
+            <Flex direction="column" gap="2">
               <Flex gap="2" align="center">
                 <Checkbox
                   checked={enableGhproxy}
@@ -2818,63 +1893,6 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
                   }
                 />
               )}
-              <Flex justify="between" align="center" mt="2">
-                <Text size="3" weight="bold">
-                  {t("admin.nodeTable.onlineCollectionSettings", "在线采集配置")}
-                </Text>
-                <Text size="1" color="green">
-                  {t("admin.nodeTable.onlineApplicable", "保存后可直接下发")}
-                </Text>
-              </Flex>
-              <div className="admin-install-options-grid grid grid-cols-2 gap-2">
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={installOptions.memoryIncludeCache}
-                    onCheckedChange={(checked) => {
-                      setInstallOptions((prev) => ({
-                        ...prev,
-                        memoryIncludeCache: Boolean(checked),
-                      }));
-                    }}
-                  />
-                  <label
-                    className="text-sm font-normal"
-                    onClick={() => {
-                      setInstallOptions((prev) => ({
-                        ...prev,
-                        memoryIncludeCache: !prev.memoryIncludeCache,
-                      }));
-                    }}
-                  >
-                    {t("admin.nodeTable.memoryModeAvailable", "监测可用内存")}
-                  </label>
-                  <Tips size="14">
-                    {t("admin.nodeTable.memoryModeAvailable_tip")}
-                  </Tips>
-                </Flex>
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={installOptions.enableGpu}
-                    onCheckedChange={(checked) => {
-                      setInstallOptions((prev) => ({
-                        ...prev,
-                        enableGpu: Boolean(checked),
-                      }));
-                    }}
-                  />
-                  <label
-                    className="text-sm font-normal"
-                    onClick={() => {
-                      setInstallOptions((prev) => ({
-                        ...prev,
-                        enableGpu: !prev.enableGpu,
-                      }));
-                    }}
-                  >
-                    {t("admin.nodeTable.enableGpuMonitoring", "启用详细 GPU 监控")}
-                  </label>
-                </Flex>
-              </div>
               <Flex gap="2" align="center">
                 <Checkbox
                   checked={enableIncludeNics}
@@ -3099,7 +2117,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
                     }
                   }}
                 >
-                  {t("admin.nodeTable.monthRotate", "流量重置日")}
+                  {t("admin.nodeTable.monthRotate", "网络统计月重置")}
                 </label>
               </Flex>
               {enableMonthRotate && (
@@ -3117,46 +2135,6 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
                   }
                 />
               )}
-              <div
-                className="admin-deployment-delivery"
-                role="status"
-                aria-live="polite"
-              >
-                <Text size="2" weight="bold" className="admin-deployment-delivery-title">
-                  {t("admin.nodeTable.deliveryStatusTitle", "在线配置状态")}
-                </Text>
-                <div className="admin-deployment-delivery-body">
-                  <div
-                    className="admin-deployment-delivery-current"
-                    data-status={deliveryState?.status || "not-started"}
-                  >
-                    <span className="admin-deployment-delivery-dot" />
-                    <span>{deliveryPresentation.label}</span>
-                  </div>
-                  <Flex gap="2" align="center" className="admin-deployment-delivery-hint">
-                    <deliveryPresentation.Icon size={15} />
-                    <Text
-                      size="1"
-                      color={deliveryState?.status === "failed" ? "red" : "gray"}
-                    >
-                      {deliveryPresentation.hint}
-                    </Text>
-                  </Flex>
-                </div>
-              </div>
-              <Button
-                mt="2"
-                variant="solid"
-                aria-busy={profileAction === "dispatch"}
-                disabled={
-                  selectedTrafficResetDay() === null ||
-                  selectedInterval() === null
-                }
-                onClick={() => void saveProfile(false)}
-              >
-                <Save size={16} />
-                {t("admin.nodeTable.saveAndDispatch", "保存并下发")}
-              </Button>
             </Flex>
           </Flex>
           <Flex direction="column" gap="2">
@@ -3165,47 +2143,21 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
             </label>
             <div className="relative">
               <TextArea
-                ref={commandTextAreaRef}
-                readOnly
+                disabled
                 className="w-full"
                 style={{ minHeight: "80px" }}
                 value={generateCommand()}
-                onFocus={(event) => event.currentTarget.select()}
               />
             </div>
           </Flex>
-          <Flex direction="column" gap="2">
+          <Flex justify="center">
             <Button
               style={{ width: "100%" }}
-              aria-busy={profileAction === "copy"}
-              disabled={
-                selectedTrafficResetDay() === null ||
-                selectedInterval() === null
-              }
-              onClick={() => void saveProfile(true)}
+              onClick={() => copyToClipboard(generateCommand())}
             >
               <Copy size={16} />
-              {t("admin.nodeTable.saveAndCopyCommand", "保存并复制部署指令")}
+              {t("common.copy")}
             </Button>
-            {isMobile && copyFeedback && (
-              <Text
-                as="div"
-                size="2"
-                weight="medium"
-                color={
-                  copyFeedback.kind === "success"
-                    ? "green"
-                    : copyFeedback.kind === "warning"
-                      ? "amber"
-                      : "red"
-                }
-                role="status"
-                aria-live="polite"
-                className="px-1"
-              >
-                {copyFeedback.message}
-              </Text>
-            )}
           </Flex>
         </div>
       </Dialog.Content>
@@ -3214,7 +2166,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
 }
 
 function EditButton({ node }: { node: NodeDetail }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const { refresh } = useNodeDetails();
   const nameRef = React.useRef<HTMLInputElement>(null);
@@ -3226,101 +2178,37 @@ function EditButton({ node }: { node: NodeDetail }) {
   const [saving, setSaving] = useState(false);
   const [traffic_limit, setTrafficLimit] = useState(0);
   const [traffic_limit_type, setTrafficLimitType] = useState("sum");
-  const [trafficResetDay, setTrafficResetDay] = useState(0);
-  const [regionOverride, setRegionOverride] = useState("");
-  const [trafficResetAllowance, setTrafficResetAllowance] = useState(0);
-
-  const regionOptions = React.useMemo(
-    () => [
-      {
-        label: t("admin.nodeEdit.regionAuto", "自动识别"),
-        value: "",
-      },
-      ...getSupportedRegions().map((region) => {
-        const code = getRegionCode(region);
-        return {
-          label: `${code} ${getRegionDisplayName(region, i18n.language.startsWith("zh") ? "zh" : "en")}`,
-          value: code,
-          icon: <Flag flag={code} compact />,
-        };
-      }),
-    ],
-    [i18n.language, t],
-  );
 
   React.useEffect(() => {
     setHidden(node.hidden);
     setTrafficLimit(node.traffic_limit || 0);
     setTrafficLimitType(node.traffic_limit_type || "sum");
-    setTrafficResetDay(node.traffic_reset_day ?? 0);
-    setRegionOverride(
-      node.region_override ? getRegionCode(node.region_override) : "",
-    );
-    setTrafficResetAllowance(node.traffic_reset_allowance ?? 0);
-  }, [
-    node.hidden,
-    node.traffic_limit,
-    node.traffic_limit_type,
-    node.traffic_reset_day,
-    node.region_override,
-    node.traffic_reset_allowance,
-  ]);
+  }, [node.hidden, node.traffic_limit, node.traffic_limit_type]);
 
   const save = async () => {
-    if (trafficResetAllowance > 0 && (trafficResetDay < 1 || trafficResetDay > 31)) {
-      toast.error(
-        t(
-          "admin.nodeEdit.trafficResetDayRequired",
-          "请先设置 1-31 日的流量重置日，再填写本周期重置流量",
-        ),
-      );
-      return;
-    }
     try {
       setSaving(true);
-      const payload: Record<string, unknown> = {
-        name: nameRef.current?.value,
-        remark: privateRemarkRef.current?.value,
-        public_remark: publicRemarkRef.current?.value,
-        group: groupRef.current?.value,
-        tags: tagsRef.current?.value,
-        hidden,
-      };
-      if (traffic_limit !== (node.traffic_limit || 0)) {
-        payload.traffic_limit = traffic_limit;
-      }
-      if (traffic_limit_type !== (node.traffic_limit_type || "sum")) {
-        payload.traffic_limit_type = traffic_limit_type;
-      }
-      if (trafficResetDay !== (node.traffic_reset_day ?? 0)) {
-        payload.traffic_reset_day = trafficResetDay;
-      }
-      const currentRegionOverride = node.region_override
-        ? getRegionCode(node.region_override)
-        : "";
-      if (regionOverride !== currentRegionOverride) {
-        payload.region_override = regionOverride;
-      }
-      if (trafficResetAllowance !== (node.traffic_reset_allowance ?? 0)) {
-        payload.traffic_reset_allowance = trafficResetAllowance;
-      }
-      const response = await fetch(`/api/admin/client/${node.uuid}/edit`, {
+      await fetch(`/api/admin/client/${node.uuid}/edit`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          name: nameRef.current?.value,
+          remark: privateRemarkRef.current?.value,
+          public_remark: publicRemarkRef.current?.value,
+          group: groupRef.current?.value,
+          tags: tagsRef.current?.value,
+          hidden,
+          traffic_limit,
+          traffic_limit_type,
+        }),
         headers: {
           "Content-Type": "application/json",
         },
       });
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || `HTTP ${response.status}`);
-      }
       refresh();
       setOpen(false);
       toast.success(t("admin.nodeEdit.saveSuccess", "保存成功"));
     } catch (error) {
       console.error("Error updating client:", error);
-      toast.error(t("admin.nodeEdit.saveError", "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -3357,24 +2245,6 @@ function EditButton({ node }: { node: NodeDetail }) {
               placeholder={t("admin.nodeEdit.tokenPlaceholder", "请输入 Token")}
               readOnly
             />
-          </div>
-          <div>
-            <label className="block mb-1 text-sm font-medium text-muted-foreground">
-              {t("admin.nodeEdit.regionOverride", "国家图标")}
-            </label>
-            <SelectOrInput
-              options={regionOptions}
-              value={regionOverride}
-              allowCustomInput={false}
-              onChange={setRegionOverride}
-              placeholder={t("admin.nodeEdit.regionAuto", "自动识别")}
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t(
-                "admin.nodeEdit.regionOverride_description",
-                "用于广播 IP 或 GeoIP 识别不准的情况；清空后恢复自动识别。",
-              )}
-            </p>
           </div>
           <div>
             <label className="mb-1 text-sm font-medium text-muted-foreground flex items-center">
@@ -3433,37 +2303,10 @@ function EditButton({ node }: { node: NodeDetail }) {
             />
           </div>
           <SettingCardCollapse title={t("admin.nodeEdit.trafficLimit")}>
-            <div className="space-y-2 pb-3 pt-2">
-              <label className="block text-base font-semibold leading-6">
-                {t("admin.nodeEdit.trafficResetDay", "流量重置日")}
-              </label>
-              <TextField.Root
-                aria-label={t("admin.nodeEdit.trafficResetDay")}
-                type="number"
-                min="0"
-                max="31"
-                value={String(trafficResetDay)}
-                onChange={(event) => {
-                  const day = Number.parseInt(event.target.value || "0", 10);
-                  setTrafficResetDay(
-                    Math.min(
-                      31,
-                      Math.max(0, Number.isFinite(day) ? day : 0),
-                    ),
-                  );
-                }}
-              />
-              <p className="text-sm leading-6 text-muted-foreground">
-                {t(
-                  "admin.nodeEdit.trafficResetDay_description",
-                  "0 表示关闭；1-31 表示每月重置日。保存后自动同步到 Agent。",
-                )}
-              </p>
-            </div>
             <SettingCardSelect
               bordless
               title={t("admin.nodeEdit.trafficLimitType")}
-              defaultValue={node.traffic_limit_type || "sum"}
+              defaultValue={node.traffic_limit_type || "max"}
               options={[
                 {
                   label: t("admin.nodeEdit.trafficLimitType_sum"),
@@ -3491,7 +2334,6 @@ function EditButton({ node }: { node: NodeDetail }) {
               }}
             />
             <SettingCardShortTextInput
-              aria-label={t("admin.nodeEdit.trafficLimit")}
               bordless
               title={t("admin.nodeEdit.trafficLimit")}
               description={t("admin.nodeEdit.trafficLimit_description")}
@@ -3504,41 +2346,6 @@ function EditButton({ node }: { node: NodeDetail }) {
                 e.currentTarget.value = formatBytes(traffic_limit);
               }}
             ></SettingCardShortTextInput>
-            <div className="mt-5 border-t border-gray-200 pt-4 dark:border-gray-700">
-              <SettingCardShortTextInput
-                aria-label={t("admin.nodeEdit.trafficResetAllowance")}
-                bordless
-                title={t("admin.nodeEdit.trafficResetAllowance", "重置流量额度")}
-                description={t(
-                  "admin.nodeEdit.trafficResetAllowance_description",
-                  "同一计费周期可多次调整；与原流量限额相加，按上方统计方式计算，并在下个重置日自动归零。",
-                )}
-                defaultValue={formatBytes(trafficResetAllowance || 0)}
-                showSaveButton={false}
-                onChange={(event) => {
-                  setTrafficResetAllowance(stringToBytes(event.currentTarget.value));
-                }}
-                onBlur={(event) => {
-                  event.currentTarget.value = formatBytes(trafficResetAllowance);
-                }}
-              />
-            </div>
-            <div className="mt-3 space-y-1.5 pb-3 text-sm leading-6 text-muted-foreground">
-              <div>
-                {t("admin.nodeEdit.trafficEffectiveFormula", {
-                  defaultValue: "原限额 {{base}} + 重置流量 {{reset}} = 本周期总限额 {{total}}",
-                  base: formatBytes(traffic_limit),
-                  reset: formatBytes(trafficResetAllowance),
-                  total: formatBytes(traffic_limit + trafficResetAllowance),
-                })}
-              </div>
-              <div>
-                {t(
-                  "admin.nodeEdit.trafficResetReportNotice",
-                  "这里只调整本周期额度，不会清零或修改真实流量，日、周、月报仍按实际产生的流量统计。",
-                )}
-              </div>
-            </div>
           </SettingCardCollapse>
         </div>
         <Flex gap="2" justify={"end"} className="mt-4">
@@ -3550,7 +2357,7 @@ function EditButton({ node }: { node: NodeDetail }) {
           >
             {saving
               ? t("admin.nodeEdit.waiting", "等待...")
-              : t("save", "保存")}
+              : t("common.save", "保存")}
           </Button>
         </Flex>
       </Dialog.Content>
@@ -3558,170 +2365,238 @@ function EditButton({ node }: { node: NodeDetail }) {
   );
 }
 
-function ReadOnlyDetailField({
-  label,
-  value,
-  copyable = false,
-  mono = false,
-}: {
-  label: React.ReactNode;
-  value?: string | number | null;
-  copyable?: boolean;
-  mono?: boolean;
-}) {
+function DetailView({ node }: { node: NodeDetail }) {
   const { t } = useTranslation();
-  const displayValue = value === undefined || value === null || value === "" ? "-" : String(value);
-  return (
-    <div className="min-w-0">
-      <label className="mb-1.5 block text-sm font-medium">{label}</label>
-      <TextField.Root
-        value={displayValue}
-        readOnly
-        title={displayValue}
-        className={`w-full bg-[var(--color-panel-solid)] ${mono ? "[&_input]:font-mono [&_input]:text-[13px]" : ""}`}
-      >
-        {copyable && displayValue !== "-" ? (
-          <TextField.Slot side="right">
-            <IconButton
-              type="button"
-              size="1"
-              variant="ghost"
-              color="gray"
-              title={t("copy", "复制")}
-              aria-label={t("copy", "复制")}
-              onClick={async () => {
-                try {
-                  await writeClipboardText(displayValue);
-                  toast.success(t("copy_success"));
-                } catch (err) {
-                  console.error("Failed to copy text:", err);
-                }
-              }}
-            >
-              <Copy size={14} />
-            </IconButton>
-          </TextField.Slot>
-        ) : null}
-      </TextField.Root>
-    </div>
-  );
-}
-
-function DetailView({ node, online }: { node: NodeDetail; online: boolean }) {
-  const { t } = useTranslation();
-  const dialogContentRef = React.useRef<HTMLDivElement>(null);
-  const statusLabel = online
-    ? t("nodeCard.online", "在线")
-    : t("nodeCard.offline", "离线");
-  const formatDateTime = (value?: string) =>
-    value ? new Date(value).toLocaleString() : "-";
+  const isMobile = useIsMobile();
 
   return (
-    <Dialog.Root>
-      <Dialog.Trigger>
-        <button
-          type="button"
-          className="flex w-full min-w-0 items-start gap-2 text-left"
-        >
-          <span className="admin-node-country-flag">
-            <Flag flag={node.region} compact />
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="block max-w-full truncate text-sm font-semibold leading-6 hover:underline">
-              {node.name}
-            </span>
-            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+    <Drawer direction={isMobile ? "bottom" : "right"}>
+      <DrawerTrigger asChild>
+        <div className="h-8 flex items-center hover:underline cursor-pointer font-bold text-base">
+          <Flag flag={node.region} size="6" />
+          {node.name.length > 25 ? node.name.slice(0, 25) + "..." : node.name}
+        </div>
+      </DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader className="gap-1">
+          <DrawerTitle>{node.name}</DrawerTitle>
+          <DrawerDescription>
+            {t("admin.nodeDetail.machineDetail", "机器详细信息")}
+          </DrawerDescription>
+        </DrawerHeader>
+        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
+          <form className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-ip">
+                  {t("admin.nodeDetail.ipAddress", "IP 地址")}
+                </label>
+                <div className="flex flex-col gap-1">
+                  {node.ipv4 && (
+                    <div className="flex items-center gap-1">
+                      <span
+                        id="detail-ipv4"
+                        className="bg-muted px-3 py-2 rounded border flex-1 min-w-0 select-text"
+                      >
+                        {node.ipv4}
+                      </span>
+                      <IconButton
+                        variant="ghost"
+                        className="size-5"
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(node.ipv4!);
+                        }}
+                      >
+                        <Copy size={16} />
+                      </IconButton>
+                    </div>
+                  )}
+                  {node.ipv6 && (
+                    <div className="flex items-center gap-1">
+                      <span
+                        id="detail-ipv6"
+                        className="bg-muted px-3 py-2 rounded border flex-1 min-w-0 select-text"
+                      >
+                        {node.ipv6}
+                      </span>
+                      <IconButton
+                        variant="ghost"
+                        className="size-5"
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(node.ipv6!);
+                        }}
+                      >
+                        <Copy size={16} />
+                      </IconButton>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-version">
+                  {t("admin.nodeDetail.clientVersion", "客户端版本")}
+                </label>
+                <span
+                  id="detail-version"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                >
+                  {node.version || (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-os">
+                  {t("admin.nodeDetail.os", "操作系统")}
+                </label>
+                <span
+                  id="detail-os"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                >
+                  {node.os || <span className="text-muted-foreground">-</span>}
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-arch">
+                  {t("admin.nodeDetail.arch", "架构")}
+                </label>
+                <span
+                  id="detail-arch"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                >
+                  {node.arch || (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-cpu_name">
+                  {t("admin.nodeDetail.cpu", "CPU")}
+                </label>
+                <span
+                  id="detail-cpu_name"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                >
+                  {node.cpu_name || (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-cpu_cores">
+                  {t("admin.nodeDetail.cpuCores", "CPU 核心数")}
+                </label>
+                <span
+                  id="detail-cpu_cores"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                >
+                  {node.cpu_cores?.toString() || (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-mem_total">
+                  {t("admin.nodeDetail.memTotal", "总内存 (Bytes)")}
+                </label>
+                <span
+                  id="detail-mem_total"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                  title={
+                    node.mem_total ? String(node.mem_total) + " Bytes" : "-"
+                  }
+                >
+                  {formatBytes(node.mem_total)}
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-disk_total">
+                  {t("admin.nodeDetail.diskTotal", "总磁盘空间 (Bytes)")}
+                </label>
+                <span
+                  id="detail-disk_total"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                  title={
+                    node.disk_total ? String(node.disk_total) + " Bytes" : "-"
+                  }
+                >
+                  {formatBytes(node.disk_total)}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <label htmlFor="detail-gpu_name">
+                {t("admin.nodeDetail.gpu", "GPU")}
+              </label>
               <span
-                className="size-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: online ? "var(--green-9)" : "var(--red-9)" }}
-              />
-              {statusLabel}
-            </span>
-          </span>
-        </button>
-      </Dialog.Trigger>
-      <Dialog.Content
-        ref={dialogContentRef}
-        tabIndex={-1}
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          dialogContentRef.current?.focus({ preventScroll: true });
-        }}
-        maxWidth="720px"
-        className="max-h-[88vh] overflow-y-auto bg-[var(--color-panel-solid)] max-sm:w-[calc(100%-1rem)]"
-        style={{ maxHeight: "88vh" }}
-      >
-        <div className="flex items-start gap-3">
-          <span className="admin-node-detail-country-flag mt-0.5 inline-flex shrink-0 items-center justify-center">
-            <Flag flag={node.region} compact />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <Dialog.Title className="mb-0 truncate">{node.name}</Dialog.Title>
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                style={{
-                  color: online ? "var(--green-11)" : "var(--red-11)",
-                  backgroundColor: online ? "var(--green-a3)" : "var(--red-a3)",
-                }}
+                id="detail-gpu_name"
+                className="bg-muted px-3 py-2 rounded border select-text"
               >
-                <span className="size-1.5 rounded-full" style={{ backgroundColor: online ? "var(--green-9)" : "var(--red-9)" }} />
-                {statusLabel}
+                {node.gpu_name || (
+                  <span className="text-muted-foreground">-</span>
+                )}
               </span>
             </div>
-            <Dialog.Description size="2" color="gray" className="mt-1">
-              {t("admin.nodeDetail.machineDetail", "机器详细信息")}
-            </Dialog.Description>
-          </div>
+            <div className="flex flex-col gap-3">
+              <label htmlFor="detail-uuid">
+                {t("admin.nodeDetail.uuid", "UUID")}
+              </label>
+              <span
+                id="detail-uuid"
+                className="bg-muted px-3 py-2 rounded border select-text"
+              >
+                {node.uuid || <span className="text-muted-foreground">-</span>}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-createdAt">
+                  {t("admin.nodeDetail.createdAt", "创建时间")}
+                </label>
+                <span
+                  id="detail-createdAt"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                >
+                  {node.created_at ? (
+                    new Date(node.created_at).toLocaleString()
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                <label htmlFor="detail-updatedAt">
+                  {t("admin.nodeDetail.updatedAt", "更新时间")}
+                </label>
+                <span
+                  id="detail-updatedAt"
+                  className="bg-muted px-3 py-2 rounded border select-text"
+                >
+                  {node.updated_at ? (
+                    new Date(node.updated_at).toLocaleString()
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </span>
+              </div>
+            </div>
+          </form>
         </div>
-
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="border-b border-[var(--gray-a5)] pb-2 text-sm font-semibold sm:col-span-2">
-            {t("admin.nodeDetail.network", "网络与客户端")}
-          </div>
-          <ReadOnlyDetailField label="IPv4" value={node.ipv4} copyable mono />
-          <ReadOnlyDetailField label="IPv6" value={node.ipv6} copyable mono />
-          <ReadOnlyDetailField label={t("admin.nodeDetail.clientVersion", "客户端版本")} value={publicVersion(node.version)} />
-          <ReadOnlyDetailField label={t("admin.nodeTable.region", "国家 / 地区")} value={getRegionDisplayName(node.region)} />
-
-          <div className="border-b border-[var(--gray-a5)] pb-2 pt-1 text-sm font-semibold sm:col-span-2">
-            {t("admin.nodeDetail.system", "系统信息")}
-          </div>
-          <ReadOnlyDetailField label={t("admin.nodeDetail.os", "操作系统")} value={node.os} />
-          <ReadOnlyDetailField label={t("admin.nodeDetail.arch", "系统架构")} value={node.arch} />
-          <div className="sm:col-span-2">
-            <ReadOnlyDetailField label={t("admin.nodeDetail.cpu", "处理器")} value={node.cpu_name} />
-          </div>
-          <ReadOnlyDetailField label={t("admin.nodeDetail.cpuCores", "CPU 核心")} value={node.cpu_cores ? `${node.cpu_cores} 核` : ""} />
-          <ReadOnlyDetailField label={t("admin.nodeDetail.virtualization", "虚拟化")} value={node.virtualization} />
-          <div className="sm:col-span-2">
-            <ReadOnlyDetailField label={t("admin.nodeDetail.gpu", "显卡")} value={node.gpu_name} />
-          </div>
-
-          <div className="border-b border-[var(--gray-a5)] pb-2 pt-1 text-sm font-semibold sm:col-span-2">
-            {t("admin.nodeDetail.resources", "硬件资源")}
-          </div>
-          <ReadOnlyDetailField label={t("admin.nodeDetail.memTotal", "内存")} value={formatBytes(node.mem_total)} />
-          <ReadOnlyDetailField label={t("admin.nodeDetail.swapTotal", "Swap")} value={formatBytes(node.swap_total)} />
-          <ReadOnlyDetailField label={t("admin.nodeDetail.diskTotal", "磁盘")} value={formatBytes(node.disk_total)} />
-
-          <div className="border-b border-[var(--gray-a5)] pb-2 pt-1 text-sm font-semibold sm:col-span-2">
-            {t("admin.nodeDetail.identity", "标识与时间")}
-          </div>
-          <div className="sm:col-span-2">
-            <ReadOnlyDetailField label={t("admin.nodeDetail.uuid", "UUID")} value={node.uuid} copyable mono />
-          </div>
-          <ReadOnlyDetailField label={t("admin.nodeDetail.createdAt", "创建时间")} value={formatDateTime(node.created_at)} />
-          <ReadOnlyDetailField label={t("admin.nodeDetail.updatedAt", "更新时间")} value={formatDateTime(node.updated_at)} />
-        </div>
-
-        <Flex justify="end" className="mt-5">
-          <Dialog.Close>
-            <Button variant="soft">{t("admin.nodeDetail.done", "完成")}</Button>
-          </Dialog.Close>
-        </Flex>
-      </Dialog.Content>
-    </Dialog.Root>
+        <DrawerFooter>
+          <DrawerClose asChild>
+            <Button>{t("admin.nodeDetail.done", "完成")}</Button>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -3736,9 +2611,7 @@ function BillingButton({ node }: { node: NodeDetail }) {
   const [autoRenewal, setAutoRenewal] = React.useState<boolean>(
     node.auto_renewal || false
   );
-  const [currency, setCurrency] = React.useState<string>(
-    currencyForDisplay(node.currency || "$")
-  );
+  const [currency, setCurrency] = React.useState<string>(node.currency || "$");
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3757,9 +2630,10 @@ function BillingButton({ node }: { node: NodeDetail }) {
         (formData.get("billingCycle") as string) || "30"
       );
       const expiredAtValue = (formData.get("expiredAt") as string) || "";
-      const expiredAt = dateInputToISOString(expiredAtValue);
-      const rawCurrency = (formData.get("currency") as string) || "$";
-      const currencyValue = currencyForStorage(rawCurrency);
+      const expiredAt = expiredAtValue
+        ? new Date(`${expiredAtValue}T00:00:00Z`).toISOString()
+        : null;
+      const currencyValue = (formData.get("currency") as string) || "$";
 
       await fetch(`/api/admin/client/${node.uuid}/edit`, {
         method: "POST",
@@ -3774,7 +2648,6 @@ function BillingButton({ node }: { node: NodeDetail }) {
           "Content-Type": "application/json",
         },
       });
-      setCurrency(currencyForDisplay(currencyValue));
       refresh();
       setOpen(false);
     } catch (error) {
@@ -3812,12 +2685,10 @@ function BillingButton({ node }: { node: NodeDetail }) {
                 {t("admin.nodeTable.currencyTips")}
               </label>
             </label>
-            <SelectOrInput
-              options={["¥", "$", "€", "£", "₽", "₣", "₹", "₫", "฿", "C$"]}
+            <TextField.Root
               name="currency"
-              value={currency}
-              onChange={(value) => setCurrency(value)}
-              allowCustomInput
+              defaultValue={currency}
+              onChange={(e) => setCurrency(e.target.value)}
             />
 
             <label className="font-bold flex items-center gap-1">
@@ -3849,7 +2720,7 @@ function BillingButton({ node }: { node: NodeDetail }) {
               name="expiredAt"
               defaultValue={
                 node.expired_at
-                  ? timestampToDateInput(node.expired_at)
+                  ? new Date(node.expired_at).toISOString().slice(0, 10)
                   : "0001-01-01"
               }
               type="date"
@@ -3865,7 +2736,7 @@ function BillingButton({ node }: { node: NodeDetail }) {
                     if (dateInput) {
                       const futureDate = new Date();
                       futureDate.setFullYear(futureDate.getFullYear() + 200);
-                      dateInput.value = timestampToDateInput(futureDate);
+                      dateInput.value = futureDate.toISOString().slice(0, 10);
                     }
                   }}
                 >
@@ -3881,7 +2752,7 @@ function BillingButton({ node }: { node: NodeDetail }) {
               onChange={setAutoRenewal}
             />
             <Button type="submit" disabled={saving}>
-              {t("save")}
+              {t("common.save")}
             </Button>
           </Flex>
         </form>

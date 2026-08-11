@@ -7,8 +7,6 @@ export type TrafficReportNotification = {
   daily: boolean;
   weekly: boolean;
   monthly: boolean;
-  include_traffic: boolean;
-  include_billing: boolean;
 };
 
 interface TrafficReportNotificationContextType {
