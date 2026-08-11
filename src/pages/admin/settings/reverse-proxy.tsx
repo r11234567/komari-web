@@ -357,7 +357,7 @@ function HTTPSPanel() {
         title={t("settings.reverse_proxy.enable_https", "Enable built-in HTTPS")}
         description={t(
           "settings.reverse_proxy.enable_https_description",
-          "When enabled, Komari Lite provides HTTPS access for both the web UI and Agent APIs.",
+          "When enabled, Komari provides HTTPS access for both the web UI and Agent APIs.",
         )}
       >
         <SettingCard.Action>
@@ -416,7 +416,7 @@ function HTTPSPanel() {
         title={t("settings.reverse_proxy.certificate_paths", "Certificate paths")}
         description={t(
           "settings.reverse_proxy.certificate_paths_description",
-          "Komari Lite reads the certificate and private key from the server. Docker users should mount the certificate directory first and enter its path inside the container.",
+          "Komari reads the certificate and private key from the server. Docker users should mount the certificate directory first and enter its path inside the container.",
         )}
         direction="column"
       >
@@ -669,7 +669,7 @@ function CloudflareTunnelPanel() {
             <Text size="2" color="gray">
               {t(
                 "settings.reverse_proxy.env_token_hint",
-                "Environment variable `KOMARI_CLOUDFLARED_TOKEN` is present. Komari Lite will try to restore cloudflared automatically on restart."
+                "Environment variable `KOMARI_CLOUDFLARED_TOKEN` is present. Komari will try to restore cloudflared automatically on restart."
               )}
             </Text>
           ) : null}
@@ -884,7 +884,7 @@ function CloudflareTunnelPanel() {
           <Dialog.Description>
             {t(
               "settings.reverse_proxy.stop_dialog_description",
-              "If you are currently accessing Komari Lite through this tunnel, stopping cloudflared may immediately disconnect your session."
+              "If you are currently accessing Komari through this tunnel, stopping cloudflared may immediately disconnect your session."
             )}
           </Dialog.Description>
 

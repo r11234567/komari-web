@@ -19,6 +19,7 @@ import { useSettings } from "@/lib/api";
 import type { SettingsResponse } from "@/lib/api";
 import { useRPC2Call } from "@/contexts/RPC2Context";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
+import { isSQLiteDSN } from "@/utils/metric";
 import {
   Badge,
   Button,
@@ -162,6 +163,13 @@ export default function MetricsSettings() {
   const { t } = useTranslation();
   const { settings, loading, error, updateMultipleSettings } = useSettings();
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const metricDSN = String(settings.metric_db_dsn || "");
+  const metricDriver = String(settings.metric_db_driver || "").toLowerCase();
+  const sqlitePoolIsFixed =
+    metricDriver === "sqlite" ||
+    (metricDriver !== "mysql" &&
+      metricDriver !== "postgresql" &&
+      isSQLiteDSN(metricDSN));
   const saveMetricSettings = React.useCallback(
     async (changes: Partial<SettingsResponse>) => {
       try {
@@ -213,7 +221,7 @@ export default function MetricsSettings() {
         title={t("settings.metrics.dsn_title")}
         description={t("settings.metrics.dsn_description")}
         descriptionPlacement="footer"
-        defaultValue={String(settings.metric_db_dsn || "")}
+        defaultValue={metricDSN}
         placeholder={DSN_PLACEHOLDER}
         OnSave={async (value) => {
           await saveMetricSettings({ metric_db_dsn: value.trim() });
@@ -246,39 +254,50 @@ export default function MetricsSettings() {
         }}
       />
 
-      <SettingCardShortTextInput
-        title={t("settings.metrics.max_open_conns_title")}
-        description={t("settings.metrics.max_open_conns_description")}
-        descriptionPlacement="footer"
-        type="number"
-        defaultValue={String(toNumber(settings.metric_max_open_conns, 25))}
-        placeholder="25"
-        OnSave={async (value) => {
-          const n = parseInt(value, 10);
-          if (isNaN(n) || n <= 0) {
-            toast.error(t("settings.metrics.conns_invalid"));
-            return;
-          }
-          await saveMetricSettings({ metric_max_open_conns: n });
-        }}
-      />
+      {sqlitePoolIsFixed ? (
+        <Callout.Root color="gray" variant="surface">
+          <Callout.Icon>
+            <Database size={16} />
+          </Callout.Icon>
+          <Callout.Text>{t("settings.metrics.sqlite_pool_fixed")}</Callout.Text>
+        </Callout.Root>
+      ) : (
+        <>
+          <SettingCardShortTextInput
+            title={t("settings.metrics.max_open_conns_title")}
+            description={t("settings.metrics.max_open_conns_description")}
+            descriptionPlacement="footer"
+            type="number"
+            defaultValue={String(toNumber(settings.metric_max_open_conns, 25))}
+            placeholder="25"
+            OnSave={async (value) => {
+              const n = parseInt(value, 10);
+              if (isNaN(n) || n <= 0) {
+                toast.error(t("settings.metrics.conns_invalid"));
+                return;
+              }
+              await saveMetricSettings({ metric_max_open_conns: n });
+            }}
+          />
 
-      <SettingCardShortTextInput
-        title={t("settings.metrics.max_idle_conns_title")}
-        description={t("settings.metrics.max_idle_conns_description")}
-        descriptionPlacement="footer"
-        type="number"
-        defaultValue={String(toNumber(settings.metric_max_idle_conns, 5))}
-        placeholder="5"
-        OnSave={async (value) => {
-          const n = parseInt(value, 10);
-          if (isNaN(n) || n < 0) {
-            toast.error(t("settings.metrics.conns_invalid"));
-            return;
-          }
-          await saveMetricSettings({ metric_max_idle_conns: n });
-        }}
-      />
+          <SettingCardShortTextInput
+            title={t("settings.metrics.max_idle_conns_title")}
+            description={t("settings.metrics.max_idle_conns_description")}
+            descriptionPlacement="footer"
+            type="number"
+            defaultValue={String(toNumber(settings.metric_max_idle_conns, 5))}
+            placeholder="5"
+            OnSave={async (value) => {
+              const n = parseInt(value, 10);
+              if (isNaN(n) || n < 0) {
+                toast.error(t("settings.metrics.conns_invalid"));
+                return;
+              }
+              await saveMetricSettings({ metric_max_idle_conns: n });
+            }}
+          />
+        </>
+      )}
 
       {/*<Callout.Root color="green" variant="surface">
         <Callout.Icon>

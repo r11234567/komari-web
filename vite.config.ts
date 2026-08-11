@@ -15,10 +15,11 @@ const configDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const buildTime = new Date().toISOString();
-  const systemUiBuild = mode !== "development" && process.env.VITE_SYSTEM_UI_BUILD !== "0";
+  const systemUiBuild =
+    mode !== "development" && process.env.VITE_SYSTEM_UI_BUILD === "1";
 
-  // Production builds are embedded into Komari. An explicit opt-out is required
-  // for a standalone root-path build.
+  // Normal production builds are the official public theme. The backend build
+  // explicitly opts into the isolated /system-assets/ administrator bundle.
   const base: string = process.env.VITE_BASE_URL
     ? process.env.VITE_BASE_URL
     : systemUiBuild
