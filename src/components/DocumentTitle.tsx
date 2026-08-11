@@ -3,8 +3,8 @@ import { useLocation } from "react-router-dom";
 
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 
-const ADMIN_TITLE = "Komari Lite Monitor";
-const PUBLIC_TITLE = "Komari Lite";
+const ADMIN_TITLE = "Komari Monitor";
+const PUBLIC_TITLE = "Komari";
 
 export default function DocumentTitle() {
   const { pathname } = useLocation();

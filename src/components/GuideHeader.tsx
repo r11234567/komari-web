@@ -3,7 +3,7 @@ import { Flex } from "@radix-ui/themes";
 import ColorSwitch from "./ColorSwitch";
 import LanguageSwitch from "./Language";
 import ThemeSwitch from "./ThemeSwitch";
-import KomariLiteBrand from "./KomariLiteBrand";
+import KomariBrand from "./KomariBrand";
 import { getAppAssetUrl } from "@/utils/assetUrl";
 
 export default function GuideHeader() {
@@ -11,11 +11,11 @@ export default function GuideHeader() {
     <Flex justify="between" align="center" gap="4" className="w-full">
       <Flex align="center" gap="2">
         <img
-          src={getAppAssetUrl("assets/logo.png?v=869680cc")}
-          alt="Komari Lite"
+          src={getAppAssetUrl("assets/pwa-icon.png")}
+          alt="Komari"
           className="size-9 object-contain"
         />
-        <KomariLiteBrand size="sm" />
+        <KomariBrand size="sm" />
       </Flex>
       <Flex gap="2">
         <LanguageSwitch />

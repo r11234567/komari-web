@@ -17,7 +17,7 @@ import remarkGfm from "remark-gfm";
 import ColorSwitch from "../ColorSwitch";
 import LanguageSwitch from "../Language";
 import ThemeSwitch from "../ThemeSwitch";
-import KomariLiteBrand from "../KomariLiteBrand";
+import KomariBrand from "../KomariBrand";
 import { useIsMobile } from "@/hooks/use-mobile";
 import menuConfig from "../../config/menuConfig.json";
 import type { MenuItem } from "../../types/menu";
@@ -979,7 +979,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
                 rel="noopener noreferrer"
                 className="flex items-end leading-none"
               >
-                <KomariLiteBrand size={isMobile ? "sm" : "md"} />
+                <KomariBrand size={isMobile ? "sm" : "md"} />
               </a>
               {updateAvailable && releasesSince.length > 0 && (
                 <Dialog.Root open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>

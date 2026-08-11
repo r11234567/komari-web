@@ -1,6 +1,6 @@
 {
-  "name": "Komari Lite",
-  "short_name": "Komari Lite",
+  "name": "Komari Monitor",
+  "short_name": "Komari Monitor",
   "description": "A simple server monitor tool",
   "start_url": "/",
   "display": "standalone",
