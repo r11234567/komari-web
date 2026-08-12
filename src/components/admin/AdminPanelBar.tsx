@@ -28,7 +28,7 @@ import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import Tips from "../ui/tips";
 import { CircleFadingArrowUp } from "lucide-react";
 import { useRPC2Call } from "@/contexts/RPC2Context";
-import { resolveI18nText } from "@/utils/i18nText";
+import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import type { PluginInfo } from "@/types/plugin";
 import {
   getThemeConfigurationType,
@@ -140,7 +140,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
           return;
         }
         const rawLabel: string =
-          resolveI18nText(cfg.name, currentLanguage) ??
+          resolveI18nText(cfg.name as I18nText | undefined, currentLanguage) ??
           t("theme.manage_with_name", {
             name: currentTheme === "default" ? "" : currentTheme,
           });

@@ -514,9 +514,12 @@ export class RPC2Client {
 }
 
 export class RPC2ResponseError extends Error {
-  constructor(public readonly code: number, message: string) {
+  readonly code: number;
+
+  constructor(code: number, message: string) {
     super(`RPC Error ${code}: ${message}`);
     this.name = "RPC2ResponseError";
+    this.code = code;
   }
 }
 

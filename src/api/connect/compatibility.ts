@@ -2,11 +2,9 @@ import { Code, ConnectError } from "@connectrpc/connect";
 
 export class ConnectCompatibilityError extends Error {
   constructor(cause: unknown) {
-    super(
-      "Connect endpoint is unavailable; use the legacy compatibility adapter",
-      { cause },
-    );
+    super("Connect endpoint is unavailable; use the legacy compatibility adapter");
     this.name = "ConnectCompatibilityError";
+    Object.assign(this, { cause });
   }
 }
 
