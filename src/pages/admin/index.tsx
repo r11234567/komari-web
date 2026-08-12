@@ -25,7 +25,6 @@ import {
   CircleDollarSign,
   Copy,
   CornerRightUp,
-  Download,
   MenuIcon,
   Pencil,
   Plus,
