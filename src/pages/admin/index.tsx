@@ -175,6 +175,7 @@ const EmptyNodesGuide = () => {
 };
 
 type AutoDiscoveryInstallOptions = {
+  installAsCurrentUser: boolean;
   disableWebSsh: boolean;
   disableAutoUpdate: boolean;
   ignoreUnsafeCert: boolean;
@@ -208,6 +209,7 @@ const AutoDiscoverySection = ({
   const [showOptions, setShowOptions] = React.useState(false);
   const [installOptions, setInstallOptions] =
     React.useState<AutoDiscoveryInstallOptions>({
+      installAsCurrentUser: false,
       disableWebSsh: false,
       disableAutoUpdate: false,
       ignoreUnsafeCert: false,
@@ -338,7 +340,9 @@ const AutoDiscoverySection = ({
     switch (selectedPlatform) {
       case "linux":
         finalCommand =
-          `wget -qO- ${quoteShellArg(scriptUrl)} | sudo bash -s -- ` +
+          `wget -qO- ${quoteShellArg(scriptUrl)} | ${
+            installOptions.installAsCurrentUser ? "bash" : "sudo bash"
+          } -s -- ` +
           quoteShellArgs(args);
         break;
       case "windows":
@@ -479,6 +483,30 @@ const AutoDiscoverySection = ({
       {showOptions && (
         <Flex direction="column" gap="2">
           <div className="grid grid-cols-2 gap-2">
+            {selectedPlatform === "linux" && (
+              <Flex gap="2" align="center">
+                <Checkbox
+                  checked={installOptions.installAsCurrentUser}
+                  onCheckedChange={(checked) =>
+                    setInstallOptions((prev) => ({
+                      ...prev,
+                      installAsCurrentUser: Boolean(checked),
+                    }))
+                  }
+                />
+                <label
+                  className="text-sm font-normal cursor-pointer"
+                  onClick={() =>
+                    setInstallOptions((prev) => ({
+                      ...prev,
+                      installAsCurrentUser: !prev.installAsCurrentUser,
+                    }))
+                  }
+                >
+                  {t("admin.nodeTable.installAsCurrentUser", "以当前用户安装")}
+                </label>
+              </Flex>
+            )}
             <Flex gap="2" align="center">
               <Checkbox
                 checked={installOptions.disableWebSsh}
@@ -1424,6 +1452,7 @@ function DeleteButton({ node }: { node: NodeDetail }) {
   );
 }
 type InstallOptions = {
+  installAsCurrentUser: boolean;
   disableWebSsh: boolean;
   disableAutoUpdate: boolean;
   ignoreUnsafeCert: boolean;
@@ -1444,6 +1473,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
   const [selectedPlatform, setSelectedPlatform] =
     React.useState<Platform>("linux");
   const [installOptions, setInstallOptions] = React.useState<InstallOptions>({
+    installAsCurrentUser: false,
     disableWebSsh: false,
     disableAutoUpdate: false,
     ignoreUnsafeCert: false,
@@ -1573,7 +1603,9 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
     switch (selectedPlatform) {
       case "linux":
         finalCommand =
-          `wget -qO- ${quoteShellArg(scriptUrl)} | sudo bash -s -- ` +
+          `wget -qO- ${quoteShellArg(scriptUrl)} | ${
+            installOptions.installAsCurrentUser ? "bash" : "sudo bash"
+          } -s -- ` +
           quoteShellArgs(args);
         break;
       case "windows":
@@ -1654,6 +1686,30 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
               {t("admin.nodeTable.installOptions", "安装选项")}
             </label>
             <div className="grid grid-cols-2 gap-2">
+              {selectedPlatform === "linux" && (
+                <Flex gap="2" align="center">
+                  <Checkbox
+                    checked={installOptions.installAsCurrentUser}
+                    onCheckedChange={(checked) => {
+                      setInstallOptions((prev) => ({
+                        ...prev,
+                        installAsCurrentUser: Boolean(checked),
+                      }));
+                    }}
+                  />
+                  <label
+                    className="text-sm font-normal"
+                    onClick={() => {
+                      setInstallOptions((prev) => ({
+                        ...prev,
+                        installAsCurrentUser: !prev.installAsCurrentUser,
+                      }));
+                    }}
+                  >
+                    {t("admin.nodeTable.installAsCurrentUser", "以当前用户安装")}
+                  </label>
+                </Flex>
+              )}
               <Flex gap="2" align="center">
                 <Checkbox
                   checked={installOptions.disableWebSsh}

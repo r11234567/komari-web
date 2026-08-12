@@ -26,6 +26,7 @@ async function removeClient(uuid: string) {
 }
 
 type InstallOptions = {
+  installAsCurrentUser: boolean;
   disableWebSsh: boolean;
   disableAutoUpdate: boolean;
   ignoreUnsafeCert: boolean;
@@ -42,6 +43,7 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
   const [selectedPlatform, setSelectedPlatform] =
     React.useState<Platform>("linux");
   const [installOptions, setInstallOptions] = React.useState<InstallOptions>({
+    installAsCurrentUser: false,
     disableWebSsh: false,
     disableAutoUpdate: false,
     ignoreUnsafeCert: false,
@@ -87,7 +89,9 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
     switch (selectedPlatform) {
       case "linux":
         finalCommand =
-          `wget -qO- https://raw.githubusercontent.com/r11234567/komari-agent/refs/heads/main/install.sh | sudo bash -s -- ` +
+          `wget -qO- https://raw.githubusercontent.com/r11234567/komari-agent/refs/heads/main/install.sh | ${
+            installOptions.installAsCurrentUser ? "bash" : "sudo bash"
+          } -s -- ` +
           quoteShellArgs(args);
         break;
       case "windows":
@@ -152,6 +156,30 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
                 {t("admin.nodeTable.installOptions", "安装选项")}
               </label>
               <div className="grid grid-cols-2 gap-2">
+                {selectedPlatform === "linux" && (
+                  <Flex gap="2">
+                    <Checkbox
+                      checked={installOptions.installAsCurrentUser}
+                      onCheckedChange={(checked) => {
+                        setInstallOptions((prev) => ({
+                          ...prev,
+                          installAsCurrentUser: Boolean(checked),
+                        }));
+                      }}
+                    />
+                    <label
+                      className="text-sm font-normal"
+                      onClick={() => {
+                        setInstallOptions((prev) => ({
+                          ...prev,
+                          installAsCurrentUser: !prev.installAsCurrentUser,
+                        }));
+                      }}
+                    >
+                      {t("admin.nodeTable.installAsCurrentUser", "以当前用户安装")}
+                    </label>
+                  </Flex>
+                )}
                 <Flex gap="2">
                   <Checkbox
                     checked={installOptions.disableWebSsh}
