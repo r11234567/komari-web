@@ -128,9 +128,26 @@ export function AgentDeploymentDialog({
   const updateRuntime = (changes: Partial<NonNullable<DeploymentProfile["runtime"]>>) => {
     setProfile((current) => {
       if (!current) return current;
+      const previous = current.runtime;
       return {
         ...current,
-        runtime: create(RuntimeConfigSchema, { ...current.runtime, ...changes }),
+        runtime: create(RuntimeConfigSchema, {
+          memoryIncludeCache:
+            changes.memoryIncludeCache ?? previous?.memoryIncludeCache,
+          detailedGpu: changes.detailedGpu ?? previous?.detailedGpu,
+          includeNics: changes.includeNics ?? previous?.includeNics ?? [],
+          excludeNics: changes.excludeNics ?? previous?.excludeNics ?? [],
+          includeMountpoints:
+            changes.includeMountpoints ?? previous?.includeMountpoints ?? [],
+          reportInterval:
+            "reportInterval" in changes
+              ? changes.reportInterval
+              : previous?.reportInterval,
+          trafficResetDay:
+            "trafficResetDay" in changes
+              ? changes.trafficResetDay
+              : previous?.trafficResetDay,
+        }),
       };
     });
   };
@@ -264,11 +281,11 @@ export function AgentDeploymentDialog({
                       checked={install.rescue.configureFirewall}
                       onChange={(value) =>
                         updateInstall(
-                          "rescue",
-                          create(RescueInstallConfigSchema, {
-                            ...install.rescue,
-                            configureFirewall: value,
-                          }),
+                        "rescue",
+                        create(RescueInstallConfigSchema, {
+                          enabled: install.rescue.enabled,
+                          configureFirewall: value,
+                        }),
                         )
                       }
                     />
