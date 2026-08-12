@@ -175,7 +175,7 @@ const EmptyNodesGuide = () => {
 
 type AutoDiscoveryInstallOptions = {
   installAsCurrentUser: boolean;
-  disableWebSsh: boolean;
+  disableRemoteControl: boolean;
   disableAutoUpdate: boolean;
   ignoreUnsafeCert: boolean;
   memoryIncludeCache: boolean;
@@ -209,7 +209,7 @@ const AutoDiscoverySection = ({
   const [installOptions, setInstallOptions] =
     React.useState<AutoDiscoveryInstallOptions>({
       installAsCurrentUser: false,
-      disableWebSsh: false,
+      disableRemoteControl: false,
       disableAutoUpdate: false,
       ignoreUnsafeCert: false,
       memoryIncludeCache: false,
@@ -248,7 +248,10 @@ const AutoDiscoverySection = ({
       return `http://${settings.script_domain.replace(/\/+$/, "")}`;
     })();
     const args: string[] = ["-e", host, "--auto-discovery", adKey];
-    if (installOptions.disableWebSsh) {
+    if (installOptions.installAsCurrentUser) {
+      args.push("--install-runtime-identity", "current-user");
+    }
+    if (installOptions.disableRemoteControl || installOptions.installAsCurrentUser) {
       args.push("--disable-remote-control");
     }
     if (installOptions.disableAutoUpdate) {
@@ -339,9 +342,7 @@ const AutoDiscoverySection = ({
     switch (selectedPlatform) {
       case "linux":
         finalCommand =
-          `wget -qO- ${quoteShellArg(scriptUrl)} | ${
-            installOptions.installAsCurrentUser ? "bash" : "sudo bash"
-          } -s -- ` +
+          `wget -qO- ${quoteShellArg(scriptUrl)} | sudo bash -s -- ` +
           quoteShellArgs(args);
         break;
       case "windows":
@@ -502,17 +503,17 @@ const AutoDiscoverySection = ({
                     }))
                   }
                 >
-                  {t("admin.nodeTable.installAsCurrentUser", "以当前用户安装")}
+                  {t("admin.nodeTable.installAsCurrentUser", "以非特权用户运行（Linux 自动创建 komari 用户）")}
                 </label>
               </Flex>
             )}
             <Flex gap="2" align="center">
               <Checkbox
-                checked={installOptions.disableWebSsh}
+                checked={installOptions.disableRemoteControl}
                 onCheckedChange={(checked) =>
                   setInstallOptions((prev) => ({
                     ...prev,
-                    disableWebSsh: Boolean(checked),
+                    disableRemoteControl: Boolean(checked),
                   }))
                 }
               />
@@ -521,7 +522,7 @@ const AutoDiscoverySection = ({
                 onClick={() =>
                   setInstallOptions((prev) => ({
                     ...prev,
-                    disableWebSsh: !prev.disableWebSsh,
+                    disableRemoteControl: !prev.disableRemoteControl,
                   }))
                 }
               >

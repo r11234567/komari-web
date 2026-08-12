@@ -215,7 +215,9 @@ export function AgentDeploymentDialog({
 
   const install = profile?.install;
   const runtime = profile?.runtime;
-  const remoteControlEnabled = install?.remoteControlEnabled ?? true;
+  const nonPrivilegedRuntime =
+    install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER;
+  const remoteControlEnabled = !nonPrivilegedRuntime && (install?.remoteControlEnabled ?? true);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -247,19 +249,38 @@ export function AgentDeploymentDialog({
               <Text size="2" color="gray">普通 Agent 的运行身份</Text>
               <SegmentedControl.Root
                 value={install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER ? "current-user" : "administrator"}
-                onValueChange={(value) => updateInstall("runtimeIdentity", value === "current-user" ? AgentRuntimeIdentity.CURRENT_USER : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR)}
+                onValueChange={(value) => {
+                  const currentUser = value === "current-user";
+                  updateInstall(
+                    "runtimeIdentity",
+                    currentUser
+                      ? AgentRuntimeIdentity.CURRENT_USER
+                      : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR,
+                  );
+                  if (currentUser) updateInstall("remoteControlEnabled", false);
+                }}
               >
                 <SegmentedControl.Item value="administrator">root / 管理员</SegmentedControl.Item>
-                <SegmentedControl.Item value="current-user">当前用户（非管理员）</SegmentedControl.Item>
+                <SegmentedControl.Item value="current-user">非特权用户</SegmentedControl.Item>
               </SegmentedControl.Root>
+              {platform === "linux" && nonPrivilegedRuntime && (
+                <Text size="2" color="gray">安装器以 root 运行并创建专用普通用户 komari；安装器无权创建用户时才使用当前非管理员用户。</Text>
+              )}
               <div className="grid gap-2 sm:grid-cols-2">
                 <Toggle label="启用基础 GPU 采集" checked={install?.enableGpu ?? false} onChange={(value) => updateInstall("enableGpu", value)} />
-                <Toggle label="启用远程控制" checked={remoteControlEnabled} onChange={(value) => updateInstall("remoteControlEnabled", value)} />
-                <Toggle label="禁用 WebSSH" checked={install?.disableWebSsh ?? false} onChange={(value) => updateInstall("disableWebSsh", value)} />
+                <Toggle
+                  label="启用远程控制"
+                  checked={remoteControlEnabled}
+                  disabled={nonPrivilegedRuntime}
+                  onChange={(value) => updateInstall("remoteControlEnabled", value)}
+                />
                 <Toggle label="禁用自动更新" checked={install?.disableAutoUpdate ?? false} onChange={(value) => updateInstall("disableAutoUpdate", value)} />
                 <Toggle label="忽略不安全证书" checked={install?.ignoreUnsafeCertificate ?? false} onChange={(value) => updateInstall("ignoreUnsafeCertificate", value)} />
                 <Toggle label="从网卡获取 IP" checked={install?.getIpAddressFromNic ?? false} onChange={(value) => updateInstall("getIpAddressFromNic", value)} />
               </div>
+              {nonPrivilegedRuntime && (
+                <Text size="2" color="gray">非特权 Agent 不能执行远程命令或终端；如需特权操作，请关闭普通远程控制后启用下方救援模式。</Text>
+              )}
               {!remoteControlEnabled && (
                 <Flex direction="column" gap="2" className="rounded border p-3">
                   <Toggle
@@ -377,11 +398,11 @@ function platformFromProfile(platform: Platform | undefined): InstallPlatform {
   return "linux";
 }
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+function Toggle({ label, checked, disabled = false, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {
   return (
     <Flex gap="2" align="center">
-      <Checkbox checked={checked} onCheckedChange={(value) => onChange(Boolean(value))} />
-      <Text size="2">{label}</Text>
+      <Checkbox checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(Boolean(value))} />
+      <Text size="2" color={disabled ? "gray" : undefined}>{label}</Text>
     </Flex>
   );
 }
