@@ -1,9 +1,9 @@
 import React from "react";
+import { toJson } from "@bufbuild/protobuf";
+import { StructSchema } from "@bufbuild/protobuf/wkt";
 import defaultTheme from "../../komari-theme.json";
-import { ConnectCompatibilityError, connectUnary } from "../api/connect/client";
-import { withRequestBudget, DEFAULT_UNARY_DEADLINE_MS } from "../api/connect/deadline";
+import { connectUnary } from "../api/connect/client";
 import { useConnect } from "./ConnectContext";
-//import { useRPC2Call } from "./RPC2Context";
 
 type ThemeField = {
   key?: string;
@@ -52,13 +52,6 @@ export interface PublicInfo {
   [property: string]: any;
 }
 
-interface Response {
-  data: PublicInfo;
-  message: string;
-  status: string;
-  [property: string]: any;
-}
-
 interface PublicInfoContextType {
   publicInfo: PublicInfo | null;
   isLoading: boolean;
@@ -86,13 +79,11 @@ export const PublicInfoProvider: React.FC<{ children: React.ReactNode }> = ({
     setError(null);
     setIsLoading(true);
     try {
-      let info: PublicInfo;
-      try {
-        const response = await connectUnary(
-          { signal: controller.signal },
-          (signal, timeoutMs) => browser.getPublicInfo({}, { signal, timeoutMs }),
-        );
-        info = {
+      const response = await connectUnary(
+        { signal: controller.signal },
+        (signal, timeoutMs) => browser.getPublicInfo({}, { signal, timeoutMs }),
+      );
+      const info: PublicInfo = {
           cors_origin_check_enabled: response.corsOriginCheckEnabled,
           custom_body: response.customBody,
           custom_head: response.customHead,
@@ -104,24 +95,12 @@ export const PublicInfoProvider: React.FC<{ children: React.ReactNode }> = ({
           sitename: response.siteName,
           private_site: response.privateSite,
           theme: response.defaultTheme,
-          theme_settings: response.themeSettings ?? {},
+          theme_settings: response.themeSettings
+            ? toJson(StructSchema, response.themeSettings)
+            : {},
           visitor_audit_enabled: response.visitorAuditEnabled,
           version: response.version,
-        };
-      } catch (connectError) {
-        if (!(connectError instanceof ConnectCompatibilityError)) throw connectError;
-        info = await withRequestBudget(
-          controller.signal,
-          DEFAULT_UNARY_DEADLINE_MS,
-          async ({ signal }) => {
-            const response = await fetch("/api/public", { signal });
-            if (!response.ok) throw new Error("Failed to fetch public info");
-            const payload = (await response.json()) as Response;
-            if (!payload?.data) throw new Error("Public info response is empty");
-            return payload.data;
-          },
-        );
-      }
+      };
       if (!controller.signal.aborted) setPublicInfo(withThemeDefaults(info));
     } catch (err) {
       if (!controller.signal.aborted) setError(err instanceof Error ? err.message : String(err));

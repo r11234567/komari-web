@@ -1,6 +1,4 @@
 import { Flex, Text } from "@radix-ui/themes";
-import { useEffect, useState } from "react";
-import { useRPC2Call } from "@/contexts/RPC2Context";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 
 const Footer = () => {
@@ -24,26 +22,8 @@ const Footer = () => {
 
   const buildTime =
     typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : null;
-  const [versionInfo, setVersionInfo] = useState<{
-    hash: string;
-    version: string;
-  } | null>(null);
-  const { call } = useRPC2Call();
   const { publicInfo } = usePublicInfo();
   const customFooterHtml = publicInfo?.theme_settings?.customFooterHtml || "";
-  useEffect(() => {
-    const fetchVersionInfo = async () => {
-      try {
-        //const response = await fetch('/api/version');
-        const data = await call("common:getVersion");
-        setVersionInfo({ hash: data.hash?.slice(0, 7), version: data.version });
-      } catch (error) {
-        console.error("Failed to fetch version info:", error);
-      }
-    };
-
-    fetchVersionInfo();
-  }, []);
 
   return (
     <div className="km-footer footer p-2 border-t-1 border-t-[var(--gray-7)]">
@@ -89,7 +69,7 @@ const Footer = () => {
               </Text>
             )}
             <Text size="1" color="gray">
-              {versionInfo && `${versionInfo.version} (${versionInfo.hash})`}
+              {publicInfo?.version ?? ""}
             </Text>
           </Flex>
         </Flex>

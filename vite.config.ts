@@ -28,6 +28,15 @@ export default defineConfig(({ mode }) => {
   const baseConfig: UserConfig = {
     base: base,
     plugins: [
+      {
+        name: "komari-html-entry",
+        transformIndexHtml(html) {
+          return html.replace(
+            "%VITE_APP_ENTRY%",
+            systemUiBuild ? "/src/main.tsx" : "/src/public-main.tsx",
+          );
+        },
+      },
       react(),
       tailwindcss(),
       ...(systemUiBuild ? [] : [VitePWA({

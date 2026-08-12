@@ -32,6 +32,11 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Reject legacy transports in default theme
+        run: |
+          set -euo pipefail
+          ! grep -RIE 'rpc2|jsonrpc|/api/rpc|new WebSocket' dist
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:

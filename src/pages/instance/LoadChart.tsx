@@ -56,15 +56,18 @@ import Tips from "@/components/ui/tips";
 import { useAccount } from "@/contexts/AccountContext";
 import { useNodeList } from "@/contexts/NodeListContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
-import { useRPC2Call } from "@/contexts/RPC2Context";
+import {
+  getPublicPingStats,
+  listPublicMetricDefinitions,
+  listPublicPingTasks,
+  queryPublicMetrics,
+} from "@/api/connect/public";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { cn } from "@/lib/utils";
 import type {
   MetricSeries,
   PingMetricStat,
-  PingMetricStatsResponse,
   PublicPingTask,
-  QueryMetricsResponse,
 } from "@/types/metrics";
 import {
   PING_LATENCY_METRIC,
@@ -202,7 +205,6 @@ const AGGREGATIONS: Array<{ value: Aggregation; labelKey: string }> = [
   { value: "first", labelKey: "chart.sampling.first" },
   { value: "last", labelKey: "chart.sampling.last" },
   { value: "stddev", labelKey: "chart.sampling.stddev" },
-  { value: "p70", labelKey: "chart.sampling.p70" },
   { value: "p95", labelKey: "chart.sampling.p95" },
   { value: "p99", labelKey: "chart.sampling.p99" },
 ];
@@ -952,7 +954,6 @@ const toQueryRange = (range: CustomTimeRange) => {
 const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   const { t } = useTranslation();
   const { uuid } = useParams<{ uuid: string }>();
-  const { call } = useRPC2Call();
   const { account } = useAccount();
   const { publicInfo, refresh: refreshPublicInfo } = usePublicInfo();
   const { nodeList } = useNodeList();
@@ -1033,7 +1034,8 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
 
   useEffect(() => {
     let active = true;
-    call<unknown, MetricDefinition[]>("public:listMetricDefinitions")
+    const controller = new AbortController();
+    listPublicMetricDefinitions(controller.signal)
       .then((items) => {
         if (active) {
           setDefinitions(Array.isArray(items) ? items : []);
@@ -1048,12 +1050,14 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
       });
     return () => {
       active = false;
+      controller.abort(new DOMException("Chart unmounted", "AbortError"));
     };
-  }, [call]);
+  }, []);
 
   useEffect(() => {
     let active = true;
-    call<unknown, PublicPingTask[]>("public:getPublicPingTasks")
+    const controller = new AbortController();
+    listPublicPingTasks(controller.signal)
       .then((items) => {
         if (active) setPingTasks(Array.isArray(items) ? items : []);
       })
@@ -1062,8 +1066,9 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
       });
     return () => {
       active = false;
+      controller.abort(new DOMException("Chart unmounted", "AbortError"));
     };
-  }, [call]);
+  }, []);
 
   const definitionMap = useMemo(
     () => new Map(definitions.map((item) => [item.name, item])),
@@ -1116,13 +1121,14 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   const metricKeys = useMemo(() => {
     const keys = charts.flatMap((chart) =>
       chart.metrics.filter((metricKey) => {
+        if (definitionsLoaded && !definitionMap.has(metricKey)) return false;
         if (!isRealtime) return true;
         const metric = fallbackCatalogMap.get(metricKey);
         return !metric?.realtimeValue && !metric?.realtimeTaggedValues;
       }),
     );
     return Array.from(new Set(keys)).sort();
-  }, [charts, isRealtime]);
+  }, [charts, definitionMap, definitionsLoaded, isRealtime]);
 
   useEffect(() => {
     if (!uuid || metricKeys.length === 0) {
@@ -1133,24 +1139,24 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     }
 
     let active = true;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
-    call<any, QueryMetricsResponse>(
-      "public:queryMetrics",
-      {
-        metric_keys: metricKeys,
-        entity_id: uuid,
-        ...metricRangeParams,
-        max_points: HISTORY_MAX_POINTS,
+    queryPublicMetrics({
+        metrics: metricKeys,
+        agentIds: [uuid],
+        ...("start" in metricRangeParams
+          ? { start: new Date(metricRangeParams.start), end: new Date(metricRangeParams.end) }
+          : { hours: metricRangeParams.hours }),
+        maxPoints: HISTORY_MAX_POINTS,
         aggregation,
-        fill_empty: true,
-      },
-      { timeout: 30000 },
-    )
+        fillEmpty: true,
+        signal: controller.signal,
+      })
       .then((result) => {
         if (!active) return;
-        setMetricSeries(normalizeMetricSeriesList(result?.series));
+        setMetricSeries(normalizeMetricSeriesList(result));
         setLoading(false);
       })
       .catch((err) => {
@@ -1161,10 +1167,10 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
 
     return () => {
       active = false;
+      controller.abort(new DOMException("Chart unmounted", "AbortError"));
     };
   }, [
     aggregation,
-    call,
     metricKeys,
     metricRangeParams,
     uuid,
@@ -1177,18 +1183,18 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     }
 
     let active = true;
-    call<any, PingMetricStatsResponse>(
-      "public:getPingMetricStats",
-      {
-        entity_id: uuid,
-        ...metricRangeParams,
-        max_points: HISTORY_MAX_POINTS,
-      },
-      { timeout: 30000 },
-    )
+    const controller = new AbortController();
+    getPublicPingStats({
+      agentIds: [uuid],
+      ...("start" in metricRangeParams
+        ? { start: new Date(metricRangeParams.start), end: new Date(metricRangeParams.end) }
+        : { hours: metricRangeParams.hours }),
+      maxPoints: HISTORY_MAX_POINTS,
+      signal: controller.signal,
+    })
       .then((result) => {
         if (!active) return;
-        setPingStats(Array.isArray(result?.stats) ? result.stats : []);
+        setPingStats(result);
       })
       .catch(() => {
         if (active) setPingStats([]);
@@ -1196,9 +1202,9 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
 
     return () => {
       active = false;
+      controller.abort(new DOMException("Chart unmounted", "AbortError"));
     };
   }, [
-    call,
     metricKeys,
     metricRangeParams,
     uuid,

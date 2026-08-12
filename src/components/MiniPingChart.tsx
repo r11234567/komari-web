@@ -12,15 +12,17 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import Tips from "@/components/ui/tips";
-import { useRPC2Call } from "@/contexts/RPC2Context";
+import {
+  getPublicPingStats,
+  listPublicPingTasks,
+  queryPublicMetrics,
+} from "@/api/connect/public";
 import { cn } from "@/lib/utils";
 import type {
   MetricSeries,
   MetricTags,
   PingMetricStat,
-  PingMetricStatsResponse,
   PublicPingTask,
-  QueryMetricsResponse,
 } from "@/types/metrics";
 import {
   PING_LATENCY_METRIC,
@@ -64,7 +66,6 @@ const MiniPingChart = ({
   hours = 12,
 }: MiniPingChartProps) => {
   const { t } = useTranslation();
-  const { call } = useRPC2Call();
   const [metricSeries, setMetricSeries] = useState<MetricSeries[]>([]);
   const [tasks, setTasks] = useState<PublicPingTask[]>([]);
   const [stats, setStats] = useState<PingMetricStat[]>([]);
@@ -82,37 +83,34 @@ const MiniPingChart = ({
     }
 
     let active = true;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     setHiddenLines({});
 
-    const taskRequest = call<unknown, PublicPingTask[]>(
-      "public:getPublicPingTasks",
-    ).catch(() => []);
-    const metricRequest = call<unknown, QueryMetricsResponse>(
-      "public:queryMetrics",
-      {
-        metric_keys: [PING_LATENCY_METRIC],
-        entity_id: uuid,
+    const taskRequest = listPublicPingTasks(controller.signal).catch(() => []);
+    const metricRequest = queryPublicMetrics({
+        metrics: [PING_LATENCY_METRIC],
+        agentIds: [uuid],
         hours,
-        max_points: 240,
+        maxPoints: 240,
         aggregation: "avg",
-        fill_empty: true,
-      },
-      { timeout: 30000 },
-    );
-    const statsRequest = call<unknown, PingMetricStatsResponse>(
-      "public:getPingMetricStats",
-      { entity_id: uuid, hours, max_points: 240 },
-      { timeout: 30000 },
-    ).catch(() => null);
+        fillEmpty: true,
+        signal: controller.signal,
+      });
+    const statsRequest = getPublicPingStats({
+      agentIds: [uuid],
+      hours,
+      maxPoints: 240,
+      signal: controller.signal,
+    }).catch(() => []);
 
     Promise.all([taskRequest, metricRequest, statsRequest])
       .then(([taskList, result, statsResult]) => {
         if (!active) return;
         setTasks(Array.isArray(taskList) ? taskList : []);
-        setMetricSeries(normalizeMetricSeriesList(result?.series));
-        setStats(Array.isArray(statsResult?.stats) ? statsResult.stats : []);
+        setMetricSeries(normalizeMetricSeriesList(result));
+        setStats(statsResult);
         setLoading(false);
       })
       .catch((requestError) => {
@@ -125,8 +123,9 @@ const MiniPingChart = ({
 
     return () => {
       active = false;
+      controller.abort(new DOMException("Chart unmounted", "AbortError"));
     };
-  }, [call, hours, uuid]);
+  }, [hours, uuid]);
 
   const taskMap = useMemo(
     () => new Map(tasks.map((task) => [String(task.id), task])),

@@ -12,6 +12,7 @@ import { DetailsGrid } from "@/components/DetailsGrid";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AccountProvider } from "@/contexts/AccountContext";
+import { queryRecentLiveRecords } from "@/api/connect/public";
 
 export default function InstancePage() {
   const { t } = useTranslation();
@@ -109,11 +110,14 @@ export default function InstancePage() {
     const controller = new AbortController();
     setRecent([]);
 
-    fetch(`/api/recent/${uuid}`, { signal: controller.signal })
-      .then((res) => res.json())
+    queryRecentLiveRecords({
+      agentId: uuid,
+      maxPoints: length,
+      signal: controller.signal,
+    })
       .then((data) => {
         if (!controller.signal.aborted) {
-          setRecent((data?.data ?? []).slice(-length));
+          setRecent(data.slice(-length));
         }
       })
       .catch((err) => {

@@ -1,8 +1,7 @@
 import React from "react";
-import { useRPC2Call } from "./RPC2Context";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { AgentSummary } from "@komari/proto/komari/browser/v1/browser_pb";
-import { ConnectCompatibilityError, connectUnary } from "../api/connect/client";
+import { connectUnary } from "../api/connect/client";
 import { useConnect } from "./ConnectContext";
 
 export type NodeBasicInfo = {
@@ -89,7 +88,6 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
   const [nodeList, setNodeList] = React.useState<NodeBasicInfo[] | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
-  const { call } = useRPC2Call();
   const { browser } = useConnect();
   const refreshSeqRef = React.useRef(0);
   const mountedRef = React.useRef(true);
@@ -114,26 +112,12 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
     activeRequest.current = controller;
     // setIsLoading(true);
     setError(null);
-    // 通过 RPC2 获取节点基本信息
     const request = async () => {
-      try {
-        const response = await connectUnary(
-          { signal: controller.signal },
-          (signal, timeoutMs) => browser.listAgents({}, { signal, timeoutMs }),
-        );
-        return response.agents.map(agentSummaryToNode);
-      } catch (connectError) {
-        if (!(connectError instanceof ConnectCompatibilityError)) {
-          throw connectError;
-        }
-        const result = await call<{ uuid?: string }, Record<string, any>>(
-          "common:getNodes",
-          undefined,
-          { signal: controller.signal },
-        );
-        if (!result || typeof result !== "object") return [];
-        return Object.values(result).map(legacyNodeToNode);
-      }
+      const response = await connectUnary(
+        { signal: controller.signal },
+        (signal, timeoutMs) => browser.listAgents({}, { signal, timeoutMs }),
+      );
+      return response.agents.map(agentSummaryToNode);
     };
 
     void request()
@@ -167,7 +151,7 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
         if (activeRequest.current === controller) activeRequest.current = null;
         setIsLoading(false);
       });
-  }, [browser, call]);
+  }, [browser]);
 
   React.useEffect(() => {
     refresh();
@@ -224,36 +208,6 @@ const agentSummaryToNode = (agent: AgentSummary): NodeBasicInfo => {
     ipv6: basic?.ipv6 || undefined,
   };
 };
-
-const legacyNodeToNode = (n: any): NodeBasicInfo => ({
-  uuid: n.uuid,
-  name: n.name,
-  cpu_name: n.cpu_name,
-  virtualization: n.virtualization,
-  arch: n.arch,
-  cpu_cores: n.cpu_cores,
-  os: n.os,
-  kernel_version: n.kernel_version,
-  gpu_name: n.gpu_name,
-  region: n.region,
-  mem_total: n.mem_total,
-  swap_total: n.swap_total,
-  disk_total: n.disk_total,
-  version: n.version ?? "",
-  weight: n.weight ?? 0,
-  price: n.price ?? 0,
-  tags: n.tags ?? "",
-  billing_cycle: n.billing_cycle ?? 0,
-  currency: n.currency ?? "",
-  group: n.group ?? "",
-  traffic_limit: n.traffic_limit ?? 0,
-  traffic_limit_type: n.traffic_limit_type,
-  expired_at: n.expired_at ?? "",
-  created_at: n.created_at ?? "",
-  updated_at: n.updated_at ?? "",
-  ipv4: n.ipv4,
-  ipv6: n.ipv6,
-});
 
 export function useNodeList(): NodeListContextType;
 export function useNodeList(required: false): NodeListContextType | undefined;
