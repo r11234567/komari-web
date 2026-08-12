@@ -28,15 +28,6 @@ export default defineConfig(({ mode }) => {
   const baseConfig: UserConfig = {
     base: base,
     plugins: [
-      {
-        name: "komari-html-entry",
-        transformIndexHtml(html) {
-          return html.replace(
-            "%VITE_APP_ENTRY%",
-            systemUiBuild ? "/src/main.tsx" : "/src/public-main.tsx",
-          );
-        },
-      },
       react(),
       tailwindcss(),
       ...(systemUiBuild ? [] : [VitePWA({
@@ -106,6 +97,13 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: [
+        {
+          find: "@komari-entry",
+          replacement: path.resolve(
+            configDir,
+            systemUiBuild ? "./src/main.tsx" : "./src/public-main.tsx",
+          ),
+        },
         { find: "@", replacement: path.resolve(configDir, "./src") },
         // Force xterm to use the CJS build to avoid a rollup bug where `||=` in
         // xterm.mjs is incorrectly lowered to `void 0||(i={})` with an undeclared `i`,
