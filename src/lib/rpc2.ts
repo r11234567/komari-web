@@ -23,6 +23,7 @@ export class RPC2Client {
     resolve: (value: any) => void;
     reject: (reason?: any) => void;
     timeout?: NodeJS.Timeout;
+    cleanupAbort?: () => void;
   }>();
   private reconnectAttempts = 0;
   private reconnectTimeout?: NodeJS.Timeout;
@@ -171,6 +172,10 @@ export class RPC2Client {
     params?: TParams,
     options: RPC2CallOptions = {}
   ): Promise<TResult> {
+    if (options.signal?.aborted) {
+      throw options.signal.reason ??
+        new DOMException("Request aborted", "AbortError");
+    }
     if (this.connectionState !== RPC2ConnectionState.CONNECTED) {
       throw new Error(i18n.t("rpc2.websocket_not_connected"));
     }
@@ -190,19 +195,41 @@ export class RPC2Client {
 
     return new Promise<TResult>((resolve, reject) => {
       const timeout = setTimeout(() => {
+        const pending = this.pendingRequests.get(request.id!);
+        if (!pending) return;
         this.pendingRequests.delete(request.id!);
-        reject(
-          new Error(i18n.t("rpc2.request_timed_out", { method }))
-        );
+        pending.cleanupAbort?.();
+        reject(new RPC2DeadlineError(i18n.t("rpc2.request_timed_out", { method })));
       }, options.timeout || this.options.requestTimeout);
+      const handleAbort = () => {
+        const pending = this.pendingRequests.get(request.id!);
+        if (!pending) return;
+        this.pendingRequests.delete(request.id!);
+        if (pending.timeout) clearTimeout(pending.timeout);
+        pending.cleanupAbort?.();
+        reject(
+          options.signal?.reason ??
+            new DOMException("Request aborted", "AbortError"),
+        );
+      };
+      options.signal?.addEventListener("abort", handleAbort, { once: true });
 
       this.pendingRequests.set(request.id!, {
         resolve,
         reject,
         timeout,
+        cleanupAbort: () =>
+          options.signal?.removeEventListener("abort", handleAbort),
       });
 
-      this.sendMessage(request);
+      try {
+        this.sendMessage(request);
+      } catch (error) {
+        this.pendingRequests.delete(request.id!);
+        clearTimeout(timeout);
+        options.signal?.removeEventListener("abort", handleAbort);
+        reject(error);
+      }
     });
   }
 
@@ -226,7 +253,10 @@ export class RPC2Client {
         method: "POST",
         headers: this.options.headers,
         body: JSON.stringify(request),
-        signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+        signal: combineSignals(
+          options.signal,
+          options.timeout || this.options.requestTimeout,
+        ),
       });
 
       if (!response.ok) {
@@ -255,11 +285,14 @@ export class RPC2Client {
   /**
    * 批量调用（仅支持 HTTP）
    */
-  async batchCall(requests: Array<{
-    method: string;
-    params?: any;
-    notification?: boolean;
-  }>): Promise<any[]> {
+  async batchCall(
+    requests: Array<{
+      method: string;
+      params?: any;
+      notification?: boolean;
+    }>,
+    options: RPC2CallOptions = {},
+  ): Promise<any[]> {
     const batchRequest: JSONRPC2BatchRequest = requests.map(req => ({
       jsonrpc: "2.0",
       method: req.method,
@@ -272,6 +305,10 @@ export class RPC2Client {
         method: "POST",
         headers: this.options.headers,
         body: JSON.stringify(batchRequest),
+        signal: combineSignals(
+          options.signal,
+          options.timeout || this.options.requestTimeout,
+        ),
       });
 
       if (!response.ok) {
@@ -314,7 +351,14 @@ export class RPC2Client {
     if (this.connectionState === RPC2ConnectionState.CONNECTED) {
       try {
         return await this.callViaWebSocket(method, params, options);
-      } catch {
+      } catch (error) {
+        if (
+          options.signal?.aborted ||
+          isAbortOrDeadline(error) ||
+          error instanceof RPC2ResponseError
+        ) {
+          throw error;
+        }
         // 回退一次 HTTP
         return this.callViaHTTP(method, params, options);
       }
@@ -380,9 +424,10 @@ export class RPC2Client {
     if (pending.timeout) {
       clearTimeout(pending.timeout);
     }
+    pending.cleanupAbort?.();
 
     if ("error" in data) {
-      pending.reject(new Error(`RPC Error ${data.error.code}: ${data.error.message}`));
+      pending.reject(new RPC2ResponseError(data.error.code, data.error.message));
     } else {
       pending.resolve(data.result);
     }
@@ -409,6 +454,7 @@ export class RPC2Client {
       if (pending.timeout) {
         clearTimeout(pending.timeout);
       }
+      pending.cleanupAbort?.();
       pending.reject(error);
     }
     this.pendingRequests.clear();
@@ -466,6 +512,33 @@ export class RPC2Client {
     }, this.options.reconnectInterval);
   }
 }
+
+export class RPC2ResponseError extends Error {
+  constructor(public readonly code: number, message: string) {
+    super(`RPC Error ${code}: ${message}`);
+    this.name = "RPC2ResponseError";
+  }
+}
+
+export class RPC2DeadlineError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RPC2DeadlineError";
+  }
+}
+
+const isAbortOrDeadline = (error: unknown) =>
+  error instanceof RPC2DeadlineError ||
+  (error instanceof DOMException &&
+    (error.name === "AbortError" || error.name === "TimeoutError"));
+
+const combineSignals = (
+  external: AbortSignal | undefined,
+  timeoutMs: number,
+): AbortSignal => {
+  const deadline = AbortSignal.timeout(timeoutMs);
+  return external ? AbortSignal.any([external, deadline]) : deadline;
+};
 
 // 注意：避免在模块级别创建默认实例，以免在多处导入时重复建立 WebSocket 连接。
 // 请通过 RPC2Provider + useRPC2Call/useRPC2 使用该客户端，或在需要的地方手动创建实例。

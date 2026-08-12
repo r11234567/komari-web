@@ -1,5 +1,8 @@
 import React from "react";
 import defaultTheme from "../../komari-theme.json";
+import { ConnectCompatibilityError, connectUnary } from "../api/connect/client";
+import { withRequestBudget, DEFAULT_UNARY_DEADLINE_MS } from "../api/connect/deadline";
+import { useConnect } from "./ConnectContext";
 //import { useRPC2Call } from "./RPC2Context";
 
 type ThemeField = {
@@ -73,31 +76,66 @@ export const PublicInfoProvider: React.FC<{ children: React.ReactNode }> = ({
   const [publicInfo, setPublicInfo] = React.useState<PublicInfo | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
-  //const { call } = useRPC2Call();
-  // 公共信息使用public，避免在私有站点的情况下RPC返回401
+  const { browser } = useConnect();
+  const activeRequest = React.useRef<AbortController | null>(null);
+
   const refresh = React.useCallback(async () => {
+    activeRequest.current?.abort(new DOMException("Superseded", "AbortError"));
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setError(null);
     setIsLoading(true);
     try {
-      const response = await fetch("/api/public");
-      if (!response.ok) {
-        throw new Error("Failed to fetch public info");
+      let info: PublicInfo;
+      try {
+        const response = await connectUnary(
+          { signal: controller.signal },
+          (signal, timeoutMs) => browser.getPublicInfo({}, { signal, timeoutMs }),
+        );
+        info = {
+          cors_origin_check_enabled: response.corsOriginCheckEnabled,
+          custom_body: response.customBody,
+          custom_head: response.customHead,
+          description: response.siteDescription,
+          disable_password_login: response.disablePasswordLogin,
+          oauth_provider: response.oauthProvider,
+          oauth_enable: response.oauthEnabled,
+          metric_retention_days: response.metricRetentionDays,
+          sitename: response.siteName,
+          private_site: response.privateSite,
+          theme: response.defaultTheme,
+          theme_settings: response.themeSettings ?? {},
+          visitor_audit_enabled: response.visitorAuditEnabled,
+          version: response.version,
+        };
+      } catch (connectError) {
+        if (!(connectError instanceof ConnectCompatibilityError)) throw connectError;
+        info = await withRequestBudget(
+          controller.signal,
+          DEFAULT_UNARY_DEADLINE_MS,
+          async ({ signal }) => {
+            const response = await fetch("/api/public", { signal });
+            if (!response.ok) throw new Error("Failed to fetch public info");
+            const payload = (await response.json()) as Response;
+            if (!payload?.data) throw new Error("Public info response is empty");
+            return payload.data;
+          },
+        );
       }
-      const resp = (await response.json()) as Response;
-      if (resp && resp.data) {
-        setPublicInfo(withThemeDefaults(resp.data));
-      } else {
-        setPublicInfo(null);
-      }
+      if (!controller.signal.aborted) setPublicInfo(withThemeDefaults(info));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!controller.signal.aborted) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsLoading(false);
+      if (activeRequest.current === controller) {
+        activeRequest.current = null;
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [browser]);
 
   React.useEffect(() => {
     void refresh();
+    return () => activeRequest.current?.abort(new DOMException("Provider unmounted", "AbortError"));
   }, [refresh]);
 
   return (

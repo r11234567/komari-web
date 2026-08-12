@@ -129,6 +129,8 @@ export interface RPC2CallOptions {
   timeout?: number;
   /** 是否为通知请求（不期望响应） */
   notification?: boolean;
+  /** 外部取消信号；组件卸载、路由离开和重复提交必须传入 */
+  signal?: AbortSignal;
 }
 
 /**

@@ -32,6 +32,7 @@ import { resolveI18nText } from "@/utils/i18nText";
 import type { PluginInfo } from "@/types/plugin";
 import {
   getThemeConfigurationType,
+  normalizeThemeManifest,
   normalizeThemeRedirectTarget,
   THEME_CONFIGURATION_MANAGED,
   THEME_CONFIGURATION_RAW,
@@ -112,7 +113,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
           cache: "no-cache",
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = normalizeThemeManifest(await resp.json());
         if (ignore) return;
         const cfg = data?.configuration;
         if (!cfg) {

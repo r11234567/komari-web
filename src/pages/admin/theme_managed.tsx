@@ -8,8 +8,8 @@ import { useTranslation } from "react-i18next";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import {
   getThemeConfigurationType,
+  normalizeThemeManifest,
   THEME_CONFIGURATION_MANAGED,
-  type ThemeConfiguration,
 } from "@/utils/themeConfiguration";
 
 interface ThemeFieldBase {
@@ -20,11 +20,6 @@ interface ThemeFieldBase {
   default?: any; // 默认值
   options?: string; // 仅 select 支持，逗号分隔
   required?: boolean;
-}
-
-interface ThemeConfigResponse {
-  configuration?: ThemeConfiguration;
-  [k: string]: any;
 }
 
 const ThemeManaged: React.FC = () => {
@@ -60,7 +55,8 @@ const ThemeManaged: React.FC = () => {
           cache: "no-cache",
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data: ThemeConfigResponse = await resp.json();
+        const data = normalizeThemeManifest(await resp.json());
+        if (!data) throw new Error("Invalid theme manifest");
         const configuration = data.configuration;
         if (
           getThemeConfigurationType(configuration) !==

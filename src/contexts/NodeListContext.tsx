@@ -1,5 +1,9 @@
 import React from "react";
 import { useRPC2Call } from "./RPC2Context";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
+import type { AgentSummary } from "@komari/proto/komari/browser/v1/browser_pb";
+import { ConnectCompatibilityError, connectUnary } from "../api/connect/client";
+import { useConnect } from "./ConnectContext";
 
 export type NodeBasicInfo = {
   /** 节点唯一标识符 */
@@ -51,7 +55,7 @@ export type NodeBasicInfo = {
   created_at: string;
   /** 更新时间 */
   updated_at: string;
-  ipv4?: string; 
+  ipv4?: string;
   ipv6?: string;
 };
 
@@ -86,59 +90,55 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<string | null>(null);
   const { call } = useRPC2Call();
+  const { browser } = useConnect();
   const refreshSeqRef = React.useRef(0);
   const mountedRef = React.useRef(true);
+  const activeRequest = React.useRef<AbortController | null>(null);
 
   React.useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      activeRequest.current?.abort(
+        new DOMException("Provider unmounted", "AbortError"),
+      );
     };
   }, []);
 
   const refresh = React.useCallback(() => {
     const refreshSeq = ++refreshSeqRef.current;
+    activeRequest.current?.abort(
+      new DOMException("Superseded", "AbortError"),
+    );
+    const controller = new AbortController();
+    activeRequest.current = controller;
     // setIsLoading(true);
     setError(null);
     // 通过 RPC2 获取节点基本信息
-    call<{ uuid?: string }, Record<string, any>>("common:getNodes")
-      .then((result) => {
-        if (!mountedRef.current || refreshSeq !== refreshSeqRef.current) return;
-        if (!result || typeof result !== "object") {
-          setNodeList([]);
-          return;
+    const request = async () => {
+      try {
+        const response = await connectUnary(
+          { signal: controller.signal },
+          (signal, timeoutMs) => browser.listAgents({}, { signal, timeoutMs }),
+        );
+        return response.agents.map(agentSummaryToNode);
+      } catch (connectError) {
+        if (!(connectError instanceof ConnectCompatibilityError)) {
+          throw connectError;
         }
-        // 将 { [uuid]: Client } 转换为 NodeBasicInfo[]
-        const list: NodeBasicInfo[] = Object.values(result).map((n: any) => ({
-          uuid: n.uuid,
-          name: n.name,
-          cpu_name: n.cpu_name,
-          virtualization: n.virtualization,
-          arch: n.arch,
-          cpu_cores: n.cpu_cores,
-          os: n.os,
-          kernel_version: n.kernel_version,
-          gpu_name: n.gpu_name,
-          region: n.region,
-          mem_total: n.mem_total,
-          swap_total: n.swap_total,
-          disk_total: n.disk_total,
-          // 兼容旧字段，若无版本信息则给空串
-          version: n.version ?? "",
-          weight: n.weight ?? 0,
-          price: n.price ?? 0,
-          tags: n.tags ?? "",
-          billing_cycle: n.billing_cycle ?? 0,
-          currency: n.currency ?? "",
-          group: n.group ?? "",
-          traffic_limit: n.traffic_limit ?? 0,
-          traffic_limit_type: n.traffic_limit_type,
-          expired_at: n.expired_at ?? "",
-          created_at: n.created_at ?? "",
-          updated_at: n.updated_at ?? "",
-          ipv4: n.ipv4,
-          ipv6: n.ipv6,
-        }));
+        const result = await call<{ uuid?: string }, Record<string, any>>(
+          "common:getNodes",
+          undefined,
+          { signal: controller.signal },
+        );
+        if (!result || typeof result !== "object") return [];
+        return Object.values(result).map(legacyNodeToNode);
+      }
+    };
+
+    void request()
+      .then((list) => {
+        if (!mountedRef.current || refreshSeq !== refreshSeqRef.current) return;
         setNodeList((previous) => {
           if (!previous) return list;
           const previousByUuid = new Map(
@@ -164,9 +164,10 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
       })
       .finally(() => {
         if (!mountedRef.current || refreshSeq !== refreshSeqRef.current) return;
+        if (activeRequest.current === controller) activeRequest.current = null;
         setIsLoading(false);
       });
-  }, [call]);
+  }, [browser, call]);
 
   React.useEffect(() => {
     refresh();
@@ -183,6 +184,76 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
     </NodeListContext.Provider>
   );
 };
+
+const agentSummaryToNode = (agent: AgentSummary): NodeBasicInfo => {
+  const basic = agent.basicInfo;
+  return {
+    uuid: agent.agentId,
+    name: agent.name,
+    cpu_name: basic?.cpuName ?? "",
+    virtualization: basic?.virtualization ?? "",
+    arch: basic?.architecture ?? "",
+    cpu_cores: basic?.cpuCores ?? 0,
+    os: basic?.os ?? "",
+    kernel_version: basic?.kernelVersion ?? "",
+    gpu_name: basic?.gpuName ?? "",
+    region: basic?.region ?? "",
+    mem_total: Number(basic?.memoryTotalBytes ?? 0n),
+    swap_total: Number(basic?.swapTotalBytes ?? 0n),
+    disk_total: Number(basic?.diskTotalBytes ?? 0n),
+    version: basic?.agentVersion ?? "",
+    weight: basic?.weight ?? 0,
+    price: basic?.price ?? 0,
+    tags: basic?.tags ?? "",
+    billing_cycle: basic?.billingCycleDays ?? 0,
+    currency: basic?.currency ?? "",
+    group: basic?.group ?? "",
+    traffic_limit: Number(basic?.trafficLimitBytes ?? 0n),
+    traffic_limit_type: (basic?.trafficLimitType ||
+      undefined) as NodeBasicInfo["traffic_limit_type"],
+    expired_at: basic?.expiresAt
+      ? timestampDate(basic.expiresAt).toISOString()
+      : "",
+    created_at: basic?.createdAt
+      ? timestampDate(basic.createdAt).toISOString()
+      : "",
+    updated_at: basic?.updatedAt
+      ? timestampDate(basic.updatedAt).toISOString()
+      : "",
+    ipv4: basic?.ipv4 || undefined,
+    ipv6: basic?.ipv6 || undefined,
+  };
+};
+
+const legacyNodeToNode = (n: any): NodeBasicInfo => ({
+  uuid: n.uuid,
+  name: n.name,
+  cpu_name: n.cpu_name,
+  virtualization: n.virtualization,
+  arch: n.arch,
+  cpu_cores: n.cpu_cores,
+  os: n.os,
+  kernel_version: n.kernel_version,
+  gpu_name: n.gpu_name,
+  region: n.region,
+  mem_total: n.mem_total,
+  swap_total: n.swap_total,
+  disk_total: n.disk_total,
+  version: n.version ?? "",
+  weight: n.weight ?? 0,
+  price: n.price ?? 0,
+  tags: n.tags ?? "",
+  billing_cycle: n.billing_cycle ?? 0,
+  currency: n.currency ?? "",
+  group: n.group ?? "",
+  traffic_limit: n.traffic_limit ?? 0,
+  traffic_limit_type: n.traffic_limit_type,
+  expired_at: n.expired_at ?? "",
+  created_at: n.created_at ?? "",
+  updated_at: n.updated_at ?? "",
+  ipv4: n.ipv4,
+  ipv6: n.ipv6,
+});
 
 export function useNodeList(): NodeListContextType;
 export function useNodeList(required: false): NodeListContextType | undefined;

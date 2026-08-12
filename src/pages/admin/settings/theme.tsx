@@ -34,6 +34,7 @@ import { useSettings } from "@/lib/api";
 import UploadDialog from "@/components/UploadDialog";
 import {
   getThemeConfigurationType,
+  normalizeThemeManifest,
   THEME_CONFIGURATION_MANAGED,
 } from "@/utils/themeConfiguration";
 
@@ -106,7 +107,9 @@ const ThemePage = () => {
           setActiveThemeHasConfig(false);
           return;
         }
-        const data = await resp.json().catch(() => null);
+        const data = normalizeThemeManifest(
+          await resp.json().catch(() => null),
+        );
         if (
           !cancelled &&
           data &&

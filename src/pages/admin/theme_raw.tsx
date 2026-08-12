@@ -4,12 +4,8 @@ import Loading from "@/components/loading";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import {
   getRawThemeHtml,
-  type ThemeConfiguration,
+  normalizeThemeManifest,
 } from "@/utils/themeConfiguration";
-
-interface ThemeConfigResponse {
-  configuration?: ThemeConfiguration;
-}
 
 const ThemeRaw = () => {
   const { publicInfo } = usePublicInfo();
@@ -37,7 +33,8 @@ const ThemeRaw = () => {
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-        const data: ThemeConfigResponse = await resp.json();
+        const data = normalizeThemeManifest(await resp.json());
+        if (!data) throw new Error("Invalid theme manifest");
         const rawHtml = getRawThemeHtml(data.configuration);
         if (!rawHtml.trim()) {
           throw new Error("Raw theme content is empty");

@@ -26,6 +26,7 @@ import { OfflineIndicator } from "./components/OfflineIndicator";
 import { Toaster } from "./components/ui/sonner";
 import { RPC2Provider } from "./contexts/RPC2Context";
 import { NodeListProvider } from "./contexts/NodeListContext";
+import { ConnectProvider } from "./contexts/ConnectContext";
 const App = () => {
   const restrictedPath = window.location.pathname.replace(/\/$/, "");
   const isRestrictedGuideRoute = [
@@ -94,17 +95,19 @@ const App = () => {
               {routing}
             </>
           ) : (
-            <RPC2Provider>
-              <PublicInfoProvider>
-                <NodeListProvider>
-                  <Toaster />
-                  <OfflineIndicator />
-                  {routing}
-                  <PWAInstallPrompt />
-                  <PWAUpdatePrompt />
-                </NodeListProvider>
-              </PublicInfoProvider>
-            </RPC2Provider>
+            <ConnectProvider>
+              <RPC2Provider>
+                <PublicInfoProvider>
+                  <NodeListProvider>
+                    <Toaster />
+                    <OfflineIndicator />
+                    {routing}
+                    <PWAInstallPrompt />
+                    <PWAUpdatePrompt />
+                  </NodeListProvider>
+                </PublicInfoProvider>
+              </RPC2Provider>
+            </ConnectProvider>
           )}
         </Theme>
       </ThemeContext.Provider>

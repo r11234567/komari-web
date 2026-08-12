@@ -1,6 +1,20 @@
 export const THEME_CONFIGURATION_MANAGED = "managed";
 export const THEME_CONFIGURATION_RAW = "raw";
 export const THEME_CONFIGURATION_REDIRECT = "redirect";
+export const THEME_MANIFEST_SCHEMA_VERSION = 1;
+
+export interface ThemeManifest {
+  schemaVersion: number;
+  name?: unknown;
+  short?: string;
+  description?: unknown;
+  version?: string;
+  author?: unknown;
+  url?: string;
+  preview?: string;
+  configuration?: ThemeConfiguration;
+  [key: string]: unknown;
+}
 
 export interface ThemeConfiguration {
   type?: string;
@@ -8,6 +22,22 @@ export interface ThemeConfiguration {
   name?: unknown;
   data?: unknown;
 }
+
+// Manifests created before schemaVersion existed are the v1 contract. Keeping
+// this normalization at the API edge prevents themes from depending on an RPC
+// transport or on frontend-internal response objects.
+export const normalizeThemeManifest = (value: unknown): ThemeManifest | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const manifest = value as Record<string, unknown>;
+  const declared = manifest.schemaVersion;
+  const schemaVersion =
+    typeof declared === "number" && Number.isInteger(declared) && declared > 0
+      ? declared
+      : THEME_MANIFEST_SCHEMA_VERSION;
+
+  return { ...manifest, schemaVersion } as ThemeManifest;
+};
 
 export const getThemeConfigurationType = (
   configuration?: ThemeConfiguration,

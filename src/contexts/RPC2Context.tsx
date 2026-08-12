@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { RPC2Client } from "../lib/rpc2";
 import type { RPC2ConnectionStateType } from "../types/rpc2";
+import type { RPC2CallOptions } from "../types/rpc2";
 import i18n from "../i18n/config";
 
 interface RPC2ContextType {
@@ -118,23 +119,23 @@ export const useRPC2Call = () => {
   const call = useCallback(<TParams = any, TResult = any>(
     method: string,
     params?: TParams,
-    options?: any
+    options?: RPC2CallOptions
   ): Promise<TResult> => client.call(method, params, options), [client]);
 
   const callViaWebSocket = useCallback(<TParams = any, TResult = any>(
     method: string,
     params?: TParams,
-    options?: any
+    options?: RPC2CallOptions
   ): Promise<TResult> => client.callViaWebSocket(method, params, options), [client]);
 
   const callViaHTTP = useCallback(<TParams = any, TResult = any>(
     method: string,
     params?: TParams,
-    options?: any
+    options?: RPC2CallOptions
   ): Promise<TResult> => client.callViaHTTP(method, params, options), [client]);
 
-  const batchCall = useCallback((requests: Array<{ method: string; params?: any; notification?: boolean }>) =>
-    client.batchCall(requests), [client]);
+  const batchCall = useCallback((requests: Array<{ method: string; params?: any; notification?: boolean }>, options?: RPC2CallOptions) =>
+    client.batchCall(requests, options), [client]);
 
   return {
     call,
