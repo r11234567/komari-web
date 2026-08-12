@@ -843,13 +843,13 @@
     "yes": "はい"
   },
   "region_overview": "地域の点灯",
-  "rpc2": {
+  "legacy_transport": {
     "automatic_connection_failed": "自動接続に失敗しました:",
     "batch_request_failed": "バッチリクエストに失敗しました",
     "connection_disconnected": "接続が切断されました",
     "connection_failed": "接続に失敗しました",
     "parse_websocket_message_failed": "WebSocket メッセージの解析に失敗しました:",
-    "provider_required": "useRPC2 は RPC2Provider 内で使用する必要があります",
+    "provider_required": "互換トランスポートは対応する Provider 内で使用する必要があります",
     "request_failed": "リクエストに失敗しました: {{method}}",
     "request_timed_out": "リクエストがタイムアウトしました: {{method}}",
     "send_heartbeat_failed": "ハートビートの送信に失敗しました:",
@@ -1569,7 +1569,7 @@
     "mode": "表示モード"
   },
   "warn_https": "現在の接続は HTTPS ではありません！あなたの敏感なデータには重大なリスクがあります。接続を安全にするために直ちに対策を講じてください！コピー操作は使用できない可能性があります！",
-  "warn_websocket": "RPC2 リクエストに失敗しました。ネットワーク接続またはサーバーの状態を確認してください！",
+  "warn_live_data": "ライブデータのリクエストに失敗しました。ネットワーク接続またはサーバーの状態を確認してください！",
   "admin_dashboard": {
     "affected_nodes": "影響ノード",
     "alert_billing": "請求リマインダー",

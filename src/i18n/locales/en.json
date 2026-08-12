@@ -843,13 +843,13 @@
     "yes": "Yes"
   },
   "region_overview": "Region",
-  "rpc2": {
+  "legacy_transport": {
     "automatic_connection_failed": "Automatic connection failed:",
     "batch_request_failed": "Batch request failed",
     "connection_disconnected": "Connection disconnected",
     "connection_failed": "Connection failed",
     "parse_websocket_message_failed": "Failed to parse WebSocket message:",
-    "provider_required": "useRPC2 must be used within RPC2Provider",
+    "provider_required": "The compatibility transport must be used within its provider",
     "request_failed": "Request failed: {{method}}",
     "request_timed_out": "Request timed out: {{method}}",
     "send_heartbeat_failed": "Failed to send heartbeat:",
@@ -1631,7 +1631,7 @@
     "mode": "View Mode"
   },
   "warn_https": "The current connection is not HTTPS! Your sensitive data is at serious risk. Take immediate action to secure the connection! Copy may not available!",
-  "warn_websocket": "RPC2 request failed, please check the network connection or server status!",
+  "warn_live_data": "Live data request failed. Please check the network connection or server status!",
   "admin_dashboard": {
     "affected_nodes": "Affected nodes",
     "alert_billing": "Billing reminder",

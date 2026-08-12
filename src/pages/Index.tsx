@@ -283,7 +283,7 @@ const Callouts = () => {
         </Callout.Icon>
         <Callout.Text>
           <Text size="2" weight="medium">
-            {t("warn_websocket")}
+            {t("warn_live_data")}
           </Text>
         </Callout.Text>
       </Callout.Root>

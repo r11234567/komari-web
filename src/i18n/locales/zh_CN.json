@@ -843,13 +843,13 @@
     "yes": "是的"
   },
   "region_overview": "点亮地区",
-  "rpc2": {
+  "legacy_transport": {
     "automatic_connection_failed": "自动连接失败:",
     "batch_request_failed": "批量请求失败",
     "connection_disconnected": "连接已断开",
     "connection_failed": "连接失败",
     "parse_websocket_message_failed": "解析 WebSocket 消息失败:",
-    "provider_required": "useRPC2 必须在 RPC2Provider 内使用",
+    "provider_required": "兼容传输必须在对应的 Provider 内使用",
     "request_failed": "请求失败: {{method}}",
     "request_timed_out": "请求超时: {{method}}",
     "send_heartbeat_failed": "发送心跳包失败:",
@@ -1631,7 +1631,7 @@
     "mode": "显示模式"
   },
   "warn_https": "当前连接不是 HTTPS！您的敏感数据存在严重风险。请立即采取措施确保连接安全！复制操作可能无法使用！",
-  "warn_websocket": "RPC2 请求失败，请检查网络连接或服务器状态！",
+  "warn_live_data": "实时数据请求失败，请检查网络连接或服务器状态！",
   "admin_dashboard": {
     "affected_nodes": "受影响节点",
     "alert_billing": "账单提醒",

@@ -75,7 +75,11 @@ export const RPC2Provider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
       await client.connect();
     } catch (err) {
-      setError(err instanceof Error ? err.message : i18n.t("rpc2.connection_failed"));
+      setError(
+        err instanceof Error
+          ? err.message
+          : i18n.t("legacy_transport.connection_failed"),
+      );
       throw err;
     }
   }, [client]);
@@ -107,7 +111,7 @@ export const RPC2Provider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useRPC2 = (): RPC2ContextType => {
   const context = useContext(RPC2Context);
   if (context === undefined) {
-    throw new Error(i18n.t("rpc2.provider_required"));
+    throw new Error(i18n.t("legacy_transport.provider_required"));
   }
   return context;
 };

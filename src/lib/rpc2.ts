@@ -101,11 +101,11 @@ export class RPC2Client {
         };
         const handleError = () => {
           cleanup();
-          reject(new Error(i18n.t("rpc2.websocket_connection_failed")));
+          reject(new Error(i18n.t("legacy_transport.websocket_connection_failed")));
         };
         const timeout = setTimeout(() => {
           cleanup();
-          reject(new Error(i18n.t("rpc2.websocket_connection_timed_out")));
+          reject(new Error(i18n.t("legacy_transport.websocket_connection_timed_out")));
         }, 10000);
 
         const cleanup = () => {
@@ -134,7 +134,7 @@ export class RPC2Client {
 
     // 异步尝试连接，不阻塞构造函数
     this.connect().catch((error) => {
-      console.warn(i18n.t("rpc2.automatic_connection_failed"), error.message);
+      console.warn(i18n.t("legacy_transport.automatic_connection_failed"), error.message);
       // 连接失败时，如果启用了自动重连，会在 onclose 处理器中进行重连
     });
   }
@@ -161,7 +161,7 @@ export class RPC2Client {
     }
 
     this.setConnectionState(RPC2ConnectionState.DISCONNECTED);
-    this.clearPendingRequests(new Error(i18n.t("rpc2.connection_disconnected")));
+    this.clearPendingRequests(new Error(i18n.t("legacy_transport.connection_disconnected")));
   }
 
   /**
@@ -177,7 +177,7 @@ export class RPC2Client {
         new DOMException("Request aborted", "AbortError");
     }
     if (this.connectionState !== RPC2ConnectionState.CONNECTED) {
-      throw new Error(i18n.t("rpc2.websocket_not_connected"));
+      throw new Error(i18n.t("legacy_transport.websocket_not_connected"));
     }
 
     const request: JSONRPC2Request<TParams> = {
@@ -199,7 +199,7 @@ export class RPC2Client {
         if (!pending) return;
         this.pendingRequests.delete(request.id!);
         pending.cleanupAbort?.();
-        reject(new RPC2DeadlineError(i18n.t("rpc2.request_timed_out", { method })));
+        reject(new RPC2DeadlineError(i18n.t("legacy_transport.request_timed_out", { method })));
       }, options.timeout || this.options.requestTimeout);
       const handleAbort = () => {
         const pending = this.pendingRequests.get(request.id!);
@@ -278,7 +278,7 @@ export class RPC2Client {
       if (error instanceof Error) {
         throw error;
       }
-      throw new Error(i18n.t("rpc2.request_failed", { method }));
+      throw new Error(i18n.t("legacy_transport.request_failed", { method }));
     }
   }
 
@@ -327,7 +327,7 @@ export class RPC2Client {
       if (error instanceof Error) {
         throw error;
       }
-      throw new Error(i18n.t("rpc2.batch_request_failed"));
+      throw new Error(i18n.t("legacy_transport.batch_request_failed"));
     }
   }
 
@@ -390,7 +390,7 @@ export class RPC2Client {
         this.handleMessage(data);
         this.eventListeners.onMessage?.(data);
       } catch (error) {
-        console.error(i18n.t("rpc2.parse_websocket_message_failed"), error);
+        console.error(i18n.t("legacy_transport.parse_websocket_message_failed"), error);
       }
     };
 
@@ -406,9 +406,9 @@ export class RPC2Client {
     };
 
     this.ws.onerror = (error) => {
-      console.error(i18n.t("rpc2.websocket_error"), error);
+      console.error(i18n.t("legacy_transport.websocket_error"), error);
       this.eventListeners.onError?.(
-        new Error(i18n.t("rpc2.websocket_connection_error"))
+        new Error(i18n.t("legacy_transport.websocket_connection_error"))
       );
     };
   }
@@ -435,7 +435,7 @@ export class RPC2Client {
 
   private sendMessage(message: JSONRPC2Request): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error(i18n.t("rpc2.websocket_not_connected"));
+      throw new Error(i18n.t("legacy_transport.websocket_not_connected"));
     }
 
     this.ws.send(JSON.stringify(message));
@@ -484,7 +484,7 @@ export class RPC2Client {
           };
           this.ws.send(JSON.stringify(heartbeatRequest));
         } catch (error) {
-          console.warn(i18n.t("rpc2.send_heartbeat_failed"), error);
+          console.warn(i18n.t("legacy_transport.send_heartbeat_failed"), error);
         }
       }
     }, this.options.heartbeatInterval);

@@ -843,13 +843,13 @@
     "yes": "是的"
   },
   "region_overview": "點亮地區",
-  "rpc2": {
+  "legacy_transport": {
     "automatic_connection_failed": "自動連線失敗:",
     "batch_request_failed": "批次請求失敗",
     "connection_disconnected": "連線已中斷",
     "connection_failed": "連線失敗",
     "parse_websocket_message_failed": "解析 WebSocket 訊息失敗:",
-    "provider_required": "useRPC2 必須在 RPC2Provider 內使用",
+    "provider_required": "相容傳輸必須在對應的 Provider 內使用",
     "request_failed": "請求失敗: {{method}}",
     "request_timed_out": "請求超時: {{method}}",
     "send_heartbeat_failed": "傳送心跳包失敗:",
@@ -1569,7 +1569,7 @@
     "mode": "顯示模式"
   },
   "warn_https": "當前連線不是 HTTPS！您的敏感資料存在嚴重風險。請立即採取措施確保連線安全！複製操作可能無法使用！",
-  "warn_websocket": "RPC2 請求失敗，請檢查網路連線或伺服器狀態！",
+  "warn_live_data": "即時資料請求失敗，請檢查網路連線或伺服器狀態！",
   "admin_dashboard": {
     "affected_nodes": "受影響節點",
     "alert_billing": "帳單提醒",

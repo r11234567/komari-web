@@ -843,13 +843,13 @@
     "yes": "Ya"
   },
   "region_overview": "Wilayah",
-  "rpc2": {
+  "legacy_transport": {
     "automatic_connection_failed": "Koneksi otomatis gagal:",
     "batch_request_failed": "Permintaan batch gagal",
     "connection_disconnected": "Koneksi terputus",
     "connection_failed": "Koneksi gagal",
     "parse_websocket_message_failed": "Gagal mengurai pesan WebSocket:",
-    "provider_required": "useRPC2 harus digunakan di dalam RPC2Provider",
+    "provider_required": "Transport kompatibilitas harus digunakan di dalam provider yang sesuai",
     "request_failed": "Permintaan gagal: {{method}}",
     "request_timed_out": "Permintaan habis waktu: {{method}}",
     "send_heartbeat_failed": "Gagal mengirim heartbeat:",
@@ -1569,7 +1569,7 @@
     "mode": "Mode Tampilan"
   },
   "warn_https": "Koneksi saat ini bukan HTTPS! Data sensitif Anda berisiko. Amankan koneksi sekarang! Fitur salin mungkin tidak tersedia!",
-  "warn_websocket": "Permintaan RPC2 gagal, periksa koneksi jaringan atau status server!",
+  "warn_live_data": "Permintaan data langsung gagal, periksa koneksi jaringan atau status server!",
   "admin_dashboard": {
     "affected_nodes": "Node terdampak",
     "alert_billing": "Pengingat tagihan",
