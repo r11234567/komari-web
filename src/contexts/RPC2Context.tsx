@@ -27,10 +27,11 @@ let __rpc2_singleton__: RPC2Client | null = null;
 let __rpc2_refcount = 0;
 
 export const RPC2Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 创建/复用客户端实例，默认启用自动连接
+  // JSON-RPC remains an HTTP-only compatibility adapter while individual
+  // browser workflows are migrated to Connect. It must not open a browser WSS.
   const [client] = useState(() => {
     if (!__rpc2_singleton__) {
-      __rpc2_singleton__ = new RPC2Client("/api/rpc2", { autoConnect: true });
+      __rpc2_singleton__ = new RPC2Client("/api/rpc2", { autoConnect: false });
     }
     return __rpc2_singleton__;
   });
