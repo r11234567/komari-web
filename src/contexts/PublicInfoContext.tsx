@@ -1,6 +1,4 @@
 import React from "react";
-import { toJson } from "@bufbuild/protobuf";
-import { StructSchema } from "@bufbuild/protobuf/wkt";
 import defaultTheme from "../../komari-theme.json";
 import { connectUnary } from "../api/connect/client";
 import { useConnect } from "./ConnectContext";
@@ -95,9 +93,7 @@ export const PublicInfoProvider: React.FC<{ children: React.ReactNode }> = ({
           sitename: response.siteName,
           private_site: response.privateSite,
           theme: response.defaultTheme,
-          theme_settings: response.themeSettings
-            ? toJson(StructSchema, response.themeSettings)
-            : {},
+          theme_settings: response.themeSettings ?? {},
           visitor_audit_enabled: response.visitorAuditEnabled,
           version: response.version,
       };

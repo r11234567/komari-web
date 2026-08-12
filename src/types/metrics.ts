@@ -1,5 +1,13 @@
 export type MetricTags = Record<string, string>;
 
+export type MetricDefinition = {
+  name: string;
+  description?: string;
+  type?: string;
+  unit?: string;
+  retention_days?: number;
+};
+
 export type MetricTagged = {
   tags?: MetricTags;
 };
