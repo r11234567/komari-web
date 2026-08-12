@@ -181,6 +181,7 @@ type AutoDiscoveryInstallOptions = {
   memoryIncludeCache: boolean;
   getIpAddrFromNic: boolean;
   enableGpu: boolean;
+  detailedGpu: boolean;
   ghproxy: string;
   dir: string;
   serviceName: string;
@@ -213,6 +214,7 @@ const AutoDiscoverySection = ({
       memoryIncludeCache: false,
       getIpAddrFromNic: false,
       enableGpu: false,
+      detailedGpu: false,
       ghproxy: "",
       dir: "",
       serviceName: "",
@@ -246,7 +248,7 @@ const AutoDiscoverySection = ({
     })();
     const args: string[] = ["-e", host, "--auto-discovery", adKey];
     if (installOptions.disableWebSsh) {
-      args.push("--disable-web-ssh");
+      args.push("--disable-remote-control");
     }
     if (installOptions.disableAutoUpdate) {
       args.push("--disable-auto-update");
@@ -260,8 +262,10 @@ const AutoDiscoverySection = ({
     if (installOptions.getIpAddrFromNic) {
       args.push("--get-ip-addr-from-nic");
     }
-    if (installOptions.enableGpu) {
-      args.push("--gpu");
+    if (installOptions.detailedGpu) {
+      args.push("--enable-gpu", "--detailed-gpu");
+    } else if (installOptions.enableGpu) {
+      args.push("--enable-gpu");
     }
     const ghproxy = installOptions.ghproxy.trim();
     if (enableGhproxy && ghproxy) {
@@ -317,7 +321,7 @@ const AutoDiscoverySection = ({
     if (selectedPlatform === "windows") {
       scriptFile = "install.ps1";
     }
-    let scriptUrl = `https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/${scriptFile}`;
+    let scriptUrl = `https://raw.githubusercontent.com/r11234567/komari-agent/refs/heads/main/${scriptFile}`;
     if (enableGhproxy && ghproxy) {
       scriptUrl = scriptUrl.slice(8); // 去掉 https://
       if (ghproxy.endsWith("/")) {
@@ -375,7 +379,7 @@ const AutoDiscoverySection = ({
           `touch .komari-auto-discovery.json && ` +
           `docker run -d --name komari-agent --restart=always ` +
           `-v .komari-auto-discovery.json:/app/auto-discovery.json ` +
-          `ghcr.io/komari-monitor/komari-agent:latest ` +
+          `ghcr.io/r11234567/komari-agent:latest ` +
           quoteShellArgs(dockerArgs);
         break;
       }
@@ -494,7 +498,7 @@ const AutoDiscoverySection = ({
                   }))
                 }
               >
-                {t("admin.nodeTable.disableWebSsh")}
+                {t("admin.nodeTable.disableRemoteControl", "禁用远程控制")}
               </label>
             </Flex>
             <Flex gap="2" align="center">
@@ -607,7 +611,29 @@ const AutoDiscoverySection = ({
                   }))
                 }
               >
-                {t("admin.nodeTable.enableGpuMonitoring", "启用详细 GPU 监控")}
+                {t("admin.nodeTable.enableGpuMonitoring", "启用基础 GPU 监控")}
+              </label>
+            </Flex>
+            <Flex gap="2" align="center">
+              <Checkbox
+                checked={installOptions.detailedGpu}
+                onCheckedChange={(checked) =>
+                  setInstallOptions((prev) => ({
+                    ...prev,
+                    detailedGpu: Boolean(checked),
+                  }))
+                }
+              />
+              <label
+                className="text-sm font-normal cursor-pointer"
+                onClick={() =>
+                  setInstallOptions((prev) => ({
+                    ...prev,
+                    detailedGpu: !prev.detailedGpu,
+                  }))
+                }
+              >
+                {t("admin.nodeTable.enableDetailedGpuMonitoring", "启用详细 GPU 采集")}
               </label>
             </Flex>
           </div>
@@ -1404,6 +1430,7 @@ type InstallOptions = {
   memoryIncludeCache: boolean;
   getIpAddrFromNic: boolean;
   enableGpu: boolean;
+  detailedGpu: boolean;
   ghproxy: string;
   dir: string;
   serviceName: string;
@@ -1423,6 +1450,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
     memoryIncludeCache: false,
     getIpAddrFromNic: false,
     enableGpu: false,
+    detailedGpu: false,
     ghproxy: "",
     dir: "",
     serviceName: "",
@@ -1458,7 +1486,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
     let args = ["-e", host, "-t", token];
     // 根据安装选项生成参数
     if (installOptions.disableWebSsh) {
-      args.push("--disable-web-ssh");
+      args.push("--disable-remote-control");
     }
     if (installOptions.disableAutoUpdate) {
       args.push("--disable-auto-update");
@@ -1472,8 +1500,10 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
     if (installOptions.getIpAddrFromNic) {
       args.push("--get-ip-addr-from-nic");
     }
-    if (installOptions.enableGpu) {
-      args.push("--gpu");
+    if (installOptions.detailedGpu) {
+      args.push("--enable-gpu", "--detailed-gpu");
+    } else if (installOptions.enableGpu) {
+      args.push("--enable-gpu");
     }
     const ghproxy = installOptions.ghproxy.trim();
     if (enableGhproxy && ghproxy) {
@@ -1525,7 +1555,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
       scriptFile = "install.ps1";
     }
     let scriptUrl =
-      `https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/${scriptFile}`;
+      `https://raw.githubusercontent.com/r11234567/komari-agent/refs/heads/main/${scriptFile}`;
     if (enableGhproxy) {
       if (enableGhproxy && ghproxy) {
         scriptUrl = scriptUrl.slice(8); // 去掉 https://
@@ -1578,7 +1608,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
         }
         finalCommand =
           `docker run -d --name komari-agent --restart=always ` +
-          `ghcr.io/komari-monitor/komari-agent:latest ` +
+          `ghcr.io/r11234567/komari-agent:latest ` +
           quoteShellArgs(dockerArgs);
         break;
       }
@@ -1643,7 +1673,7 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
                     }));
                   }}
                 >
-                  {t("admin.nodeTable.disableWebSsh")}
+                  {t("admin.nodeTable.disableRemoteControl", "禁用远程控制")}
                 </label>
               </Flex>
               <Flex gap="2" align="center">
@@ -1756,7 +1786,29 @@ function GenerateCommandButton({ node, settings }: { node: NodeDetail, settings:
                     }));
                   }}
                 >
-                  {t("admin.nodeTable.enableGpuMonitoring", "启用详细 GPU 监控")}
+                  {t("admin.nodeTable.enableGpuMonitoring", "启用基础 GPU 监控")}
+              </label>
+            </Flex>
+              <Flex gap="2" align="center">
+                <Checkbox
+                  checked={installOptions.detailedGpu}
+                  onCheckedChange={(checked) => {
+                    setInstallOptions((prev) => ({
+                      ...prev,
+                      detailedGpu: Boolean(checked),
+                    }));
+                  }}
+                />
+                <label
+                  className="text-sm font-normal"
+                  onClick={() => {
+                    setInstallOptions((prev) => ({
+                      ...prev,
+                      detailedGpu: !prev.detailedGpu,
+                    }));
+                  }}
+                >
+                  {t("admin.nodeTable.enableDetailedGpuMonitoring", "启用详细 GPU 采集")}
                 </label>
               </Flex>
             </div>

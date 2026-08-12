@@ -56,7 +56,7 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
     const args: string[] = ["-e", host, "-t", token];
     // 根据安装选项生成参数
     if (installOptions.disableWebSsh) {
-      args.push("--disable-web-ssh");
+      args.push("--disable-remote-control");
     }
     if (installOptions.disableAutoUpdate) {
       args.push("--disable-auto-update");
@@ -87,13 +87,13 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
     switch (selectedPlatform) {
       case "linux":
         finalCommand =
-          `wget -qO- https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/install.sh | sudo bash -s -- ` +
+          `wget -qO- https://raw.githubusercontent.com/r11234567/komari-agent/refs/heads/main/install.sh | sudo bash -s -- ` +
           quoteShellArgs(args);
         break;
       case "windows":
         finalCommand =
           `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ` +
-          `"iwr 'https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/install.ps1'` +
+          `"iwr 'https://raw.githubusercontent.com/r11234567/komari-agent/refs/heads/main/install.ps1'` +
           ` -UseBasicParsing -OutFile 'install.ps1'; &` +
           ` '.\\install.ps1'`;
         args.forEach((arg) => {
@@ -103,7 +103,7 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
         break;
       case "macos":
         finalCommand =
-          `zsh <(curl -sL https://raw.githubusercontent.com/komari-monitor/komari-agent/refs/heads/main/install.sh) ` +
+          `zsh <(curl -sL https://raw.githubusercontent.com/r11234567/komari-agent/refs/heads/main/install.sh) ` +
           quoteShellArgs(args);
         break;
     }
@@ -171,7 +171,7 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
                       }));
                     }}
                   >
-                    {t("admin.nodeTable.disableWebSsh", "禁用 WebSSH")}
+                    {t("admin.nodeTable.disableRemoteControl", "禁用远程控制")}
                   </label>
                 </Flex>
                 <Flex gap="2">
@@ -365,4 +365,3 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
     </div>
   );
 }
-
