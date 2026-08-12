@@ -281,11 +281,11 @@ export function AgentDeploymentDialog({
                       checked={install.rescue.configureFirewall}
                       onChange={(value) =>
                         updateInstall(
-                        "rescue",
-                        create(RescueInstallConfigSchema, {
-                          enabled: install.rescue.enabled,
-                          configureFirewall: value,
-                        }),
+                          "rescue",
+                          create(RescueInstallConfigSchema, {
+                            enabled: true,
+                            configureFirewall: value,
+                          }),
                         )
                       }
                     />
