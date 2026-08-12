@@ -1,6 +1,8 @@
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { BrowserService } from "@komari/proto/komari/browser/v1/browser_pb";
+import { DeploymentService } from "@komari/proto/komari/deployment/v1/deployment_pb";
+import { RescueService } from "@komari/proto/komari/rescue/v1/rescue_pb";
 import {
   ConnectCompatibilityError,
   isCompatibilityFailure,
@@ -23,8 +25,10 @@ const transport = createConnectTransport({
 });
 
 const browser = createClient(BrowserService, transport);
+const deployment = createClient(DeploymentService, transport);
+const rescue = createClient(RescueService, transport);
 
-export const connectClients = { browser };
+export const connectClients = { browser, deployment, rescue };
 
 export const connectUnary = <T>(
   options: ConnectCallOptions,

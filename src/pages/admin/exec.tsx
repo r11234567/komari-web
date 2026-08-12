@@ -15,6 +15,7 @@ import { Play, AlertCircle, CheckCircle2, Copy, Clock } from "lucide-react";
 import { toast } from "sonner";
 import NodeSelector from "@/components/NodeSelector";
 import { SettingCardCollapse } from "@/components/admin/SettingCard";
+import { RescueConsole } from "@/components/admin/RescueConsole";
 
 interface TaskResult {
     task_id: string;
@@ -389,6 +390,8 @@ const ExecContent = () => {
             </div>
 
             <Separator size="4" />
+
+            <RescueConsole agentId={selectedNodes.length === 1 ? selectedNodes[0] : undefined} />
 
             {/* 命令输入区域 */}
             <Card className="km-exec-editor-card p-6">
