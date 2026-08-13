@@ -3,10 +3,10 @@ import { create } from "@bufbuild/protobuf";
 import { durationFromMs, timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
   AgentRuntimeIdentity,
+  RescueInstallConfigSchema,
   type ConfigDelivery,
   type DeploymentProfile,
   Platform,
-  RescueInstallConfigSchema,
 } from "@komari/proto/komari/deployment/v1/deployment_pb";
 import { RuntimeConfigSchema } from "@komari/proto/komari/config/v1/config_pb";
 import { DeliveryState } from "@komari/proto/komari/common/v1/common_pb";
@@ -289,29 +289,11 @@ export function AgentDeploymentDialog({
                     onChange={(value) =>
                       updateInstall(
                         "rescue",
-                        create(RescueInstallConfigSchema, {
-                          enabled: value,
-                          configureFirewall: value,
-                        }),
+                        create(RescueInstallConfigSchema, { enabled: value }),
                       )
                     }
                   />
-                  {install?.rescue?.enabled && (
-                    <Toggle
-                      label="由救援辅助程序配置防火墙"
-                      checked={install.rescue.configureFirewall}
-                      onChange={(value) =>
-                        updateInstall(
-                          "rescue",
-                          create(RescueInstallConfigSchema, {
-                            enabled: true,
-                            configureFirewall: value,
-                          }),
-                        )
-                      }
-                    />
-                  )}
-                  <Text size="2" color="gray">救援辅助程序独立以管理员权限运行；不启用时不会安装守护程序或修改防火墙。</Text>
+                  <Text size="2" color="gray">救援辅助程序独立以管理员权限运行；安装时不会修改防火墙，仅在管理员通过 2FA 明确执行隔离动作时创建可撤销的 Komari 专属规则。</Text>
                 </Flex>
               )}
               <TextField.Root value={install?.installDirectory ?? ""} placeholder="安装目录" onChange={(event) => updateInstall("installDirectory", event.target.value)} />
@@ -368,7 +350,7 @@ export function AgentDeploymentDialog({
                 请求安装：{rescueHelper?.requested ? "是" : "否"}；已安装：{rescueHelper?.installed ? "是" : "否"}；守护程序：{rescueHelper?.guardianRunning ? "运行中" : "未运行"}
               </Text>
               <Text size="2">
-                辅助程序：{rescueHelper?.helperRunning ? "运行中" : "未运行"}；防火墙：{rescueHelper?.firewallConfigured ? "已配置" : "未配置"}
+                辅助程序：{rescueHelper?.helperRunning ? "运行中" : "未运行"}；网络隔离：{rescueHelper?.networkIsolation === 1 ? "无" : rescueHelper?.networkIsolation ? "已启用" : "未知"}
               </Text>
               {rescueHelper?.error && <Text size="2" color="red">{rescueHelper.error.message}</Text>}
             </Flex>
