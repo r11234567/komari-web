@@ -15,6 +15,19 @@ test("联通线路选择使用 CUG 名称且不再暴露独立 10099", () => {
   assert.doesNotMatch(source, /unicom:\s*\[[^\]]*"10099"/);
 });
 
+test("默认规则提供 SoftBank、IIJ 和 Lumen 回程线路", () => {
+  assert.match(source, /const internationalLineOptions = \["SoftBank", "IIJ", "Lumen"\]/);
+  assert.match(source, /softbank: "SoftBank（AS17676）"/);
+  assert.match(source, /iij: "IIJ（AS2497）"/);
+  assert.match(source, /lumen: "Lumen（AS3356）"/);
+});
+
+test("持续切线只有显式开启逐次报警才重复通知", () => {
+  assert.match(source, /notify_repeated: false/);
+  assert.match(source, /逐次报警（切线持续时每次探测提醒）/);
+  assert.doesNotMatch(source, /切线通知冷却时间（秒）/);
+});
+
 test("编辑表单只在打开弹窗时读取任务数据", () => {
   assert.match(
     source,

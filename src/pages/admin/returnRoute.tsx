@@ -66,6 +66,7 @@ type Task = {
   cooldown: number;
   notify: boolean;
   notify_recovery: boolean;
+  notify_repeated: boolean;
   enabled: boolean;
 };
 
@@ -90,6 +91,7 @@ type TaskBatchForm = Pick<
   | "cooldown"
   | "notify"
   | "notify_recovery"
+  | "notify_repeated"
   | "enabled"
 >;
 
@@ -191,6 +193,7 @@ const defaults: Task = {
   cooldown: 1800,
   notify: true,
   notify_recovery: true,
+  notify_repeated: false,
   enabled: true,
 };
 
@@ -230,6 +233,7 @@ function toTaskBatchForm(task: Task): TaskBatchForm {
     cooldown: form.cooldown,
     notify: form.notify,
     notify_recovery: form.notify_recovery,
+    notify_repeated: form.notify_repeated,
     enabled: form.enabled,
   };
 }
@@ -250,6 +254,8 @@ const lineOptions: Record<Task["carrier"], string[]> = {
   unicom: ["CUG VIP", "CUG 优化", "9929", "4837"],
 };
 
+const internationalLineOptions = ["SoftBank", "IIJ", "Lumen"];
+
 const ruleGroupNames: Record<string, string> = {
   cmin2: "CMIN2",
   cmi: "CMI",
@@ -260,11 +266,14 @@ const ruleGroupNames: Record<string, string> = {
   unicom_10099: "CUG 接入（AS10099）",
   unicom_9929: "9929",
   unicom_4837: "4837",
+  softbank: "SoftBank（AS17676）",
+  iij: "IIJ（AS2497）",
+  lumen: "Lumen（AS3356）",
 };
 
-const ruleGroupOrder = ["cmin2", "cmi", "cmnet", "cn2_global", "cn2_backbone", "telecom_163", "unicom_10099", "unicom_9929", "unicom_4837"];
+const ruleGroupOrder = ["cmin2", "cmi", "cmnet", "cn2_global", "cn2_backbone", "telecom_163", "unicom_10099", "unicom_9929", "unicom_4837", "softbank", "iij", "lumen"];
 
-const allLineOptions = Object.values(lineOptions).flat();
+const allLineOptions = [...Object.values(lineOptions).flat(), ...internationalLineOptions];
 
 const regionOptions = ["华北", "东北", "华东", "华中", "华南", "西南", "西北", "港澳台", "其他"];
 
@@ -556,12 +565,10 @@ function RouteTaskDialog({
           </FormSection>
 
           <FormSection title="通知与状态">
-            <Field label="切线通知冷却时间（秒）">
-              <TextField.Root required type="number" min="0" max="604800" step="1" value={form.cooldown} onChange={(e) => setForm({ ...form, cooldown: e.target.value })} />
-            </Field>
             <div className="flex flex-col justify-end gap-3 pb-1">
               <label className="flex items-center justify-between gap-3 text-sm"><span>发送切线通知</span><Switch checked={form.notify} onCheckedChange={(notify) => setForm({ ...form, notify })} /></label>
               <label className="flex items-center justify-between gap-3 text-sm"><span>发送恢复通知</span><Switch checked={form.notify_recovery} onCheckedChange={(notify_recovery) => setForm({ ...form, notify_recovery })} /></label>
+              <label className="flex items-center justify-between gap-3 text-sm"><span>逐次报警（切线持续时每次探测提醒）</span><Switch checked={form.notify_repeated} disabled={!form.notify} onCheckedChange={(notify_repeated) => setForm({ ...form, notify_repeated })} /></label>
               <label className="flex items-center justify-between gap-3 text-sm"><span>启用任务</span><Switch checked={form.enabled} onCheckedChange={(enabled) => setForm({ ...form, enabled })} /></label>
             </div>
           </FormSection>
@@ -682,12 +689,10 @@ function RouteTaskBatchDialog({
           </FormSection>
 
           <FormSection title="通知与状态">
-            <Field label="切线通知冷却时间（秒）">
-              <TextField.Root required type="number" min="0" max="604800" step="1" value={form.cooldown} onChange={(event) => setForm({ ...form, cooldown: event.target.value })} />
-            </Field>
             <div className="flex flex-col justify-end gap-3 pb-1">
               <label className="flex items-center justify-between gap-3 text-sm"><span>发送切线通知</span><Switch checked={form.notify} onCheckedChange={(notify) => setForm({ ...form, notify })} /></label>
               <label className="flex items-center justify-between gap-3 text-sm"><span>发送恢复通知</span><Switch checked={form.notify_recovery} onCheckedChange={(notify_recovery) => setForm({ ...form, notify_recovery })} /></label>
+              <label className="flex items-center justify-between gap-3 text-sm"><span>逐次报警（切线持续时每次探测提醒）</span><Switch checked={form.notify_repeated} disabled={!form.notify} onCheckedChange={(notify_repeated) => setForm({ ...form, notify_repeated })} /></label>
               <label className="flex items-center justify-between gap-3 text-sm"><span>启用任务</span><Switch checked={form.enabled} onCheckedChange={(enabled) => setForm({ ...form, enabled })} /></label>
             </div>
           </FormSection>
