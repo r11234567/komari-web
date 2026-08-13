@@ -14,6 +14,7 @@ export interface DashboardTrafficDay {
 
 export interface DashboardTrafficBucket {
   hour: string;
+  timestamp: number;
   up: number;
   down: number;
 }

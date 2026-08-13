@@ -16,9 +16,13 @@ export async function requestTrafficTrend(signal: AbortSignal): Promise<Dashboar
   const response = await connectUnary({ signal }, (requestSignal, timeoutMs) =>
     connectClients.browser.getTrafficTrend({}, { signal: requestSignal, timeoutMs }),
   );
-  return response.buckets.map((bucket) => ({
-    hour: bucket.startTime ? trafficBucketLabel(timestampDate(bucket.startTime)) : "-",
-    up: byteCount(bucket.uploadBytes),
-    down: byteCount(bucket.downloadBytes),
-  }));
+  return response.buckets.map((bucket) => {
+    const startTime = bucket.startTime ? timestampDate(bucket.startTime) : null;
+    return {
+      hour: startTime ? trafficBucketLabel(startTime) : "-",
+      timestamp: startTime?.getTime() ?? 0,
+      up: byteCount(bucket.uploadBytes),
+      down: byteCount(bucket.downloadBytes),
+    };
+  });
 }

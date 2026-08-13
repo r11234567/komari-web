@@ -468,11 +468,19 @@ export function LatencyPanel({
 }) {
   const { t } = useTranslation();
   const points = React.useMemo(
-    () => (charts?.latency.points ?? []).map((point) => ({
-      ...point,
-      label: new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(point.time)),
-    })),
+    () => (charts?.latency.points ?? []).map((point) => {
+      const date = new Date(point.time);
+      return {
+        ...point,
+        timestamp: date.getTime(),
+        label: new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(date),
+      };
+    }),
     [charts?.latency.points, locale],
+  );
+  const ticks = React.useMemo(
+    () => points.filter((point) => new Date(point.timestamp).getMinutes() === 0).map((point) => point.timestamp),
+    [points],
   );
   return (
     <section className="min-h-[148px] rounded-md border bg-[var(--color-panel-solid)] p-3">
@@ -512,12 +520,20 @@ export function LatencyPanel({
           >
             <LineChart data={points} margin={{ top: 3, right: 3, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={44} />
+              <XAxis
+                dataKey="timestamp"
+                type="number"
+                domain={["dataMin", "dataMax"]}
+                ticks={ticks}
+                tickFormatter={(value) => new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(Number(value)))}
+                tickLine={false}
+                axisLine={false}
+              />
               <YAxis hide domain={["auto", "auto"]} />
               <Tooltip
-                content={({ active, payload, label }) => active && payload?.length ? (
+                content={({ active, payload }) => active && payload?.length ? (
                   <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
-                    <div className="text-muted-foreground">{label}</div>
+                    <div className="text-muted-foreground">{String(payload[0]?.payload?.label ?? "-")}</div>
                     <div className="mt-1 font-medium">{Number(payload[0]?.value ?? 0).toFixed(1)} ms</div>
                   </div>
                 ) : null}
@@ -801,6 +817,23 @@ export function TrafficTrendPanel({
   axisWidth: number;
 }) {
   const { t } = useTranslation();
+  const ticks = React.useMemo(
+    () => (trend ?? [])
+      .filter((bucket) => {
+        const date = new Date(bucket.timestamp);
+        return date.getMinutes() === 0 && date.getHours() % 2 === 0;
+      })
+      .map((bucket) => bucket.timestamp),
+    [trend],
+  );
+  const tickFormatter = React.useCallback((value: number) => {
+    const date = new Date(value);
+    const part = (partValue: number) => String(partValue).padStart(2, "0");
+    if (date.getHours() === 0) {
+      return `${part(date.getMonth() + 1)}-${part(date.getDate())} 00:00`;
+    }
+    return `${part(date.getHours())}:00`;
+  }, []);
   return (
     <section className="@container flex h-full min-w-0 flex-col rounded-md border bg-[var(--color-panel-solid)] p-3">
       <PanelHeader
@@ -828,12 +861,20 @@ export function TrafficTrendPanel({
         >
           <LineChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
-            <XAxis dataKey="hour" tickLine={false} axisLine={false} minTickGap={28} />
+            <XAxis
+              dataKey="timestamp"
+              type="number"
+              domain={["dataMin", "dataMax"]}
+              ticks={ticks}
+              tickFormatter={tickFormatter}
+              tickLine={false}
+              axisLine={false}
+            />
             <YAxis tickLine={false} axisLine={false} width={axisWidth} tickFormatter={(value) => formatBytes(Number(value)).replace(" ", "")} />
             <Tooltip
-              content={({ active, payload, label }) => active && payload?.length ? (
+              content={({ active, payload }) => active && payload?.length ? (
                 <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm">
-                  <div className="mb-1.5 text-muted-foreground">{label}</div>
+                  <div className="mb-1.5 text-muted-foreground">{String(payload[0]?.payload?.hour ?? "-")}</div>
                   <div className="font-medium text-[var(--accent-11)]">{t("admin_dashboard.upload")}: {formatBytes(Number(payload[0]?.value ?? 0))}</div>
                   <div className="mt-1 font-medium text-[var(--orange-11)]">{t("admin_dashboard.download")}: {formatBytes(Number(payload[1]?.value ?? 0))}</div>
                 </div>
