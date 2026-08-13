@@ -62,6 +62,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
     "@eslint/js": "^9.25.0",
     "@types/lodash": "^4.17.17",
     "@types/node": "^22.15.17",
