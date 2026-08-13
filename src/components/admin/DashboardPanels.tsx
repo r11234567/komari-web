@@ -36,6 +36,7 @@ import {
   type DashboardData,
   type DashboardDatabaseStatus,
   type DashboardResourceRankItem,
+  type DashboardTrafficBucket,
 } from "@/utils/dashboard";
 import {
   dashboardAlertCategoryPath,
@@ -791,11 +792,11 @@ export function ResourceRankingPanel({ data, limit }: { data: DashboardData; lim
 }
 
 export function TrafficTrendPanel({
-  charts,
+  trend,
   error,
   axisWidth,
 }: {
-  charts: DashboardChartsData | null;
+  trend: DashboardTrafficBucket[] | null;
   error: string | null;
   axisWidth: number;
 }) {
@@ -813,11 +814,11 @@ export function TrafficTrendPanel({
           </div>
         )}
       />
-      {error || charts?.traffic.error ? (
+      {error ? (
         <div className="flex min-h-[220px] flex-1 items-center justify-center text-sm text-[var(--red-11)]">
           {t("admin_dashboard.data_unavailable")}
         </div>
-      ) : charts ? (
+      ) : trend ? (
         <ChartContainer
           config={{
             up: { label: t("admin_dashboard.upload"), color: "var(--accent-9)" },
@@ -825,7 +826,7 @@ export function TrafficTrendPanel({
           }}
           className="min-h-[220px] w-full flex-1 aspect-auto"
         >
-          <LineChart data={charts.traffic.hourly} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <LineChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
             <XAxis dataKey="hour" tickLine={false} axisLine={false} minTickGap={28} />
             <YAxis tickLine={false} axisLine={false} width={axisWidth} tickFormatter={(value) => formatBytes(Number(value)).replace(" ", "")} />
@@ -1236,7 +1237,7 @@ function LegacyAdminDashboard() {
       })),
     [charts?.traffic.daily, locale],
   );
-  const hourlyTrafficAxisWidth = React.useMemo(
+  const trafficTrendAxisWidth = React.useMemo(
     () =>
       dashboardTrafficAxisWidth(
         (charts?.traffic.hourly ?? []).flatMap((item) => [item.up, item.down]),
@@ -1370,7 +1371,7 @@ function LegacyAdminDashboard() {
                   <LineChart data={charts.traffic.hourly} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="hour" tickLine={false} axisLine={false} minTickGap={28} />
-                    <YAxis tickLine={false} axisLine={false} width={hourlyTrafficAxisWidth} tickFormatter={(value) => formatBytes(Number(value)).replace(" ", "")} />
+                    <YAxis tickLine={false} axisLine={false} width={trafficTrendAxisWidth} tickFormatter={(value) => formatBytes(Number(value)).replace(" ", "")} />
                     <Tooltip
                       content={({ active, payload, label }) => active && payload?.length ? (
                         <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-lg">

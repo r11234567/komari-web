@@ -248,23 +248,23 @@ export function AgentDeploymentDialog({
               </SegmentedControl.Root>
               <Text size="2" color="gray">普通 Agent 的运行身份</Text>
               <SegmentedControl.Root
-                value={install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER ? "current-user" : "administrator"}
+                value={install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER ? "service-account" : "administrator"}
                 onValueChange={(value) => {
-                  const currentUser = value === "current-user";
+                  const serviceAccount = value === "service-account";
                   updateInstall(
                     "runtimeIdentity",
-                    currentUser
+                    serviceAccount
                       ? AgentRuntimeIdentity.CURRENT_USER
                       : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR,
                   );
-                  if (currentUser) updateInstall("remoteControlEnabled", false);
+                  if (serviceAccount) updateInstall("remoteControlEnabled", false);
                 }}
               >
                 <SegmentedControl.Item value="administrator">root / 管理员</SegmentedControl.Item>
-                <SegmentedControl.Item value="current-user">非特权用户</SegmentedControl.Item>
+                <SegmentedControl.Item value="service-account">专用非特权服务账号</SegmentedControl.Item>
               </SegmentedControl.Root>
-              {platform === "linux" && nonPrivilegedRuntime && (
-                <Text size="2" color="gray">安装器以 root 运行并创建专用普通用户 komari；安装器无权创建用户时才使用当前非管理员用户。</Text>
+              {nonPrivilegedRuntime && (
+                <Text size="2" color="gray">安装器以 root / 管理员权限创建或配置不可登录的专用普通服务账号，不使用当前交互用户。</Text>
               )}
               <div className="grid gap-2 sm:grid-cols-2">
                 <Toggle label="启用基础 GPU 采集" checked={install?.enableGpu ?? false} onChange={(value) => updateInstall("enableGpu", value)} />

@@ -33,6 +33,7 @@ import {
   TrafficTrendPanel,
 } from "@/components/admin/DashboardPanels";
 import { useDashboardSettings } from "@/hooks/useDashboardSettings";
+import { requestTrafficTrend } from "@/api/connect/dashboard";
 import {
   dashboardLocalStorageTotal,
   dashboardRuntimeStorageTotal,
@@ -40,6 +41,7 @@ import {
   shortDashboardDay,
   type DashboardChartsData,
   type DashboardData,
+  type DashboardTrafficBucket,
 } from "@/utils/dashboard";
 import {
   dashboardChartSections,
@@ -95,12 +97,15 @@ export default function AdminDashboard() {
   const dashboardRootRef = React.useRef<HTMLDivElement>(null);
   const navigationAnchorRef = React.useRef<Omit<DashboardViewState, "scrollTop"> | null>(null);
   const restoredViewKeyRef = React.useRef<string | null>(null);
+  const trafficTrendControllerRef = React.useRef<AbortController | null>(null);
 
   const [data, setData] = React.useState<DashboardData | null>(() => getDashboardSnapshot(summaryKey, accountKey));
   const [charts, setCharts] = React.useState<DashboardChartsData | null>(() => getDashboardChartsSnapshot(chartKey, accountKey));
+  const [trafficTrend, setTrafficTrend] = React.useState<DashboardTrafficBucket[] | null>(null);
   const [loading, setLoading] = React.useState(() => getDashboardSnapshot(summaryKey, accountKey) === null);
   const [error, setError] = React.useState<string | null>(null);
   const [chartsError, setChartsError] = React.useState<string | null>(null);
+  const [trafficTrendError, setTrafficTrendError] = React.useState<string | null>(null);
 
   const loadSummary = React.useCallback(async (silent = false) => {
     if (summarySections.length === 0) {
@@ -135,10 +140,34 @@ export default function AdminDashboard() {
     }
   }, [accountKey, chartSections, settings.ranking_limit]);
 
+  const loadTrafficTrend = React.useCallback(async () => {
+    if (!chartSections.includes("traffic")) {
+      setTrafficTrend(null);
+      setTrafficTrendError(null);
+      return;
+    }
+    trafficTrendControllerRef.current?.abort();
+    const controller = new AbortController();
+    trafficTrendControllerRef.current = controller;
+    try {
+      const next = await requestTrafficTrend(controller.signal);
+      if (controller.signal.aborted) return;
+      setTrafficTrend(next);
+      setTrafficTrendError(null);
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        setTrafficTrendError(reason instanceof Error ? reason.message : String(reason));
+      }
+    }
+  }, [chartSections]);
+
+  React.useEffect(() => () => trafficTrendControllerRef.current?.abort(), []);
+
   const refreshAll = React.useCallback(() => {
     void loadSummary(false);
     void loadCharts();
-  }, [loadCharts, loadSummary]);
+    void loadTrafficTrend();
+  }, [loadCharts, loadSummary, loadTrafficTrend]);
 
   React.useEffect(() => {
     if (settingsLoading) return;
@@ -150,6 +179,7 @@ export default function AdminDashboard() {
     setLoading(!cachedSummary);
     void loadSummary(Boolean(cachedSummary));
     void loadCharts();
+    void loadTrafficTrend();
 
     const refreshWhenVisible = (callback: () => void) => {
       if (document.visibilityState === "visible") callback();
@@ -162,7 +192,10 @@ export default function AdminDashboard() {
       : null;
     const chartInterval = chartSections.length > 0
       ? window.setInterval(
-        () => refreshWhenVisible(() => void loadCharts()),
+        () => refreshWhenVisible(() => {
+          void loadCharts();
+          void loadTrafficTrend();
+        }),
         settings.chart_refresh_seconds * 1000,
       )
       : null;
@@ -174,6 +207,7 @@ export default function AdminDashboard() {
     chartKey,
     chartSections.length,
     loadCharts,
+    loadTrafficTrend,
     loadSummary,
     settings.chart_refresh_seconds,
     settings.refresh_seconds,
@@ -264,11 +298,11 @@ export default function AdminDashboard() {
     })),
     [charts?.traffic.daily, locale],
   );
-  const hourlyTrafficAxisWidth = React.useMemo(
+  const trafficTrendAxisWidth = React.useMemo(
     () => dashboardTrafficAxisWidth(
-      (charts?.traffic.hourly ?? []).flatMap((item) => [item.up, item.down]),
+      (trafficTrend ?? []).flatMap((item) => [item.up, item.down]),
     ),
-    [charts?.traffic.hourly],
+    [trafficTrend],
   );
   const dailyTrafficAxisWidth = React.useMemo(
     () => dashboardTrafficAxisWidth(
@@ -377,7 +411,7 @@ export default function AdminDashboard() {
           />
         );
       case "traffic_trend":
-        return <TrafficTrendPanel charts={charts} error={chartsError} axisWidth={hourlyTrafficAxisWidth} />;
+        return <TrafficTrendPanel trend={trafficTrend} error={trafficTrendError} axisWidth={trafficTrendAxisWidth} />;
       case "billing_trend":
         return (
           <BillingTrendPanel

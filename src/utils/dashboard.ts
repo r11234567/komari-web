@@ -12,7 +12,7 @@ export interface DashboardTrafficDay {
   billable: number;
 }
 
-export interface DashboardTrafficHour {
+export interface DashboardTrafficBucket {
   hour: string;
   up: number;
   down: number;
@@ -198,7 +198,7 @@ export interface DashboardChartsData {
     today_up: number;
     today_down: number;
     today_billable: number;
-    hourly: DashboardTrafficHour[];
+    hourly: DashboardTrafficBucket[];
     daily: DashboardTrafficDay[];
     ranking: DashboardTrafficRankItem[];
     history_ready: boolean;

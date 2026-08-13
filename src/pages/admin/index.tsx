@@ -174,7 +174,7 @@ const EmptyNodesGuide = () => {
 };
 
 type AutoDiscoveryInstallOptions = {
-  installAsCurrentUser: boolean;
+  installAsServiceAccount: boolean;
   disableRemoteControl: boolean;
   disableAutoUpdate: boolean;
   ignoreUnsafeCert: boolean;
@@ -190,6 +190,7 @@ type AutoDiscoveryInstallOptions = {
   includeMountpoints: string;
   interval: string;
   monthRotate: string;
+  serverName: string;
 };
 
 const AutoDiscoverySection = ({
@@ -208,8 +209,8 @@ const AutoDiscoverySection = ({
   const [showOptions, setShowOptions] = React.useState(false);
   const [installOptions, setInstallOptions] =
     React.useState<AutoDiscoveryInstallOptions>({
-      installAsCurrentUser: false,
-      disableRemoteControl: false,
+      installAsServiceAccount: true,
+      disableRemoteControl: true,
       disableAutoUpdate: false,
       ignoreUnsafeCert: false,
       memoryIncludeCache: false,
@@ -224,6 +225,7 @@ const AutoDiscoverySection = ({
       includeMountpoints: "",
       interval: "",
       monthRotate: "",
+      serverName: "",
     });
 
   const [enableGhproxy, setEnableGhproxy] = React.useState(false);
@@ -248,10 +250,14 @@ const AutoDiscoverySection = ({
       return `http://${settings.script_domain.replace(/\/+$/, "")}`;
     })();
     const args: string[] = ["-e", host, "--auto-discovery", adKey];
-    if (installOptions.installAsCurrentUser) {
-      args.push("--install-runtime-identity", "current-user");
+    const serverName = installOptions.serverName.trim();
+    if (serverName) {
+      args.push("--server-name", serverName);
     }
-    if (installOptions.disableRemoteControl || installOptions.installAsCurrentUser) {
+    if (installOptions.installAsServiceAccount && selectedPlatform !== "docker") {
+      args.push("--install-runtime-identity", "service-account");
+    }
+    if (installOptions.disableRemoteControl || installOptions.installAsServiceAccount) {
       args.push("--disable-remote-control");
     }
     if (installOptions.disableAutoUpdate) {
@@ -358,7 +364,7 @@ const AutoDiscoverySection = ({
         break;
       case "macos":
         finalCommand =
-          `zsh <(curl -sL ${quoteShellArg(scriptUrl)}) ` +
+          `curl -fsSL ${quoteShellArg(scriptUrl)} | sudo bash -s -- ` +
           quoteShellArgs(args);
         break;
       case "docker": {
@@ -376,13 +382,11 @@ const AutoDiscoverySection = ({
           }
           dockerArgs.push(args[i]);
         }
-        // 自动发现会在 /app/auto-discovery.json 写入注册得到的 uuid/token，
-        // 通过 bind mount 持久化该文件，容器更新重建后复用同一身份，避免重复注册。
-        // 注意：文件挂载要求宿主机上文件已存在，否则 Docker 会将其创建为目录。
+        // Docker 镜像以非 root 用户运行，命名卷挂到该用户可写的状态目录，
+        // 容器更新重建后复用自动发现身份，避免重复注册。
         finalCommand =
-          `touch .komari-auto-discovery.json && ` +
           `docker run -d --name komari-agent --restart=always ` +
-          `-v .komari-auto-discovery.json:/app/auto-discovery.json ` +
+          `-v komari-agent-data:/var/lib/komari ` +
           `ghcr.io/r11234567/komari-agent:latest ` +
           quoteShellArgs(dockerArgs);
         break;
@@ -467,6 +471,25 @@ const AutoDiscoverySection = ({
         <SegmentedControl.Item value="docker">Docker</SegmentedControl.Item>
       </SegmentedControl.Root>
 
+      <Flex direction="column" gap="1">
+        <Text as="label" size="2" weight="bold">
+          {t("admin.nodeTable.autoDiscovery.serverName", "服务器显示名称")}
+        </Text>
+        <TextField.Root
+          placeholder={t(
+            "admin.nodeTable.autoDiscovery.serverNamePlaceholder",
+            "留空则使用目标机器的系统主机名"
+          )}
+          value={installOptions.serverName}
+          onChange={(event) =>
+            setInstallOptions((previous) => ({
+              ...previous,
+              serverName: event.target.value,
+            }))
+          }
+        />
+      </Flex>
+
       <Flex gap="2" align="center">
         <Checkbox
           checked={showOptions}
@@ -483,14 +506,14 @@ const AutoDiscoverySection = ({
       {showOptions && (
         <Flex direction="column" gap="2">
           <div className="grid grid-cols-2 gap-2">
-            {selectedPlatform === "linux" && (
+            {selectedPlatform !== "docker" && (
               <Flex gap="2" align="center">
                 <Checkbox
-                  checked={installOptions.installAsCurrentUser}
+                  checked={installOptions.installAsServiceAccount}
                   onCheckedChange={(checked) =>
                     setInstallOptions((prev) => ({
                       ...prev,
-                      installAsCurrentUser: Boolean(checked),
+                      installAsServiceAccount: Boolean(checked),
                     }))
                   }
                 />
@@ -499,11 +522,14 @@ const AutoDiscoverySection = ({
                   onClick={() =>
                     setInstallOptions((prev) => ({
                       ...prev,
-                      installAsCurrentUser: !prev.installAsCurrentUser,
+                      installAsServiceAccount: !prev.installAsServiceAccount,
                     }))
                   }
                 >
-                  {t("admin.nodeTable.installAsCurrentUser", "以非特权用户运行（Linux 自动创建 komari 用户）")}
+                  {t(
+                    "admin.nodeTable.installAsServiceAccount",
+                    "以不可登录的非特权服务账号运行"
+                  )}
                 </label>
               </Flex>
             )}
