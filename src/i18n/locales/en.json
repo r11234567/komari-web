@@ -1669,7 +1669,7 @@
     "download": "Down",
     "external_storage": "External storage",
     "history_preparing": "Historical traffic is being prepared. The full trend will appear automatically.",
-    "hourly_traffic_hint": "Upload and download totals in 15-minute intervals",
+    "hourly_traffic_hint": "Upload and download totals in 20-minute intervals",
     "last_compaction": "Last compaction",
     "load_failed": "Failed to load dashboard",
     "main_database": "Main database",

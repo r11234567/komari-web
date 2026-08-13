@@ -1667,7 +1667,7 @@
     "download": "下载",
     "external_storage": "外部存储",
     "history_preparing": "历史流量统计准备中，完成后会自动显示完整趋势。",
-    "hourly_traffic_hint": "每 15 分钟上传与下载流量",
+    "hourly_traffic_hint": "每 20 分钟上传与下载流量",
     "last_compaction": "最近封块",
     "latency_24h": "24 小时时延",
     "latency_jitter_ranking": "延迟抖动排行",

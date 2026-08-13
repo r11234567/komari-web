@@ -1603,7 +1603,7 @@
     "download": "Unduh",
     "external_storage": "Penyimpanan eksternal",
     "history_preparing": "Riwayat trafik sedang disiapkan dan akan tampil otomatis.",
-    "hourly_traffic_hint": "Total unggah dan unduh dalam interval 15 menit",
+    "hourly_traffic_hint": "Total unggah dan unduh dalam interval 20 menit",
     "last_compaction": "Pemadatan terakhir",
     "load_failed": "Gagal memuat dasbor",
     "main_database": "Basis data utama",

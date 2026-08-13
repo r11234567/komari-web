@@ -1,4 +1,4 @@
-import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { durationFromMs, timestampDate } from "@bufbuild/protobuf/wkt";
 import { connectClients, connectUnary } from "@/api/connect/client";
 import type { DashboardTrafficBucket } from "@/utils/dashboard";
 
@@ -7,6 +7,9 @@ const byteCount = (value: bigint) => {
   return Number.isSafeInteger(numeric) ? numeric : Number.MAX_SAFE_INTEGER;
 };
 
+const trafficTrendWindow = durationFromMs(24 * 60 * 60 * 1000);
+const trafficTrendInterval = durationFromMs(20 * 60 * 1000);
+
 const trafficBucketLabel = (date: Date) => {
   const part = (value: number) => String(value).padStart(2, "0");
   return `${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}`;
@@ -14,7 +17,10 @@ const trafficBucketLabel = (date: Date) => {
 
 export async function requestTrafficTrend(signal: AbortSignal): Promise<DashboardTrafficBucket[]> {
   const response = await connectUnary({ signal }, (requestSignal, timeoutMs) =>
-    connectClients.browser.getTrafficTrend({}, { signal: requestSignal, timeoutMs }),
+    connectClients.browser.getTrafficTrend(
+      { window: trafficTrendWindow, interval: trafficTrendInterval },
+      { signal: requestSignal, timeoutMs },
+    ),
   );
   return response.buckets.map((bucket) => {
     const startTime = bucket.startTime ? timestampDate(bucket.startTime) : null;

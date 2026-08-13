@@ -538,7 +538,7 @@ export function LatencyPanel({
                   </div>
                 ) : null}
               />
-              <Line type="monotone" dataKey="average" stroke="var(--color-average)" strokeWidth={2} dot={false} activeDot={{ r: 3 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="average" stroke="var(--color-average)" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} isAnimationActive={false} />
             </LineChart>
           </ChartContainer>
         ) : (
@@ -880,8 +880,8 @@ export function TrafficTrendPanel({
                 </div>
               ) : null}
             />
-            <Line type="monotone" dataKey="up" stroke="var(--color-up)" strokeWidth={2} dot={false} activeDot={{ r: 3 }} isAnimationActive={false} />
-            <Line type="monotone" dataKey="down" stroke="var(--color-down)" strokeWidth={2} dot={false} activeDot={{ r: 3 }} isAnimationActive={false} />
+            <Line type="monotone" dataKey="up" stroke="var(--color-up)" strokeWidth={2} dot={{ r: 1.5 }} activeDot={{ r: 3 }} isAnimationActive={false} />
+            <Line type="monotone" dataKey="down" stroke="var(--color-down)" strokeWidth={2} dot={{ r: 1.5 }} activeDot={{ r: 3 }} isAnimationActive={false} />
           </LineChart>
         </ChartContainer>
       ) : <Skeleton className="min-h-[220px] w-full flex-1" />}

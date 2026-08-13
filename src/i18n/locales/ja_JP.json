@@ -1603,7 +1603,7 @@
     "download": "ダウンロード",
     "external_storage": "外部ストレージ",
     "history_preparing": "過去のトラフィックを準備中です。完了後に自動表示されます。",
-    "hourly_traffic_hint": "15 分間隔のアップロード・ダウンロード通信量",
+    "hourly_traffic_hint": "20 分間隔のアップロード・ダウンロード通信量",
     "last_compaction": "最終圧縮",
     "load_failed": "ダッシュボードを読み込めませんでした",
     "main_database": "メインデータベース",

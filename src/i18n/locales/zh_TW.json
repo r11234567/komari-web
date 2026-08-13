@@ -1603,7 +1603,7 @@
     "download": "下載",
     "external_storage": "外部儲存",
     "history_preparing": "歷史流量統計準備中，完成後會自動顯示完整趨勢。",
-    "hourly_traffic_hint": "每 15 分鐘上傳與下載流量",
+    "hourly_traffic_hint": "每 20 分鐘上傳與下載流量",
     "last_compaction": "最近封塊",
     "load_failed": "儀表板載入失敗",
     "main_database": "主資料庫",
