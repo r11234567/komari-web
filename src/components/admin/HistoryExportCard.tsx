@@ -7,19 +7,23 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { SettingCard } from "./SettingCard";
 
-type ExportType = "load" | "ping";
+type ExportCategory = "resource" | "network" | "latency" | "all";
 type ExportStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 type RangeMode = "quick" | "custom";
 
 type ExportJob = {
   id: string;
-  type: ExportType;
+  type: ExportCategory;
+  category: ExportCategory;
+  node_name: string;
   status: ExportStatus;
   progress: number;
   start: string;
   end: string;
   created_at: string;
   expires_at: string;
+  filename?: string;
+  size?: number;
   error?: string;
 };
 
@@ -85,7 +89,7 @@ export function HistoryExportCard() {
   const { t } = useTranslation();
   const { nodeList } = useNodeList();
 
-  const [type, setType] = React.useState<ExportType>("load");
+  const [category, setCategory] = React.useState<ExportCategory>("resource");
   const [uuid, setUUID] = React.useState("");
   const [retention, setRetention] = React.useState<RetentionInfo | null>(null);
 
@@ -96,7 +100,26 @@ export function HistoryExportCard() {
   const [customEnd, setCustomEnd] = React.useState("");
 
   const [job, setJob] = React.useState<ExportJob | null>(null);
+  const [readyExports, setReadyExports] = React.useState<ExportJob[]>([]);
+  const [selectedReadyID, setSelectedReadyID] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+
+  const refreshReadyExports = React.useCallback(async () => {
+    try {
+      const exports = await requestAdminData<ExportJob[]>(
+        "/api/admin/history/export",
+        "Failed to read generated exports",
+      );
+      setReadyExports(exports);
+      setSelectedReadyID((current) =>
+        current && exports.some((item) => item.id === current)
+          ? current
+          : (exports[0]?.id ?? ""),
+      );
+    } catch {
+      // Keep the last successfully loaded list while the server is unavailable.
+    }
+  }, []);
 
   // Fetch retention once on mount
   React.useEffect(() => {
@@ -120,15 +143,25 @@ export function HistoryExportCard() {
       .catch(() => setRetention({ resource_hours: 720, ping_hours: 24 }));
   }, []);
 
-  // When type or retention changes, reset quick selection to max
+  // When category or retention changes, reset quick selection to max.
   React.useEffect(() => {
     if (!retention) return;
-    const maxHours = type === "ping" ? retention.ping_hours : retention.resource_hours;
+    const maxHours = category === "latency"
+      ? retention.ping_hours
+      : category === "all"
+        ? Math.min(retention.resource_hours, retention.ping_hours)
+        : retention.resource_hours;
     setQuickHours(maxHours);
     setRangeMode("quick");
     setCustomStart("");
     setCustomEnd("");
-  }, [type, retention]);
+  }, [category, retention]);
+
+  React.useEffect(() => {
+    void refreshReadyExports();
+    const timer = window.setInterval(() => void refreshReadyExports(), 10_000);
+    return () => window.clearInterval(timer);
+  }, [refreshReadyExports]);
 
   React.useEffect(() => {
     if (!uuid && nodeList?.length) setUUID(nodeList[0].uuid);
@@ -154,14 +187,21 @@ export function HistoryExportCard() {
         `/api/admin/history/export/${job.id}`,
         t("settings.lts_database.export_status_error", "读取导出状态失败"),
       )
-        .then(setJob)
+        .then((next) => {
+          setJob(next);
+          if (next.status === "done") void refreshReadyExports();
+        })
         .catch((error) => toast.error(error instanceof Error ? error.message : String(error)));
     }, 1000);
     return () => window.clearTimeout(timer);
-  }, [job, t]);
+  }, [job, refreshReadyExports, t]);
 
   const maxHours = retention
-    ? type === "ping" ? retention.ping_hours : retention.resource_hours
+    ? category === "latency"
+      ? retention.ping_hours
+      : category === "all"
+        ? Math.min(retention.resource_hours, retention.ping_hours)
+        : retention.resource_hours
     : null;
   const ranges = maxHours ? buildRanges(maxHours) : [];
 
@@ -202,12 +242,12 @@ export function HistoryExportCard() {
       let body: Record<string, unknown>;
       if (rangeMode === "custom" && customStart && customEnd) {
         body = {
-          type, uuid,
+          category, uuid,
           start: localInputToRFC3339(customStart),
           end: localInputToRFC3339(customEnd),
         };
       } else {
-        body = { type, uuid, hours: quickHours };
+        body = { category, uuid, hours: quickHours };
       }
       const next = await requestAdminData<ExportJob>(
         "/api/admin/history/export",
@@ -256,13 +296,15 @@ export function HistoryExportCard() {
       <Flex direction="column" className="w-full pt-3" gap="3">
         {!job ? (
           <>
-            {/* Type + node selectors */}
+            {/* Category + node selectors */}
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <Select.Root value={type} onValueChange={(v) => setType(v as ExportType)}>
+              <Select.Root value={category} onValueChange={(v) => setCategory(v as ExportCategory)}>
                 <Select.Trigger aria-label={t("settings.lts_database.export_type", "导出类型")} />
                 <Select.Content>
-                  <Select.Item value="load">{t("settings.lts_database.export_resources", "资源历史")}</Select.Item>
-                  <Select.Item value="ping">Ping</Select.Item>
+                  <Select.Item value="resource">{t("settings.lts_database.export_resources", "资源")}</Select.Item>
+                  <Select.Item value="network">{t("settings.lts_database.export_network", "网络")}</Select.Item>
+                  <Select.Item value="latency">{t("settings.lts_database.export_latency", "延迟")}</Select.Item>
+                  <Select.Item value="all">{t("settings.lts_database.export_all", "全部")}</Select.Item>
                 </Select.Content>
               </Select.Root>
               <Select.Root value={uuid} onValueChange={setUUID}>
@@ -349,7 +391,7 @@ export function HistoryExportCard() {
             <Flex justify="between" align="center" gap="3" wrap="wrap">
               <div>
                 <Text as="div" size="2" weight="medium">
-                  {job.type === "load" ? t("settings.lts_database.export_resources", "资源历史") : "Ping"}
+                  {t(`settings.lts_database.export_${job.category ?? job.type}`, job.category ?? job.type)}
                 </Text>
                 <Text as="div" size="1" color="gray">
                   {new Date(job.start).toLocaleString()} – {new Date(job.end).toLocaleString()}
@@ -382,6 +424,52 @@ export function HistoryExportCard() {
             </Flex>
           </>
         )}
+
+        <div className="border-t border-gray-6 pt-3">
+          <Text as="div" size="2" weight="medium" mb="2">
+            {t("settings.lts_database.export_ready", "可直接下载的数据")}
+          </Text>
+          <Flex gap="2" align="center" wrap="wrap">
+            <div className="min-w-0 flex-1">
+              <Select.Root
+                value={selectedReadyID}
+                onValueChange={setSelectedReadyID}
+                disabled={readyExports.length === 0}
+              >
+                <Select.Trigger
+                  className="w-full"
+                  placeholder={t("settings.lts_database.export_ready_empty", "暂无可下载数据")}
+                />
+                <Select.Content>
+                  {readyExports.map((item) => (
+                    <Select.Item key={item.id} value={item.id}>
+                      {item.node_name} - {new Date(item.start).toLocaleString()} ~ {new Date(item.end).toLocaleString()} - {t(
+                        `settings.lts_database.export_${item.category ?? item.type}`,
+                        item.category ?? item.type,
+                      )} - {new Date(item.created_at).toLocaleString()}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
+            </div>
+            {selectedReadyID ? (
+              <Button asChild>
+                <a href={`/api/admin/history/export/${selectedReadyID}/download`}>
+                  <Download size={16} />
+                  {t("settings.lts_database.export_download", "下载")}
+                </a>
+              </Button>
+            ) : (
+              <Button disabled>
+                <Download size={16} />
+                {t("settings.lts_database.export_download", "下载")}
+              </Button>
+            )}
+          </Flex>
+          <Text as="div" size="1" color="gray" mt="1">
+            {t("settings.lts_database.export_ready_ttl", "生成文件保留 48 小时，列表会自动更新。")}
+          </Text>
+        </div>
       </Flex>
     </SettingCard>
   );
