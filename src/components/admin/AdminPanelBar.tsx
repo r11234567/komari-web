@@ -22,7 +22,6 @@ import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { TablerMenu2 } from "../Icones/Tabler";
 import InlineSvgIcon from "../InlineSvgIcon";
 import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
-import { useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import Tips from "../ui/tips";
 import { CircleFadingArrowUp } from "lucide-react";
@@ -56,7 +55,6 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
   const [openSubMenus, setOpenSubMenus] = useState<{ [key: string]: boolean }>({
     // 默认所有子菜单关闭
   });
-  const { account } = useAccount();
   const isMobile = useIsMobile();
   const ishttps = window.location.protocol === "https:";
   const [t, i18n] = useTranslation();
