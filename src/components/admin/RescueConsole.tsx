@@ -66,6 +66,8 @@ const terminalStates = new Set([
 export function RescueConsole({ agentId }: { agentId?: string }) {
   const { deployment, rescue } = useConnect();
   const [available, setAvailable] = React.useState(false);
+  const [statusLoaded, setStatusLoaded] = React.useState(false);
+  const [statusError, setStatusError] = React.useState("");
   const [helperStatus, setHelperStatus] = React.useState<RescueHelperStatus>();
   const [action, setAction] = React.useState<RescueAction>(RescueAction.DIAGNOSTICS);
   const [twoFactorCode, setTwoFactorCode] = React.useState("");
@@ -88,12 +90,16 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         helper?.installed === true &&
         helper.helperRunning === true,
     );
+    setStatusLoaded(true);
+    setStatusError("");
   }, [agentId, deployment]);
 
   React.useEffect(() => {
     statusController.current?.abort();
     streamController.current?.abort();
     setAvailable(false);
+    setStatusLoaded(false);
+    setStatusError("");
     setHelperStatus(undefined);
     setSession(undefined);
     setOutput("");
@@ -104,6 +110,8 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     void loadStatus(controller.signal)
       .catch((error) => {
         if (!controller.signal.aborted) {
+          setStatusLoaded(true);
+          setStatusError(error instanceof Error ? error.message : "读取救援状态失败");
           toast.error(error instanceof Error ? error.message : "读取救援状态失败");
         }
       });
@@ -224,7 +232,34 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     }
   };
 
-  if (!available) return null;
+  if (!agentId) return null;
+
+  if (!statusLoaded || !available) {
+    return (
+      <Card className="p-6">
+        <Flex direction="column" gap="2">
+          <Flex align="center" gap="2">
+            <ShieldAlert size="18" />
+            <Text size="4" weight="bold">救援模式控制台</Text>
+          </Flex>
+          {!statusLoaded ? (
+            <Text size="2" color="gray">正在读取救援辅助程序状态...</Text>
+          ) : statusError ? (
+            <Text size="2" color="red">{statusError}</Text>
+          ) : (
+            <Text size="2" color="orange">
+              此节点当前不可进入救援模式。需要禁用普通远程控制，并确保救援辅助程序已安装且正在运行。
+            </Text>
+          )}
+          {statusLoaded && !statusError && (
+            <Text size="2" color="gray">
+              已安装：{helperStatus?.installed ? "是" : "否"}；辅助程序：{helperStatus?.helperRunning ? "运行中" : "未运行"}
+            </Text>
+          )}
+        </Flex>
+      </Card>
+    );
+  }
 
   const terminal = session ? terminalStates.has(session.state) : false;
   const selectedAction = actions.find((item) => item.value === action) ?? actions[0];
