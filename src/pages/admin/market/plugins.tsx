@@ -31,7 +31,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import Loading from "@/components/loading";
-import { useRPC2Call } from "@/contexts/RPC2Context";
+import { deleteAdminPlugin, listAdminPlugins } from "@/api/connect/admin";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import type { PluginInfo } from "@/types/plugin";
 
@@ -107,7 +107,6 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit) {
 
 // 插件市场：源管理与主题市场一致（增/改/删/启停 + 目录刷新）。
 export default function PluginMarketPage() {
-  const { call } = useRPC2Call();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const language = i18n.resolvedLanguage || i18n.language || "";
@@ -133,32 +132,42 @@ export default function PluginMarketPage() {
   const [savingSource, setSavingSource] = useState(false);
   const [sourceToDelete, setSourceToDelete] = useState<MarketSource | null>(null);
 
-  const loadSources = useCallback(async () => {
-    const payload = await request<MarketSource[]>("/api/admin/plugin/market/sources");
+  const loadSources = useCallback(async (signal = AbortSignal.timeout(15_000)) => {
+    const payload = await request<MarketSource[]>("/api/admin/plugin/market/sources", { signal });
     setSources(payload.data || []);
   }, []);
 
-  const loadCatalog = useCallback(async (force = false) => {
+  const loadCatalog = useCallback(async (
+    force = false,
+    signal = AbortSignal.timeout(15_000),
+  ) => {
     const suffix = force ? "?refresh=true" : "";
     const [catalogPayload, installedResult] = await Promise.all([
       request<{ plugins: MarketPlugin[]; sources: SourceStatus[] }>(
         `/api/admin/plugin/market/catalog${suffix}`,
+        { signal },
       ),
-      call<any, PluginInfo[]>("admin:listPlugins").catch(() => []),
+      listAdminPlugins(signal).catch(() => []),
     ]);
     setPlugins(catalogPayload.data?.plugins || []);
     setSourceStatuses(catalogPayload.data?.sources || []);
     const list = Array.isArray(installedResult) ? installedResult : [];
     setInstalled(new Map(list.map((plugin) => [plugin.short, plugin.version])));
     setInstalledInfo(new Map(list.map((plugin) => [plugin.short, plugin])));
-  }, [call]);
+  }, []);
 
   useEffect(() => {
-    Promise.all([loadCatalog(), loadSources()])
-      .catch((error) =>
-        toast.error(error instanceof Error ? error.message : String(error)),
-      )
-      .finally(() => setLoading(false));
+    const controller = new AbortController();
+    Promise.all([loadCatalog(false, controller.signal), loadSources(controller.signal)])
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          toast.error(error instanceof Error ? error.message : String(error));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort(new DOMException("Page unmounted", "AbortError"));
   }, [loadCatalog, loadSources]);
 
   const filteredPlugins = useMemo(() => {
@@ -211,7 +220,7 @@ export default function PluginMarketPage() {
   const uninstallPlugin = async (plugin: MarketPlugin) => {
     setDeletingPlugin(plugin.short);
     try {
-      await call("admin:deletePlugin", { short: plugin.short });
+      await deleteAdminPlugin(plugin.short, AbortSignal.timeout(15_000));
       toast.success(t("plugin.market_uninstall_success", "Plugin uninstalled"));
       await loadCatalog();
     } catch (error) {

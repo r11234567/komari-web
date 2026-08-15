@@ -17,7 +17,16 @@ import {
 } from "@/components/ui/table";
 import { useSettings } from "@/lib/api";
 import type { SettingsResponse } from "@/lib/api";
-import { useRPC2Call } from "@/contexts/RPC2Context";
+import {
+  cancelAdminMetricMigration,
+  getAdminMetricMigrationStatus,
+  listAdminMetricDefinitions,
+  startAdminMetricMigration,
+  updateAdminMetricDefinition,
+  type AdminMetricDefinition as MetricDefinition,
+  type MigrationStatus,
+  type MigrationStatusResponse,
+} from "@/api/connect/admin";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import { isSQLiteDSN } from "@/utils/metric";
 import {
@@ -44,33 +53,6 @@ import { toast } from "sonner";
 
 // store-to-store 迁移状态。旧的 not_started/in_progress/paused 已废弃，
 // 后端语义改为：把某个 metrics 源库的数据搬运到当前运行中的 metrics 目标库。
-type MigrationStatus = "idle" | "running" | "completed" | "failed" | "canceled";
-
-interface MigrationStatusResponse {
-  status: MigrationStatus;
-  is_running: boolean;
-  source_driver: string;
-  source_dsn: string;
-  target_driver: string;
-  target_dsn: string;
-  total_metrics: number;
-  metrics_done: number;
-  current_metric: string;
-  migrated_points: number;
-  start_time?: string;
-  end_time?: string;
-  error?: string;
-}
-
-interface MetricDefinition {
-  name: string;
-  description?: I18nText | null;
-  type: string;
-  unit?: string;
-  retention_days: number;
-  metadata?: Record<string, string>;
-}
-
 type MetricRetentionChange = {
   name: string;
   retention_days: number;
@@ -321,7 +303,6 @@ function MetricRetentionTable({
   defaultRetentionDays: number;
 }) {
   const { t, i18n } = useTranslation();
-  const { call } = useRPC2Call();
   const [metrics, setMetrics] = React.useState<MetricDefinition[]>([]);
   const [drafts, setDrafts] = React.useState<Record<string, string>>({});
   const [loading, setLoading] = React.useState(true);
@@ -335,14 +316,10 @@ function MetricRetentionTable({
   const language = i18n.resolvedLanguage || i18n.language;
 
   const fetchMetrics = React.useCallback(
-    async (silent = false) => {
+    async (silent = false, signal = AbortSignal.timeout(15_000)) => {
       if (!silent) setLoading(true);
       try {
-        const data = await call<unknown, MetricDefinition[]>(
-          "admin:listMetricDefinitions",
-          {},
-        );
-        const list = Array.isArray(data) ? data : [];
+        const list = await listAdminMetricDefinitions(signal);
         setMetrics(list);
         setDrafts(
           Object.fromEntries(
@@ -354,6 +331,7 @@ function MetricRetentionTable({
         );
         setLoadError(null);
       } catch (e) {
+        if (signal.aborted) return;
         const message = e instanceof Error ? e.message : String(e);
         setLoadError(message);
         if (!silent) {
@@ -363,11 +341,13 @@ function MetricRetentionTable({
         if (!silent) setLoading(false);
       }
     },
-    [call, defaultRetentionDays, t],
+    [defaultRetentionDays, t],
   );
 
   React.useEffect(() => {
-    void fetchMetrics();
+    const controller = new AbortController();
+    void fetchMetrics(false, controller.signal);
+    return () => controller.abort(new DOMException("Table unmounted", "AbortError"));
   }, [fetchMetrics]);
 
   const saveRetentionChanges = React.useCallback(
@@ -377,10 +357,11 @@ function MetricRetentionTable({
       try {
         const results = await Promise.allSettled(
           changes.map((change) =>
-            call<MetricRetentionChange, MetricDefinition>(
-              "admin:updateMetricDefinition",
-              change,
-            ),
+            updateAdminMetricDefinition({
+              name: change.name,
+              retentionDays: change.retention_days,
+              signal: AbortSignal.timeout(15_000),
+            }),
           ),
         );
         const successful = new Map<string, MetricDefinition>();
@@ -432,7 +413,7 @@ function MetricRetentionTable({
         setSaving(false);
       }
     },
-    [call, t],
+    [t],
   );
 
   const handleSaveAll = async () => {
@@ -706,7 +687,6 @@ function StatusBadge({ status }: { status: MigrationStatus }) {
 
 function MigrationCard() {
   const { t } = useTranslation();
-  const { call } = useRPC2Call();
 
   const [statusData, setStatusData] =
     React.useState<MigrationStatusResponse | null>(null);
@@ -716,15 +696,12 @@ function MigrationCard() {
   const [sourceDsn, setSourceDsn] = React.useState("");
 
   const fetchStatus = React.useCallback(
-    async (silent = false) => {
+    async (silent = false, signal = AbortSignal.timeout(15_000)) => {
       if (!silent) setLoadingStatus(true);
       try {
-        const data = await call<unknown, MigrationStatusResponse>(
-          "admin:getMetricMigrationStatus",
-          {},
-        );
-        setStatusData(data);
+        setStatusData(await getAdminMetricMigrationStatus(signal));
       } catch (e) {
+        if (signal.aborted) return;
         if (!silent) {
           toast.error(
             t("settings.metrics.fetch_status_failed") +
@@ -736,11 +713,13 @@ function MigrationCard() {
         if (!silent) setLoadingStatus(false);
       }
     },
-    [call, t],
+    [t],
   );
 
   React.useEffect(() => {
-    void fetchStatus(true);
+    const controller = new AbortController();
+    void fetchStatus(true, controller.signal);
+    return () => controller.abort(new DOMException("Card unmounted", "AbortError"));
   }, [fetchStatus]);
 
   // 迁移进行中时轮询刷新状态。
@@ -773,7 +752,7 @@ function MigrationCard() {
       const params: { source_dsn?: string } = {};
       const dsn = sourceDsn.trim();
       if (dsn) params.source_dsn = dsn;
-      await call("admin:startMetricMigration", params);
+      await startAdminMetricMigration(params.source_dsn ?? "", AbortSignal.timeout(15_000));
       toast.success(t("settings.metrics.migration_started"));
       await fetchStatus(true);
     } catch (e) {
@@ -790,7 +769,7 @@ function MigrationCard() {
   const handleCancel = async () => {
     setCanceling(true);
     try {
-      await call("admin:cancelMetricMigration", {});
+      await cancelAdminMetricMigration(AbortSignal.timeout(15_000));
       toast.success(t("settings.metrics.migration_canceled"));
       await fetchStatus(true);
     } catch (e) {

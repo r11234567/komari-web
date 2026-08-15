@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 
 import { Code, ConnectError } from "@connectrpc/connect";
 import { isCompatibilityFailure } from "../src/api/connect/compatibility.ts";
@@ -70,4 +71,43 @@ test("request budgets reject invalid deadlines before transport work", async () 
     RangeError,
   );
   assert.equal(called, false);
+});
+
+test("remote pages use typed Connect adapters instead of legacy transports", async () => {
+  const [executionPage, terminalPage, adapter] = await Promise.all([
+    readFile(new URL("../src/pages/admin/exec.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/pages/terminal/index.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/api/connect/remote.ts", import.meta.url), "utf8"),
+  ]);
+  assert.doesNotMatch(executionPage, /\/api\/admin\/task\/(?:exec|.*result)/);
+  assert.doesNotMatch(terminalPage, /new WebSocket|\/terminal\?/);
+  assert.doesNotMatch(terminalPage, /\/api\/admin\/client\/list/);
+  assert.match(adapter, /execution\.watchExecution/);
+  assert.match(adapter, /webssh\.watchSession/);
+  assert.match(adapter, /webssh\.acknowledgeSessionEvents/);
+  assert.match(adapter, /AbortSignal\.any/);
+});
+
+test("new deployment profiles use a dedicated service account identity", async () => {
+  const deploymentDialog = await readFile(
+    new URL("../src/components/admin/AgentDeploymentDialog.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(deploymentDialog, /AgentRuntimeIdentity\.SERVICE_ACCOUNT/);
+  assert.match(deploymentDialog, /专用非特权服务账号/);
+});
+
+test("default application graph does not import the RPC2 compatibility client", async () => {
+  const files = await Promise.all([
+    "../src/main.tsx",
+    "../src/components/admin/AdminPanelBar.tsx",
+    "../src/components/admin/DownsamplingCard.tsx",
+    "../src/pages/admin/plugins.tsx",
+    "../src/pages/admin/plugin_config.tsx",
+    "../src/pages/admin/market/plugins.tsx",
+    "../src/pages/admin/settings/metrics.tsx",
+  ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  for (const source of files) {
+    assert.doesNotMatch(source, /RPC2Context|useRPC2Call|\/api\/rpc2|new WebSocket/);
+  }
 });

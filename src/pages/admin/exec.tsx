@@ -11,16 +11,18 @@ import {
     Badge,
     TextField
 } from "@radix-ui/themes";
-import { Play, AlertCircle, CheckCircle2, Copy, Clock } from "lucide-react";
+import { Play, AlertCircle, CheckCircle2, Copy, Clock, Square } from "lucide-react";
 import { toast } from "sonner";
 import NodeSelector from "@/components/NodeSelector";
 import { SettingCardCollapse } from "@/components/admin/SettingCard";
 import { RescueConsole } from "@/components/admin/RescueConsole";
+import { cancelRemoteExecution, createRemoteExecutions, listRemoteAgentCapabilities, watchRemoteExecution } from "@/api/connect/remote";
+import { OperationState } from "@komari/proto/komari/common/v1/common_pb";
 
 interface TaskResult {
     task_id: string;
     client: string;
-    client_info: {
+    client_info?: {
         uuid: string;
         name: string;
         [key: string]: any;
@@ -29,27 +31,7 @@ interface TaskResult {
     exit_code: number | null;
     finished_at: string | null;
     created_at: string;
-}
-
-interface ExecResponse {
-    success?: boolean;
-    task_id?: string;
-    clients?: string[];
-    message?: string;
-    // 新的响应格式
-    status?: string;
-    data?: {
-        task_id: string;
-    };
-}
-
-interface TaskResultResponse {
-    success?: boolean;
-    results?: TaskResult[];
-    message?: string;
-    // 新的响应格式
-    status?: string;
-    data?: TaskResult[];
+    state?: OperationState;
 }
 
 const COMMAND_EDITOR_ID = "remote-exec-command-editor";
@@ -58,8 +40,6 @@ const COMMAND_EDITOR_LINE_HEIGHT_VAR = "--command-editor-line-height";
 const COMMAND_EDITOR_VERTICAL_PADDING_VAR = "--command-editor-vertical-padding";
 const COMMAND_EDITOR_COLLAPSED_HEIGHT = `calc(${COMMAND_EDITOR_COLLAPSED_LINES} * var(${COMMAND_EDITOR_LINE_HEIGHT_VAR}) + var(${COMMAND_EDITOR_VERTICAL_PADDING_VAR}))`;
 const COMMAND_EDITOR_LINE_NUMBER_LIMIT = 500;
-// 客户端标记“执行超时”的内部结果（避免在 UI 中展示硬编码中文）
-const TIMEOUT_RESULT_MARKER = "__komari_exec_timeout__";
 
 const parsePixelValue = (value: string) => {
     const parsedValue = Number.parseFloat(value);
@@ -99,15 +79,14 @@ const ExecContent = () => {
     const [executing, setExecuting] = useState(false);
     const [results, setResults] = useState<TaskResult[]>([]);
     const [taskId, setTaskId] = useState<string | null>(null);
-    const [polling, setPolling] = useState(false);
     const [commandFocused, setCommandFocused] = useState(false);
     const [commandEditorHeight, setCommandEditorHeight] = useState(COMMAND_EDITOR_COLLAPSED_HEIGHT);
     const [twoFaEnabled, setTwoFaEnabled] = useState(false);
     const [twoFaCode, setTwoFaCode] = useState("");
+    const [executionCapableNodes, setExecutionCapableNodes] = useState<Set<string>>(new Set());
+    const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
 
-    // 使用 useRef 来保存轮询相关的引用
-    const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const executionControllersRef = useRef(new Map<string, AbortController>());
     const commandTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const commandEditorRef = useRef<HTMLDivElement | null>(null);
     const commandLineGutterRef = useRef<HTMLDivElement | null>(null);
@@ -147,25 +126,35 @@ const ExecContent = () => {
         maxHeight: commandFocused ? "60vh" : COMMAND_EDITOR_COLLAPSED_HEIGHT,
     }), [commandEditorHeight, commandFocused]);
 
-    // 清理轮询的函数
-    const clearPolling = () => {
-        if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-        }
-        if (pollingTimeoutRef.current) {
-            clearTimeout(pollingTimeoutRef.current);
-            pollingTimeoutRef.current = null;
-        }
-        setPolling(false);
-    };
-
-    // 组件卸载时清理轮询
     useEffect(() => {
         return () => {
-            clearPolling();
+            for (const controller of executionControllersRef.current.values()) {
+                controller.abort();
+            }
+            executionControllersRef.current.clear();
         };
     }, []);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        void listRemoteAgentCapabilities(controller.signal)
+            .then((agents) => {
+                const supported = new Set(
+                    agents
+                        .filter((agent) => agent.capabilities?.execution?.available === true)
+                        .map((agent) => agent.agentId),
+                );
+                setExecutionCapableNodes(supported);
+                setSelectedNodes((current) => current.filter((agentId) => supported.has(agentId)));
+                setCapabilitiesResolved(true);
+            })
+            .catch((error) => {
+                if (!controller.signal.aborted) {
+                    toast.error(error instanceof Error ? error.message : t("common.unknownError"));
+                }
+            });
+        return () => controller.abort();
+    }, [t]);
 
     useEffect(() => {
         fetch("/api/me")
@@ -210,71 +199,11 @@ const ExecContent = () => {
         return <div className="text-red-500">{error}</div>;
     }
 
-    // 轮询任务结果
-    const pollTaskResult = async (taskId: string) => {
-        try {
-            const response = await fetch(`/api/admin/task/${taskId}/result`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data: TaskResultResponse = await response.json();
-            let taskResults: TaskResult[] | undefined;
-
-            // 支持旧格式和新格式
-            if (data.success && data.results) {
-                taskResults = data.results;
-            } else if (data.status === "success" && data.data) {
-                taskResults = data.data;
-            }
-
-            if (taskResults) {
-                setResults(taskResults);
-
-                // 检查是否所有任务都已完成
-                const allCompleted = taskResults.every(result => result.finished_at !== null);
-                if (allCompleted) {
-                    clearPolling();
-                    toast.success(t("exec.allCompleted", "所有任务执行完成"));
-                }
-            }
-        } catch (err) {
-            console.error("轮询任务结果失败:", err);
-            clearPolling();
-        }
-    };
-
-    // 开始轮询
-    const startPolling = (taskId: string) => {
-        // 先清理之前的轮询
-        clearPolling();
-
-        setPolling(true);
-
-        // 首次立即执行
-        pollTaskResult(taskId);
-
-        // 设置定时轮询
-        pollingIntervalRef.current = setInterval(() => {
-            pollTaskResult(taskId);
-        }, 2000);
-
-        // 60秒后停止轮询并设置为超时状态
-        pollingTimeoutRef.current = setTimeout(() => {
-            // 将未完成的任务状态设置为超时
-            setResults(prevResults =>
-                prevResults.map(result =>
-                    result.finished_at === null
-                        ? { ...result, finished_at: new Date().toISOString(), exit_code: -1, result: TIMEOUT_RESULT_MARKER }
-                        : result
-                )
-            );
-            clearPolling();
-            toast.warning(t("exec.pollingTimeout", "任务执行超时"));
-        }, 60000);
-    };
-
     const executeCommand = async () => {
+		if (!twoFaEnabled) {
+			toast.error(t("exec.errors.twoFactorRequired", "请先配置双重验证"));
+			return;
+		}
         if (!command.trim()) {
             toast.error(t("exec.errors.emptyCommand"));
             return;
@@ -290,47 +219,67 @@ const ExecContent = () => {
             return;
         }
 
-        // 清理之前的轮询
-        clearPolling();
+        for (const controller of executionControllersRef.current.values()) {
+            controller.abort();
+        }
+        executionControllersRef.current.clear();
 
         setExecuting(true);
         setResults([]);
         setTaskId(null);
 
         try {
-            const response = await fetch("/api/admin/task/exec", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    // Remote exec treats whitespace as script content, so preserve the user's exact input.
-                    command,
-                    clients: selectedNodes,
-                    "2fa_code": twoFaCode,
-                }),
+            const createController = new AbortController();
+            const executions = await createRemoteExecutions({
+                agentIds: selectedNodes,
+                command,
+                twoFactorCode,
+                idempotencyKey: crypto.randomUUID(),
+                signal: createController.signal,
             });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            if (executions.length === 0) {
+                throw new Error(t("common.unknownError"));
             }
-
-            const data: ExecResponse = await response.json();
-
-            if (data.success && data.task_id) {
-                setTaskId(data.task_id);
-                setTwoFaCode("");
-                toast.success(t("exec.taskStarted"));
-                startPolling(data.task_id);
-            } else if (data.status === "success" && data.data?.task_id) {
-                setTaskId(data.data.task_id);
-                setTwoFaCode("");
-                toast.success(t("exec.taskStarted"));
-                startPolling(data.data.task_id);
-            } else {
-                throw new Error(data.message);
+            setTaskId(executions[0].executionId);
+            setTwoFaCode("");
+            setResults(executions.map((execution) => ({
+                task_id: execution.executionId,
+                client: execution.agentId,
+                client_info: { uuid: execution.agentId, name: nodeDetail.find((node) => node.uuid === execution.agentId)?.name ?? execution.agentId },
+                result: "",
+                exit_code: execution.exitCode ?? null,
+                finished_at: execution.finishedAt ? execution.finishedAt.toString() : null,
+                created_at: execution.createdAt?.toString() ?? new Date().toISOString(),
+                state: execution.state,
+            })));
+            for (const execution of executions) {
+                const controller = new AbortController();
+                executionControllersRef.current.set(execution.executionId, controller);
+                void (async () => {
+                    let output = "";
+                    try {
+                        for await (const update of watchRemoteExecution({ executionId: execution.executionId, signal: controller.signal })) {
+                            const event = update.event;
+                            if (!event) continue;
+                            if (event.output.byteLength > 0) output += new TextDecoder().decode(event.output, { stream: true });
+                            setResults((current) => current.map((result) => result.task_id === execution.executionId ? {
+                                ...result,
+                                result: output,
+                                state: event.state,
+                                exit_code: event.exitCode ?? result.exit_code,
+                                finished_at: [OperationState.CANCELLED, OperationState.DEADLINE_EXCEEDED, OperationState.FAILED, OperationState.SUCCEEDED].includes(event.state) ? new Date().toISOString() : result.finished_at,
+                            } : result));
+                        }
+                    } catch (error) {
+                        if (!controller.signal.aborted) {
+                            toast.error(error instanceof Error ? error.message : t("common.unknownError"));
+                        }
+                    } finally {
+                        executionControllersRef.current.delete(execution.executionId);
+                    }
+                })();
             }
+            toast.success(t("exec.taskStarted"));
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : t("common.unknownError");
             toast.error(errorMessage);
@@ -362,21 +311,44 @@ const ExecContent = () => {
         }).join(", ");
     };
 
-    // 超时标记结果展示为本地化文案
-    const displayResultText = (result: TaskResult) =>
-        result.result === TIMEOUT_RESULT_MARKER ? t("exec.status.timeout") : result.result;
+    const displayResultText = (result: TaskResult) => result.result;
 
     const getTaskStatus = (result: TaskResult) => {
-        if (result.finished_at === null) {
-            return { status: "running", color: "blue" as const, text: t("exec.status.running") };
-        }
-        if (result.result === TIMEOUT_RESULT_MARKER) {
+        if (result.state === OperationState.DEADLINE_EXCEEDED) {
             return { status: "timeout", color: "orange" as const, text: t("exec.status.timeout", "超时") };
         }
-        if (result.exit_code === 0) {
+        if (result.state === OperationState.CANCEL_REQUESTED) {
+            return { status: "running", color: "orange" as const, text: t("exec.status.cancelRequested", "正在取消") };
+        }
+        if (result.state === OperationState.QUEUED || result.state === OperationState.RUNNING || result.finished_at === null) {
+            return { status: "running", color: "blue" as const, text: t("exec.status.running") };
+        }
+        if (result.state === OperationState.SUCCEEDED || result.exit_code === 0) {
             return { status: "success", color: "green" as const, text: t("common.success") };
         }
         return { status: "failed", color: "red" as const, text: t("common.error") };
+    };
+
+    const cancelExecution = async (result: TaskResult) => {
+        if (twoFaEnabled && !twoFaCode.trim()) {
+            toast.error(t("account.otp_empty_error"));
+            return;
+        }
+        const controller = new AbortController();
+        try {
+            const response = await cancelRemoteExecution({
+                executionId: result.task_id,
+                reason: "cancelled by administrator",
+                twoFactorCode: twoFaCode,
+                signal: controller.signal,
+            });
+            setTwoFaCode("");
+            if (response.execution) {
+                setResults((current) => current.map((item) => item.task_id === result.task_id ? { ...item, state: response.execution?.state } : item));
+            }
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t("common.unknownError"));
+        }
     };
 
     return (
@@ -449,9 +421,10 @@ const ExecContent = () => {
 
                     <div>
                         <SettingCardCollapse title={t("exec.selectNodes")} defaultOpen>
-                            <NodeSelector
+                <NodeSelector
                                 value={selectedNodes}
-                                onChange={setSelectedNodes}
+                    onChange={setSelectedNodes}
+                    includeNode={capabilitiesResolved ? (node) => executionCapableNodes.has(node.uuid) : undefined}
                                 className="min-h-[200px]"
                             />
                         </SettingCardCollapse>
@@ -474,7 +447,7 @@ const ExecContent = () => {
                         ) : null}
                         <Button
                             onClick={executeCommand}
-                            disabled={executing || !command.trim() || selectedNodes.length === 0 || (twoFaEnabled && !twoFaCode.trim())}
+                            disabled={executing || !twoFaEnabled || !command.trim() || selectedNodes.length === 0 || !twoFaCode.trim()}
                         >
                             {executing ? (
                                 <>
@@ -519,7 +492,7 @@ const ExecContent = () => {
                                             </label>
                                             <Flex justify="between" align="center">
                                                 <Flex align="center" gap="2">
-                                                    <Text weight="medium">{result.client_info.name}</Text>
+                                                    <Text weight="medium">{result.client_info?.name ?? result.client}</Text>
                                                     <Badge
                                                         color={status.color}
                                                         variant="soft"
@@ -553,6 +526,19 @@ const ExecContent = () => {
                                                     )}
                                                 </Flex>
 
+                                                <Flex gap="2">
+                                                {result.finished_at === null && (
+                                                    <Button
+                                                        variant="soft"
+                                                        color="red"
+                                                        size="1"
+                                                        onClick={() => cancelExecution(result)}
+                                                        title={t("common.cancel")}
+                                                        aria-label={t("common.cancel")}
+                                                    >
+                                                        <Square size={14} />
+                                                    </Button>
+                                                )}
                                                 {result.result && (
                                                     <Button
                                                         variant="ghost"
@@ -564,6 +550,7 @@ const ExecContent = () => {
                                                         <Copy size={14} />
                                                     </Button>
                                                 )}
+                                                </Flex>
                                             </Flex>
 
                                             {/* 时间信息 */}
@@ -589,25 +576,6 @@ const ExecContent = () => {
                                 );
                             })}
                         </div>
-
-                        {/* 轮询状态提示 */}
-                        {polling && (
-                            <Flex align="center" justify="between" className="text-sm text-gray-500">
-                                <Flex align="center" gap="2">
-                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent" />
-                                    <Text size="2" color="gray">
-                                        {t("exec.status.polling")}
-                                    </Text>
-                                </Flex>
-                                <Button
-                                    variant="soft"
-                                    size="1"
-                                    onClick={clearPolling}
-                                >
-                                    {t("exec.stopPolling")}
-                                </Button>
-                            </Flex>
-                        )}
                     </Flex>
                 </Card>
             )}

@@ -216,6 +216,7 @@ export function AgentDeploymentDialog({
   const install = profile?.install;
   const runtime = profile?.runtime;
   const nonPrivilegedRuntime =
+    install?.runtimeIdentity === AgentRuntimeIdentity.SERVICE_ACCOUNT ||
     install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER;
   const remoteControlEnabled = !nonPrivilegedRuntime && (install?.remoteControlEnabled ?? true);
 
@@ -248,13 +249,13 @@ export function AgentDeploymentDialog({
               </SegmentedControl.Root>
               <Text size="2" color="gray">普通 Agent 的运行身份</Text>
               <SegmentedControl.Root
-                value={install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER ? "service-account" : "administrator"}
+                value={nonPrivilegedRuntime ? "service-account" : "administrator"}
                 onValueChange={(value) => {
                   const serviceAccount = value === "service-account";
                   updateInstall(
                     "runtimeIdentity",
                     serviceAccount
-                      ? AgentRuntimeIdentity.CURRENT_USER
+                      ? AgentRuntimeIdentity.SERVICE_ACCOUNT
                       : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR,
                   );
                   if (serviceAccount) updateInstall("remoteControlEnabled", false);

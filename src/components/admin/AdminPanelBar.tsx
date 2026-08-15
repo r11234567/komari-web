@@ -27,7 +27,7 @@ import { useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import Tips from "../ui/tips";
 import { CircleFadingArrowUp } from "lucide-react";
-import { useRPC2Call } from "@/contexts/RPC2Context";
+import { listAdminPlugins } from "@/api/connect/admin";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import type { PluginInfo } from "@/types/plugin";
 import {
@@ -53,7 +53,6 @@ interface AdminPanelBarProps {
 }
 
 const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
-  const { call } = useRPC2Call();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openSubMenus, setOpenSubMenus] = useState<{ [key: string]: boolean }>({
     // 默认所有子菜单关闭
@@ -70,10 +69,10 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
   const { refreshVersion } = useAdminNavigation();
   //const navigate = useNavigate();
   // 获取版本信息
-  const [versionInfo, setVersionInfo] = useState<{
-    hash: string;
-    version: string;
-  } | null>(null);
+  const versionInfo = publicInfo?.version ? {
+    hash: String(publicInfo.hash || "").slice(0, 7),
+    version: String(publicInfo.version),
+  } : null;
   const currentLanguage =
     i18n.resolvedLanguage ||
     i18n.language ||
@@ -167,10 +166,11 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
   // iframe 页面进入 plugin-page 路由；redirect 页面复用主题的站内跳转校验。
   useEffect(() => {
     let ignore = false;
+    const controller = new AbortController();
     async function loadPluginMenu() {
       try {
-        const result = await call<any, PluginInfo[]>("admin:listPlugins");
-        if (ignore || !Array.isArray(result)) return;
+        const result = await listAdminPlugins(controller.signal);
+        if (ignore) return;
         const pluginIconUrl = (plugin: PluginInfo, icon?: string) =>
           resolvePluginIcon(plugin.short, icon) || "Blocks";
         const items: ExtendedMenuItem[] = [];
@@ -205,32 +205,18 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
         }
         if (!ignore) setPluginMenuItems(items);
       } catch (e) {
-        console.warn("加载插件菜单失败:", e);
-        if (!ignore) setPluginMenuItems([]);
+        if (!ignore) {
+          console.warn("加载插件菜单失败:", e);
+          setPluginMenuItems([]);
+        }
       }
     }
     loadPluginMenu();
     return () => {
       ignore = true;
+      controller.abort(new DOMException("Navigation changed", "AbortError"));
     };
-  }, [call, currentLanguage, refreshVersion]);
-
-  useEffect(() => {
-    const fetchVersionInfo = async () => {
-      try {
-        //const response = await fetch("/api/version");
-        const data = await call("common:getVersion");
-        setVersionInfo({
-          hash: data.hash?.slice(0, 7),
-          version: data.version,
-        });
-      } catch (error) {
-        console.error("Failed to fetch version info:", error);
-      }
-    };
-
-    fetchVersionInfo();
-  }, []);
+  }, [currentLanguage, refreshVersion]);
 
   // 规范化版本为 [major, minor, patch] 数组，忽略前缀 v 和后缀
   function parseSemver(input?: string | null): number[] | null {

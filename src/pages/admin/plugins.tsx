@@ -20,14 +20,15 @@ import Loading from "@/components/loading";
 import InlineSvgIcon from "@/components/InlineSvgIcon";
 import UploadDialog from "@/components/UploadDialog";
 import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
-import { useRPC2Call } from "@/contexts/RPC2Context";
+import {
+  deleteAdminPlugin,
+  getAdminPluginLogs,
+  listAdminPlugins,
+  setAdminPluginEnabled,
+} from "@/api/connect/admin";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import { iconMap, resolvePluginIcon } from "@/utils/iconHelper";
 import type { PluginInfo } from "@/types/plugin";
-
-interface SetEnabledResult {
-  requires_approval?: boolean;
-}
 
 // 插件是否声明了可编辑配置项（忽略 title 分组项）。
 const hasConfiguration = (plugin: PluginInfo) =>
@@ -53,7 +54,6 @@ const renderPluginIcon = (
 
 // 插件管理：上传 zip、switch 启停、权限确认弹窗、运行日志、行内错误文本。
 export default function PluginsPage() {
-  const { call } = useRPC2Call();
   const { refreshNavigation } = useAdminNavigation();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -77,17 +77,21 @@ export default function PluginsPage() {
   const [pluginToDelete, setPluginToDelete] = useState<PluginInfo | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const loadList = useCallback(async () => {
+  const loadList = useCallback(async (signal = AbortSignal.timeout(15_000)) => {
     try {
-      const result = await call<any, PluginInfo[]>("admin:listPlugins");
-      setPlugins(Array.isArray(result) ? result : []);
+      setPlugins(await listAdminPlugins(signal));
     } catch (error) {
+      if (signal.aborted) return;
       toast.error(error instanceof Error ? error.message : String(error));
     }
-  }, [call]);
+  }, []);
 
   useEffect(() => {
-    loadList().finally(() => setLoading(false));
+    const controller = new AbortController();
+    loadList(controller.signal).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort(new DOMException("Page unmounted", "AbortError"));
   }, [loadList]);
 
   const uploadPlugin = (file: File) => {
@@ -164,14 +168,12 @@ export default function PluginsPage() {
   const toggle = async (plugin: PluginInfo, enabled: boolean) => {
     setToggling(plugin.short);
     try {
-      const result = await call<
-        { short: string; enabled: boolean },
-        SetEnabledResult
-      >("admin:setPluginEnabled", {
+      const result = await setAdminPluginEnabled({
         short: plugin.short,
         enabled,
+        signal: AbortSignal.timeout(15_000),
       });
-      if (enabled && result?.requires_approval) {
+      if (enabled && result.requiresPermissionApproval) {
         setPendingApproval(plugin);
         return;
       }
@@ -196,10 +198,11 @@ export default function PluginsPage() {
     setPendingApproval(null);
     setToggling(plugin.short);
     try {
-      await call("admin:setPluginEnabled", {
+      await setAdminPluginEnabled({
         short: plugin.short,
         enabled: true,
         approved: true,
+        signal: AbortSignal.timeout(15_000),
       });
       refreshNavigation();
       toast.success(t("plugin.enable_success", "Plugin enabled"));
@@ -216,10 +219,7 @@ export default function PluginsPage() {
     setLogContent("");
     setLogsLoading(true);
     try {
-      const result = await call<{ short: string }, { logs?: string }>("admin:getPluginLogs", {
-        short: plugin.short,
-      });
-      setLogContent(result?.logs || "");
+      setLogContent(await getAdminPluginLogs(plugin.short, AbortSignal.timeout(15_000)));
     } catch (error) {
       setLogContent(
         `${t("plugin.logs_load_failed", "Failed to load logs")}: ${
@@ -234,7 +234,7 @@ export default function PluginsPage() {
   const deletePlugin = async (plugin: PluginInfo) => {
     setDeleting(true);
     try {
-      await call("admin:deletePlugin", { short: plugin.short });
+      await deleteAdminPlugin(plugin.short, AbortSignal.timeout(15_000));
       toast.success(t("plugin.deleted", "Plugin deleted"));
       setPluginToDelete(null);
       await loadList();

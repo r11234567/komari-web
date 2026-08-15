@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { CSSProperties } from "react";
+import { create } from "@bufbuild/protobuf";
 import { Terminal } from "@xterm/xterm";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -13,6 +14,8 @@ import {
   Dialog,
   Flex,
   IconButton,
+  Tabs,
+  Text,
   TextField,
   Theme,
 } from "@radix-ui/themes";
@@ -20,6 +23,7 @@ import {
 
 import { useTranslation } from "react-i18next";
 import { Cross1Icon } from "@radix-ui/react-icons";
+import { Copy, Download, FilePlus2, FolderPlus, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { TablerAlertTriangleFilled } from "../../components/Icones/Tabler";
 import CommandClipboardPanel from "@/pages/terminal/CommandClipboard";
 import { Toaster } from "@/components/ui/sonner";
@@ -32,6 +36,40 @@ import {
 } from "@/hooks/useXtermjsSettings";
 import { motion } from "framer-motion";
 import throttle from "lodash/throttle";
+import {
+  closeRemoteSession,
+  createRemoteSession,
+  listRemoteAgentCapabilities,
+  sendRemoteFileCommand,
+  sendRemoteSessionInput,
+  sendRemoteSessionResize,
+  watchRemoteSession,
+} from "@/api/connect/remote";
+import {
+  FileCommandSchema,
+  FileOperation,
+  type FileEntry,
+  type FileEvent,
+} from "@komari/proto/komari/webssh/v1/webssh_pb";
+
+type PendingFileRequest = {
+  events: FileEvent[];
+  finishOnComplete: boolean;
+  resolve: (events: FileEvent[]) => void;
+  reject: (reason: Error) => void;
+};
+
+type FileCommandInput = {
+  operation: FileOperation;
+  path?: string;
+  destination?: string;
+  recursive?: boolean;
+  overwrite?: boolean;
+  size?: bigint;
+  sha256?: string;
+  uploadId?: string;
+  data?: Uint8Array;
+};
 interface TerminalAreaProps {
   terminalRef: React.RefObject<HTMLDivElement | null>;
   toggleClipboard: () => void;
@@ -80,9 +118,195 @@ const Divider: React.FC<{
   />
 );
 
-const ClipboardPanel: React.FC = () => (
+const remoteJoin = (directory: string, name: string) => {
+  if (!directory) return name;
+  const separator = directory.includes("\\") ? "\\" : "/";
+  return directory.endsWith("/") || directory.endsWith("\\")
+    ? `${directory}${name}`
+    : `${directory}${separator}${name}`;
+};
+
+const remoteBaseName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) || "download";
+
+const FileManagerPanel: React.FC<{
+  connected: boolean;
+  request: (input: FileCommandInput) => Promise<FileEvent[]>;
+}> = ({ connected, request }) => {
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const [path, setPath] = useState("");
+  const [entries, setEntries] = useState<FileEntry[]>([]);
+  const [parent, setParent] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const list = useCallback(async (nextPath: string) => {
+    if (!connected) return;
+    setBusy(true);
+    setError("");
+    try {
+      const [event] = await request({ operation: FileOperation.LIST, path: nextPath });
+      setPath(nextPath || event.parent);
+      setParent(event.parent);
+      setEntries(event.entries);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }, [connected, request]);
+
+  useEffect(() => {
+    if (connected) void list("");
+  }, [connected, list]);
+
+  const mutate = async (input: FileCommandInput) => {
+    setBusy(true);
+    setError("");
+    try {
+      await request(input);
+      await list(path);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createEntry = (directory: boolean) => {
+    const name = window.prompt(directory ? "Directory name" : "File name")?.trim();
+    if (!name) return;
+    void mutate({
+      operation: directory ? FileOperation.MKDIR : FileOperation.CREATE,
+      path: remoteJoin(path, name),
+    });
+  };
+
+  const rename = (entry: FileEntry) => {
+    const name = window.prompt("New name", entry.name)?.trim();
+    if (!name || name === entry.name) return;
+    void mutate({ operation: FileOperation.RENAME, path: entry.path, destination: remoteJoin(path, name) });
+  };
+
+  const copy = (entry: FileEntry) => {
+    const destination = window.prompt("Copy destination", `${entry.path}.copy`)?.trim();
+    if (!destination) return;
+    void mutate({ operation: FileOperation.COPY, path: entry.path, destination });
+  };
+
+  const remove = (entry: FileEntry) => {
+    if (!window.confirm(`Delete ${entry.path}?`)) return;
+    void mutate({ operation: FileOperation.DELETE, path: entry.path, recursive: entry.directory });
+  };
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setError("");
+    try {
+      const destination = remoteJoin(path, file.name);
+      const [started] = await request({
+        operation: FileOperation.UPLOAD_START,
+        path: destination,
+        size: BigInt(file.size),
+        overwrite: false,
+      });
+      if (!started.uploadId) throw new Error("Agent did not create an upload session");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+      const sha256 = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
+      const chunkSize = 256 * 1024;
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        await request({
+          operation: FileOperation.UPLOAD_CHUNK,
+          uploadId: started.uploadId,
+          data: bytes.slice(offset, Math.min(offset + chunkSize, bytes.length)),
+        });
+      }
+      await request({ operation: FileOperation.UPLOAD_FINISH, uploadId: started.uploadId, sha256 });
+      await list(path);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+      if (uploadRef.current) uploadRef.current.value = "";
+    }
+  };
+
+  const download = async (entry: FileEntry) => {
+    setBusy(true);
+    setError("");
+    try {
+      const events = await request({ operation: FileOperation.DOWNLOAD, path: entry.path });
+      const parts = events
+        .filter((event) => event.data.length > 0)
+        .map((event) => event.data.buffer.slice(event.data.byteOffset, event.data.byteOffset + event.data.byteLength) as ArrayBuffer);
+      const blob = new Blob(parts);
+      const completed = events.at(-1);
+      if (completed?.sha256) {
+        const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()));
+        const actual = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
+        if (actual !== completed.sha256.toLowerCase()) {
+          throw new Error("Downloaded file checksum mismatch");
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = remoteBaseName(entry.path);
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Flex direction="column" gap="2" className="h-full min-h-0 p-2">
+      <Flex gap="1" align="center">
+        <IconButton size="1" variant="soft" disabled={!connected || busy} onClick={() => void list(path)} title="Refresh"><RefreshCw size={14} /></IconButton>
+        <IconButton size="1" variant="soft" disabled={!connected || busy} onClick={() => createEntry(true)} title="New directory"><FolderPlus size={14} /></IconButton>
+        <IconButton size="1" variant="soft" disabled={!connected || busy} onClick={() => createEntry(false)} title="New file"><FilePlus2 size={14} /></IconButton>
+        <IconButton size="1" variant="soft" disabled={!connected || busy} onClick={() => uploadRef.current?.click()} title="Upload"><Upload size={14} /></IconButton>
+        <input ref={uploadRef} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />
+      </Flex>
+      <TextField.Root value={path} disabled={!connected || busy} placeholder="Remote path" onChange={(event) => setPath(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void list(path); }} />
+      {error ? <Text size="1" color="red">{error}</Text> : null}
+      <div className="min-h-0 flex-1 overflow-auto">
+        {parent ? (
+          <button type="button" className="w-full px-2 py-1 text-left hover:bg-accent-3" onClick={() => void list(parent)}>../</button>
+        ) : null}
+        {entries.map((entry) => (
+          <Flex key={entry.path} align="center" justify="between" gap="2" className="border-b border-gray-7 px-2 py-1">
+            <button type="button" className="min-w-0 flex-1 truncate text-left" onDoubleClick={() => { if (entry.directory) void list(entry.path); }} title={entry.path}>
+              {entry.directory ? `${entry.name}/` : entry.name}
+            </button>
+            <Flex gap="1">
+              {!entry.directory ? <IconButton size="1" variant="ghost" onClick={() => void download(entry)} disabled={busy} title="Download"><Download size={13} /></IconButton> : null}
+              <IconButton size="1" variant="ghost" onClick={() => rename(entry)} disabled={busy} title="Rename"><Pencil size={13} /></IconButton>
+              <IconButton size="1" variant="ghost" onClick={() => copy(entry)} disabled={busy} title="Copy"><Copy size={13} /></IconButton>
+              <IconButton size="1" variant="ghost" color="red" onClick={() => remove(entry)} disabled={busy} title="Delete"><Trash2 size={13} /></IconButton>
+            </Flex>
+          </Flex>
+        ))}
+      </div>
+    </Flex>
+  );
+};
+
+const SidePanel: React.FC<{
+  connected: boolean;
+  requestFile: (input: FileCommandInput) => Promise<FileEvent[]>;
+}> = ({ connected, requestFile }) => (
   <div className="km-terminal-clipboard h-screen p-2 min-w-64" style={{ flex: 1 }}>
-    <CommandClipboardPanel className="h-full w-full" />
+    <Tabs.Root defaultValue="commands" className="flex h-full flex-col">
+      <Tabs.List>
+        <Tabs.Trigger value="commands">Commands</Tabs.Trigger>
+        <Tabs.Trigger value="files">Files</Tabs.Trigger>
+      </Tabs.List>
+      <Tabs.Content value="commands" className="min-h-0 flex-1"><CommandClipboardPanel className="h-full w-full" /></Tabs.Content>
+      <Tabs.Content value="files" className="min-h-0 flex-1"><FileManagerPanel connected={connected} request={requestFile} /></Tabs.Content>
+    </Tabs.Root>
   </div>
 );
 
@@ -94,8 +318,11 @@ const TerminalPage = () => {
   } = useXtermjsSettings();
   const terminalRef = useRef<HTMLDivElement>(null);
   const terminalInstance = useRef<Terminal | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionControllerRef = useRef<AbortController | null>(null);
+  const sessionSequenceRef = useRef(0n);
+  const sessionCommandQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingFileRequestsRef = useRef(new Map<string, PendingFileRequest>());
   const resolvedSettingsRef = useRef<XtermjsSettings>(defaultXtermjsSettings);
   const initializedUuidRef = useRef<string | null>(null);
   const params = new URLSearchParams(window.location.search);
@@ -117,6 +344,8 @@ const TerminalPage = () => {
   const [appearance, setAppearance] = useState<CSSProperties>({});
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [twoFaResolved, setTwoFaResolved] = useState(false);
+  const [remoteAgentReady, setRemoteAgentReady] = useState(false);
+  const [sessionConnected, setSessionConnected] = useState(false);
   const [otpCode, setOtpCode] = useState<string | null>(null);
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
   const [otpInput, setOtpInput] = useState("");
@@ -157,21 +386,75 @@ const TerminalPage = () => {
     disconnectMessageRef.current = t("terminal.disconnect");
   }, [t]);
 
-  // 使用 useCallback 确保 resizeTerminal 引用稳定
+  const enqueueSessionCommand = useCallback((
+    command: (sessionId: string, sequence: bigint, signal: AbortSignal) => Promise<unknown>,
+    onError?: (error: Error) => void,
+  ) => {
+    const sessionId = sessionIdRef.current;
+    const controller = sessionControllerRef.current;
+    if (!sessionId || !controller || controller.signal.aborted) {
+      onError?.(new Error("Remote session is not connected"));
+      return;
+    }
+    sessionSequenceRef.current += 1n;
+    const sequence = sessionSequenceRef.current;
+    sessionCommandQueueRef.current = sessionCommandQueueRef.current
+      .then(() => command(sessionId, sequence, controller.signal))
+      .catch((error) => {
+        const normalized = error instanceof Error ? error : new Error(String(error));
+        onError?.(normalized);
+        if (!controller.signal.aborted) {
+          terminalInstance.current?.write(`\r\n${normalized.message}\r\n`);
+        }
+      });
+  }, []);
+
+  const requestFile = useCallback((input: FileCommandInput) => {
+    const requestId = crypto.randomUUID();
+    const command = create(FileCommandSchema, {
+      requestId,
+      operation: input.operation,
+      path: input.path ?? "",
+      destination: input.destination ?? "",
+      recursive: input.recursive ?? false,
+      overwrite: input.overwrite ?? false,
+      size: input.size ?? 0n,
+      sha256: input.sha256 ?? "",
+      uploadId: input.uploadId ?? "",
+      data: input.data ?? new Uint8Array(),
+    });
+    return new Promise<FileEvent[]>((resolve, reject) => {
+      pendingFileRequestsRef.current.set(requestId, {
+        events: [],
+        finishOnComplete:
+          input.operation === FileOperation.DOWNLOAD ||
+          input.operation === FileOperation.UPLOAD_FINISH,
+        resolve,
+        reject,
+      });
+      enqueueSessionCommand(
+        (sessionId, sequence, signal) => sendRemoteFileCommand({ sessionId, sequence, command, signal }),
+        (error) => {
+          pendingFileRequestsRef.current.delete(requestId);
+          reject(error);
+        },
+      );
+    });
+  }, [enqueueSessionCommand]);
+
   const resizeTerminal = useCallback(() => {
     fitAddonRef.current?.fit();
     const term = terminalInstance.current;
-    const ws = wsRef.current;
-    if (term && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: "resize",
-          cols: term.cols,
-          rows: term.rows,
-        })
-      );
+    if (term) {
+      enqueueSessionCommand((sessionId, sequence, signal) => sendRemoteSessionResize({
+        sessionId,
+        sequence,
+        columns: term.cols,
+        rows: term.rows,
+        signal,
+      }));
     }
-  }, []);
+  }, [enqueueSessionCommand]);
 
   const startDragging = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -236,19 +519,30 @@ const TerminalPage = () => {
       window.location.href = "/";
       return;
     }
-    fetch("./api/admin/client/list")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.length === 0) {
-          alert(t("terminal.no_active_connection"));
+    const controller = new AbortController();
+    setRemoteAgentReady(false);
+    void listRemoteAgentCapabilities(controller.signal)
+      .then((agents) => {
+        const agent = agents.find((item) => item.agentId === uuid);
+        if (!agent) {
+          throw new Error(t("terminal.no_active_connection"));
         }
-        const client = data.find(
-          (item: { uuid: string }) => item.uuid === uuid
+        if (!agent.capabilities?.webssh?.available) {
+          throw new Error(
+            agent.capabilities?.webssh?.limitation ||
+              t("terminal.no_active_connection"),
+          );
+        }
+        document.title = `${t("terminal.title")} - ${agent.name || t("terminal.title")}`;
+        setRemoteAgentReady(true);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setSettingsResolutionError(
+          error instanceof Error ? error : new Error(String(error)),
         );
-        document.title = `${t("terminal.title")} - ${
-          client?.name || t("terminal.title")
-        }`;
       });
+    return () => controller.abort();
   }, [t, uuid]);
 
   // Trigger OTP dialog when 2FA is enabled
@@ -261,15 +555,13 @@ const TerminalPage = () => {
 
   // Connection effect - waits for OTP if 2FA is enabled
   useEffect(() => {
-    if (!settingsResolved || !twoFaResolved || uuid === null || !terminalRef.current) return;
+    if (!settingsResolved || !twoFaResolved || !remoteAgentReady || uuid === null || !terminalRef.current) return;
+    if (!twoFaEnabled) return;
     if (initializedUuidRef.current === uuid) return;
     if (twoFaEnabled && otpCode === null) return; // Wait for OTP
 
     initializedUuidRef.current = uuid;
     firstBinary.current = false;
-    const otpQuery = twoFaEnabled && otpCode ? `?2fa_code=${encodeURIComponent(otpCode)}` : "";
-
-
     const snapshot = resolvedSettingsRef.current;
     const terminalOptions: Partial<ITerminalOptions> = {
       cursorBlink: snapshot.terminalOptions.cursorBlink,
@@ -329,88 +621,70 @@ const TerminalPage = () => {
       }
     });
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    const baseUrl = `${protocol}//${host}`;
-    const ws = new WebSocket(`${baseUrl}/api/admin/client/${uuid}/terminal${otpQuery}`);
-    ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      if (disposed) {
-        return;
-      }
-      resizeTerminal();
-      startHeartbeat();
-    };
-
-    const startHeartbeat = () => {
-      if (disposed) {
-        return;
-      }
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-        heartbeatIntervalRef.current = null;
-      }
-      heartbeatIntervalRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(
-            JSON.stringify({
-              type: "heartbeat",
-              timestamp: new Date().toISOString(),
-            })
-          );
-        }
-      }, 10000);
-    };
-
-    const stopHeartbeat = () => {
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-        heartbeatIntervalRef.current = null;
-      }
-    };
-
-    ws.onmessage = (event) => {
-      if (disposed) {
-        return;
-      }
-      if (event.data instanceof ArrayBuffer) {
-        const uint8Array = new Uint8Array(event.data);
-        term.write(uint8Array);
-      } else {
-        term.write(event.data);
-      }
-      if (!firstBinary.current && event.data instanceof ArrayBuffer) {
-        firstBinary.current = true;
-        firstBinaryTimeout = setTimeout(() => {
-          if (disposed) return;
-          const term = terminalInstance.current;
-          if (term) {
-            term.resize(term.cols - 1, term.rows);
+    const sessionController = new AbortController();
+    sessionControllerRef.current = sessionController;
+    sessionSequenceRef.current = 0n;
+    sessionCommandQueueRef.current = Promise.resolve();
+    void (async () => {
+      try {
+        const started = await createRemoteSession({
+          agentId: uuid,
+          rows: term.rows,
+          columns: term.cols,
+          twoFactorCode: otpCode ?? "",
+          signal: sessionController.signal,
+        });
+        if (disposed) return;
+        sessionIdRef.current = started.sessionId;
+        setSessionConnected(true);
+        resizeTerminal();
+        for await (const response of watchRemoteSession({ sessionId: started.sessionId, signal: sessionController.signal })) {
+          if (disposed || !response.event) continue;
+          const event = response.event;
+          if (event.event.case === "output") {
+            term.write(event.event.value);
+            if (!firstBinary.current) {
+              firstBinary.current = true;
+              firstBinaryTimeout = setTimeout(() => {
+                if (disposed) return;
+                const active = terminalInstance.current;
+                if (active && active.cols > 1) active.resize(active.cols - 1, active.rows);
+                resizeTerminal();
+              }, 200);
+            }
+          } else if (event.event.case === "file") {
+            const fileEvent = event.event.value;
+            const pending = pendingFileRequestsRef.current.get(fileEvent.requestId);
+            if (pending) {
+              pending.events.push(fileEvent);
+              if (!fileEvent.success) {
+                pendingFileRequestsRef.current.delete(fileEvent.requestId);
+                pending.reject(new Error(fileEvent.error || "Remote file operation failed"));
+              } else if (!pending.finishOnComplete || fileEvent.complete) {
+                pendingFileRequestsRef.current.delete(fileEvent.requestId);
+                pending.resolve(pending.events);
+              }
+            }
+          } else if (event.event.case === "closed") {
+            setSessionConnected(false);
+            term.write(`\n ${disconnectMessageRef.current}`);
+            break;
           }
-          resizeTerminal();
-        }, 200);
+        }
+      } catch (error) {
+        setSessionConnected(false);
+        if (!disposed && !sessionController.signal.aborted) {
+          term.write(`\r\n${error instanceof Error ? error.message : String(error)}\r\n`);
+        }
       }
-    };
-
-    ws.onclose = () => {
-      if (disposed) {
-        return;
-      }
-      stopHeartbeat();
-      term.write(`\n ${disconnectMessageRef.current}`);
-    };
+    })();
 
     const termDataDisposable = term.onData((data) => {
       if (disposed) {
         return;
       }
-      if (ws.readyState === WebSocket.OPEN) {
-        const encoder = new TextEncoder();
-        const uint8Array = encoder.encode(data);
-        ws.send(uint8Array);
-      }
+      const encoded = new TextEncoder().encode(data);
+      enqueueSessionCommand((sessionId, sequence, signal) => sendRemoteSessionInput({ sessionId, sequence, data: encoded, signal }));
     });
 
     const handleResize = () => {
@@ -429,7 +703,7 @@ const TerminalPage = () => {
     document.addEventListener("keydown", handleKeyDown);
 
     const handleContextMenu = (e: MouseEvent) => {
-      if (e.ctrlKey || ws.readyState !== WebSocket.OPEN) {
+      if (e.ctrlKey || !sessionIdRef.current) {
         return;
       }
       const selection = window.getSelection();
@@ -448,12 +722,11 @@ const TerminalPage = () => {
         e.preventDefault();
         term.focus();
         navigator.clipboard.readText().then((text) => {
-          if (disposed || ws.readyState !== WebSocket.OPEN) {
+          if (disposed || !sessionIdRef.current) {
             return;
           }
-          const encoder = new TextEncoder();
-          const uint8Array = encoder.encode(text.replace(/\r?\n/g, "\r"));
-          ws.send(uint8Array);
+          const encoded = new TextEncoder().encode(text.replace(/\r?\n/g, "\r"));
+          enqueueSessionCommand((sessionId, sequence, signal) => sendRemoteSessionInput({ sessionId, sequence, data: encoded, signal }));
         });
       }
     };
@@ -463,11 +736,16 @@ const TerminalPage = () => {
     return () => {
       disposed = true;
       isMounted = false;
-      stopHeartbeat();
-      ws.onopen = null;
-      ws.onmessage = null;
-      ws.onclose = null;
-      ws.onerror = null;
+      const closingSession = sessionIdRef.current;
+      setSessionConnected(false);
+      sessionController.abort();
+      for (const pending of pendingFileRequestsRef.current.values()) {
+        pending.reject(new Error("Remote session closed"));
+      }
+      pendingFileRequestsRef.current.clear();
+      if (closingSession) {
+        void closeRemoteSession({ sessionId: closingSession, reason: "browser page closed", signal: AbortSignal.timeout(10_000) });
+      }
       resizeObserver?.disconnect();
       if (firstBinaryTimeout !== null) {
         clearTimeout(firstBinaryTimeout);
@@ -477,23 +755,18 @@ const TerminalPage = () => {
       if (customCssStyle.parentNode) {
         customCssStyle.parentNode.removeChild(customCssStyle);
       }
-      if (
-        ws.readyState === WebSocket.OPEN ||
-        ws.readyState === WebSocket.CONNECTING
-      ) {
-        ws.close();
-      }
       if (initializedUuidRef.current === uuid) {
         initializedUuidRef.current = null;
       }
       terminalInstance.current = null;
-      wsRef.current = null;
+      sessionIdRef.current = null;
+      sessionControllerRef.current = null;
       fitAddonRef.current = null;
       window.removeEventListener("resize", handleResize);
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [settingsResolved, twoFaEnabled, twoFaResolved, otpCode, uuid, resizeTerminal, t]);
+  }, [settingsResolved, twoFaEnabled, twoFaResolved, remoteAgentReady, otpCode, uuid, resizeTerminal, enqueueSessionCommand, t]);
 
   const submitOtp = useCallback(() => {
     if (!otpInput) return;
@@ -512,12 +785,9 @@ const TerminalPage = () => {
   }, [isClipboardOpen, resizeTerminal]);
 
   const sendCommand = useCallback((cmd: string) => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      const encoder = new TextEncoder();
-      ws.send(encoder.encode(cmd + "\r"));
-    }
-  }, []);
+    const encoded = new TextEncoder().encode(cmd + "\r");
+    enqueueSessionCommand((sessionId, sequence, signal) => sendRemoteSessionInput({ sessionId, sequence, data: encoded, signal }));
+  }, [enqueueSessionCommand]);
 
   return (
     <TerminalContext.Provider
@@ -525,6 +795,21 @@ const TerminalPage = () => {
     >
       <Theme appearance="dark" className="km-page-terminal">
         <Toaster theme="dark" />
+        {twoFaResolved && !twoFaEnabled ? (
+          <div className="absolute left-1/2 top-4 z-40 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2">
+            <Callout.Root color="red" size="2">
+              <Callout.Icon><TablerAlertTriangleFilled /></Callout.Icon>
+              <Callout.Text>
+                <Flex align="center" justify="between" gap="3">
+                  <span>{t("exec.errors.twoFactorRequired", "请先配置双重验证")}</span>
+                  <Button size="1" variant="soft" onClick={() => { window.location.href = "/admin/account"; }}>
+                    {t("common.settings", "设置")}
+                  </Button>
+                </Flex>
+              </Callout.Text>
+            </Callout.Root>
+          </div>
+        ) : null}
         {settingsResolutionError ? (
           <div className="absolute left-4 top-4 z-30 max-w-[32rem]">
             <Callout.Root
@@ -587,7 +872,7 @@ const TerminalPage = () => {
             appearance={appearance}
           />
           {isClipboardOpen && <Divider onMouseDown={startDragging} />}
-          {isClipboardOpen && <ClipboardPanel />}
+          {isClipboardOpen && <SidePanel connected={sessionConnected} requestFile={requestFile} />}
         </Flex>
         <Dialog.Root
           open={otpDialogOpen}

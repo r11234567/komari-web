@@ -1,4 +1,8 @@
-import { useRPC2Call } from "@/contexts/RPC2Context";
+import {
+  getAdminDownsamplingPolicy,
+  setAdminDownsamplingPolicy,
+  type DownsamplingPolicy,
+} from "@/api/connect/admin";
 import {
   Button,
   Callout,
@@ -13,14 +17,6 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { SettingCard } from "./SettingCard";
 
-type DownsamplingPolicy = {
-  enabled: boolean;
-  raw_retention: string;
-  minute_retention_minutes: number;
-  five_minute_retention_minutes: number;
-  hour_retention_hours: number;
-};
-
 const fallbackPolicy: DownsamplingPolicy = {
   enabled: false,
   raw_retention: "15m",
@@ -29,62 +25,30 @@ const fallbackPolicy: DownsamplingPolicy = {
   hour_retention_hours: 600,
 };
 
-function positiveInteger(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
-    ? value
-    : fallback;
-}
-
-function normalizePolicy(value: unknown): DownsamplingPolicy {
-  if (!value || typeof value !== "object") return fallbackPolicy;
-  const policy = value as Partial<DownsamplingPolicy>;
-  return {
-    enabled: policy.enabled === true,
-    raw_retention:
-      typeof policy.raw_retention === "string"
-        ? policy.raw_retention
-        : fallbackPolicy.raw_retention,
-    minute_retention_minutes: positiveInteger(
-      policy.minute_retention_minutes,
-      fallbackPolicy.minute_retention_minutes,
-    ),
-    five_minute_retention_minutes: positiveInteger(
-      policy.five_minute_retention_minutes,
-      fallbackPolicy.five_minute_retention_minutes,
-    ),
-    hour_retention_hours: positiveInteger(
-      policy.hour_retention_hours,
-      fallbackPolicy.hour_retention_hours,
-    ),
-  };
-}
-
 export function DownsamplingCard() {
   const { t } = useTranslation();
-  const { callViaHTTP } = useRPC2Call();
   const [policy, setPolicy] = React.useState(fallbackPolicy);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
 
-  const load = React.useCallback(async () => {
+  const load = React.useCallback(async (signal = AbortSignal.timeout(15_000)) => {
     setLoading(true);
     try {
-      const response = await callViaHTTP<Record<string, never>, unknown>(
-        "admin:getDownsamplingPolicy",
-        {},
-      );
-      setPolicy(normalizePolicy(response));
+      setPolicy(await getAdminDownsamplingPolicy(signal));
     } catch (error) {
+      if (signal.aborted) return;
       toast.error(
         error instanceof Error ? error.message : String(error),
       );
     } finally {
       setLoading(false);
     }
-  }, [callViaHTTP]);
+  }, []);
 
   React.useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort(new DOMException("Card unmounted", "AbortError"));
   }, [load]);
 
   const save = async () => {
@@ -115,21 +79,10 @@ export function DownsamplingCard() {
     }
     setSaving(true);
     try {
-      const response = await callViaHTTP<{
-        enabled: boolean;
-        minute_retention_minutes: number;
-        five_minute_retention_minutes: number;
-        hour_retention_hours: number;
-      }, unknown>(
-        "admin:setDownsamplingPolicy",
-        {
-          enabled: policy.enabled,
-          minute_retention_minutes: policy.minute_retention_minutes,
-          five_minute_retention_minutes: policy.five_minute_retention_minutes,
-          hour_retention_hours: policy.hour_retention_hours,
-        },
-      );
-      setPolicy(normalizePolicy(response));
+      setPolicy(await setAdminDownsamplingPolicy({
+        ...policy,
+        signal: AbortSignal.timeout(30_000),
+      }));
       toast.success(t("settings.settings_saved"));
     } catch (error) {
       toast.error(

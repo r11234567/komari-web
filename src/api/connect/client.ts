@@ -4,6 +4,9 @@ import { BrowserService } from "@komari/proto/komari/browser/v1/browser_pb";
 import { DeploymentService } from "@komari/proto/komari/deployment/v1/deployment_pb";
 import { RescueService } from "@komari/proto/komari/rescue/v1/rescue_pb";
 import { MetricsService } from "@komari/proto/komari/metrics/v1/metrics_pb";
+import { ExecutionService } from "@komari/proto/komari/exec/v1/exec_pb";
+import { WebSSHService } from "@komari/proto/komari/webssh/v1/webssh_pb";
+import { PluginService } from "@komari/proto/komari/plugin/v1/plugin_pb";
 import {
   ConnectCompatibilityError,
   isCompatibilityFailure,
@@ -29,8 +32,11 @@ const browser = createClient(BrowserService, transport);
 const deployment = createClient(DeploymentService, transport);
 const rescue = createClient(RescueService, transport);
 const metrics = createClient(MetricsService, transport);
+const execution = createClient(ExecutionService, transport);
+const webssh = createClient(WebSSHService, transport);
+const plugin = createClient(PluginService, transport);
 
-export const connectClients = { browser, deployment, rescue, metrics };
+export const connectClients = { browser, deployment, rescue, metrics, execution, webssh, plugin };
 
 export const connectUnary = <T>(
   options: ConnectCallOptions,

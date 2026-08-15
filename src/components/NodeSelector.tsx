@@ -9,6 +9,7 @@ interface NodeSelectorProps {
   value: string[]; // uuid 列表
   onChange: (uuids: string[]) => void;
   hiddenUuidOnlyClient?: boolean;
+  includeNode?: (node: ReturnType<typeof useNodeDetails>["nodeDetail"][number]) => boolean;
 }
 
 const NodeSelector: React.FC<NodeSelectorProps> = ({
@@ -17,6 +18,7 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
   value,
   onChange,
   hiddenUuidOnlyClient = false,
+  includeNode,
 }) => {
   const { nodeDetail, isLoading, error } = useNodeDetails();
   const { t } = useTranslation();
@@ -35,7 +37,7 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
       hiddenDescription={hiddenDescription}
       value={nodesFiltered}
       onChange={onChange}
-      items={[...nodeDetail]}
+      items={includeNode ? nodeDetail.filter(includeNode) : [...nodeDetail]}
       sortItems={(a, b) => (a.weight ?? 0) - (b.weight ?? 0)}
       getId={(n) => n.uuid}
       getLabel={(n) => n.name}

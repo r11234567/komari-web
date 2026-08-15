@@ -16,16 +16,15 @@ import { toast } from "sonner";
 import Loading from "@/components/loading";
 import InlineSvgIcon from "@/components/InlineSvgIcon";
 import ConfigFormTabs from "@/components/admin/ConfigFormTabs";
-import { useRPC2Call } from "@/contexts/RPC2Context";
+import {
+  getAdminPluginConfiguration,
+  listAdminPlugins,
+  setAdminPluginConfiguration,
+} from "@/api/connect/admin";
 import { resolveI18nText } from "@/utils/i18nText";
 import { iconMap, resolvePluginIcon } from "@/utils/iconHelper";
 import type { I18nText } from "@/utils/i18nText";
 import type { PluginConfiguration, PluginInfo, PluginConfigItem } from "@/types/plugin";
-
-interface ConfigurationResponse {
-  configuration?: PluginConfiguration;
-  data?: Record<string, any>;
-}
 
 // 渲染插件 icon：lucide 名用组件，URL/相对路径用图片或内联 SVG，否则默认 Blocks。
 const renderPluginIcon = (
@@ -54,7 +53,6 @@ const renderPluginIcon = (
 
 // 插件配置：左侧插件列表，右侧具体插件的配置项（与主题配置一致）。
 export default function PluginConfigPage() {
-  const { call } = useRPC2Call();
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage || i18n.language || "";
 
@@ -83,17 +81,21 @@ export default function PluginConfigPage() {
     [plugins],
   );
 
-  const loadList = useCallback(async () => {
+  const loadList = useCallback(async (signal = AbortSignal.timeout(15_000)) => {
     try {
-      const result = await call<any, PluginInfo[]>("admin:listPlugins");
-      setPlugins(Array.isArray(result) ? result : []);
+      setPlugins(await listAdminPlugins(signal));
     } catch (e) {
+      if (signal.aborted) return;
       toast.error(e instanceof Error ? e.message : String(e));
     }
-  }, [call]);
+  }, []);
 
   useEffect(() => {
-    loadList().finally(() => setLoading(false));
+    const controller = new AbortController();
+    loadList(controller.signal).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort(new DOMException("Page unmounted", "AbortError"));
   }, [loadList]);
 
 
@@ -103,9 +105,10 @@ export default function PluginConfigPage() {
     setValues({});
     setError(null);
     try {
-      const result = await call<any, ConfigurationResponse>("admin:getPluginConfiguration", {
-        short: plugin.short,
-      });
+      const result = await getAdminPluginConfiguration(
+        plugin.short,
+        AbortSignal.timeout(15_000),
+      );
       const configuration = result?.configuration || {};
       setConfiguration(configuration);
       const items: PluginConfigItem[] = Array.isArray(configuration.data)
@@ -122,7 +125,7 @@ export default function PluginConfigPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [call]);
+  }, []);
   // 从插件管理页跳转过来时（?short=xxx）自动选中对应插件。
   useEffect(() => {
     if (loading || autoSelectDone) return;
@@ -143,9 +146,10 @@ export default function PluginConfigPage() {
     if (!selected) return;
     setSaving(true);
     try {
-      await call("admin:setPluginConfiguration", {
+      await setAdminPluginConfiguration({
         short: selected.short,
-        data: values,
+        values,
+        signal: AbortSignal.timeout(15_000),
       });
       toast.success(t("plugin.config_saved", "Configuration saved"));
     } catch (e) {

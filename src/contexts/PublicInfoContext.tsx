@@ -96,6 +96,7 @@ export const PublicInfoProvider: React.FC<{ children: React.ReactNode }> = ({
           theme_settings: response.themeSettings ?? {},
           visitor_audit_enabled: response.visitorAuditEnabled,
           version: response.version,
+          hash: response.buildHash,
       };
       if (!controller.signal.aborted) setPublicInfo(withThemeDefaults(info));
     } catch (err) {
