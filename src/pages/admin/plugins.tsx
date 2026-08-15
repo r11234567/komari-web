@@ -277,7 +277,7 @@ export default function PluginsPage() {
             <Upload size={14} />
             {t("plugin.upload", "Upload Plugin")}
           </Button>
-          <Button variant="soft" onClick={loadList}>
+          <Button variant="soft" onClick={() => void loadList()}>
             <RefreshCw size={14} />
             {t("common.refresh", "Refresh")}
           </Button>

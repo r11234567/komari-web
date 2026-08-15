@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "build:system": "tsc -b && node ./script/build-system-ui.mjs",
     "lint": "eslint .",
-    "test": "node --test tests/connectMigration.test.ts tests/dashboard.test.ts tests/dashboardSession.test.ts tests/dashboardSettings.test.ts tests/returnRouteLines.test.ts tests/reverseProxy.test.ts",
+    "test": "node --test tests/connectMigration.test.ts tests/dashboard.test.ts tests/dashboardSession.test.ts tests/dashboardSettings.test.ts tests/loginRedirect.test.ts tests/returnRouteLines.test.ts tests/reverseProxy.test.ts",
     "preview": "vite preview",
     "i18n:sync": "node ./script/i18n-sync.mjs",
     "i18n:sync:dry": "node ./script/i18n-sync.mjs --dry-run"

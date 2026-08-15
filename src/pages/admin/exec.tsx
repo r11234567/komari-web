@@ -233,7 +233,7 @@ const ExecContent = () => {
             const executions = await createRemoteExecutions({
                 agentIds: selectedNodes,
                 command,
-                twoFactorCode,
+                twoFactorCode: twoFaCode,
                 idempotencyKey: crypto.randomUUID(),
                 signal: createController.signal,
             });

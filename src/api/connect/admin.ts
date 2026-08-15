@@ -263,12 +263,20 @@ export interface MigrationStatusResponse {
   error?: string;
 }
 
-const migrationState = (state: MetricMigrationState): MigrationStatus => ({
-  [MetricMigrationState.RUNNING]: "running",
-  [MetricMigrationState.COMPLETED]: "completed",
-  [MetricMigrationState.FAILED]: "failed",
-  [MetricMigrationState.CANCELED]: "canceled",
-}[state] as MigrationStatus | undefined) ?? "idle";
+const migrationState = (state: MetricMigrationState): MigrationStatus => {
+  switch (state) {
+    case MetricMigrationState.RUNNING:
+      return "running";
+    case MetricMigrationState.COMPLETED:
+      return "completed";
+    case MetricMigrationState.FAILED:
+      return "failed";
+    case MetricMigrationState.CANCELED:
+      return "canceled";
+    default:
+      return "idle";
+  }
+};
 
 const migrationValue = (migration?: {
   state: MetricMigrationState;

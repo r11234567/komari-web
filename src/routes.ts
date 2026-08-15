@@ -9,6 +9,7 @@ const AdminLayout = lazy(() => import("./pages/admin/_layout"));
 const Admin = lazy(() => import("./pages/admin"));
 const Dashboard = lazy(() => import("./pages/admin/dashboard"));
 const NotFound = lazy(() => import("./pages/404"));
+const LoginPage = lazy(() => import("./pages/login"));
 
 export const routes: RouteObject[] = [
   {
@@ -41,6 +42,10 @@ export const routes: RouteObject[] = [
   {
     path: "/install",
     element: React.createElement(lazy(() => import("./pages/install"))),
+  },
+  {
+    path: "/login",
+    element: React.createElement(LoginPage),
   },
   {
     path: "/database-recovery",
