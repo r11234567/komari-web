@@ -50,6 +50,11 @@ interface AdminPanelBarProps {
   content: ReactNode;
 }
 
+const KOMARI_RELEASE_REPOSITORY = "r11234567/komari";
+const KOMARI_RELEASES_URL = `https://api.github.com/repos/${KOMARI_RELEASE_REPOSITORY}/releases?per_page=100`;
+const KOMARI_RELEASE_CACHE_KEY = `komari_releases_cache:${KOMARI_RELEASE_REPOSITORY}`;
+const KOMARI_RELEASE_CACHE_TTL = 30 * 60 * 1000;
+
 const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openSubMenus, setOpenSubMenus] = useState<{ [key: string]: boolean }>({
@@ -70,6 +75,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     hash: String(publicInfo.hash || "").slice(0, 7),
     version: String(publicInfo.version),
   } : null;
+  const currentVersion = publicInfo?.version == null ? "" : String(publicInfo.version).trim();
   const currentLanguage =
     i18n.resolvedLanguage ||
     i18n.language ||
@@ -235,50 +241,69 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     return false;
   }
 
-  // 获取 GitHub releases 列表，并筛选出”比当前版本新的所有 release”
+  // 获取 GitHub releases 列表，并筛选出“比当前版本新的所有 release”
   // 使用 sessionStorage 缓存，避免频繁请求导致 429
   // 对于 snapshot 或无效版本，跳过检查
   useEffect(() => {
     let ignore = false;
-    const currentVersion = (publicInfo as any)?.version || versionInfo?.version;
+    const controller = new AbortController();
     if (!currentVersion) return;
 
     // 跳过 snapshot、dev、rc 等非正式版本
     const versionStr = String(currentVersion).toLowerCase();
     if (
-      versionStr.includes(“snapshot”) ||
-      versionStr.includes(“dev”) ||
-      versionStr.includes(“rc”) ||
-      versionStr.includes(“beta”) ||
-      versionStr.includes(“alpha”)
+      versionStr.includes("snapshot") ||
+      versionStr.includes("dev") ||
+      versionStr.includes("rc") ||
+      versionStr.includes("beta") ||
+      versionStr.includes("alpha")
     ) {
-      console.log(“跳过版本检查：当前为非正式版本”, currentVersion);
+      console.log("跳过版本检查：当前为非正式版本", currentVersion);
       return;
     }
 
     // 检查版本格式是否有效
     const parsed = parseSemver(currentVersion);
     if (!parsed) {
-      console.log(“跳过版本检查：无法解析版本号”, currentVersion);
+      console.log("跳过版本检查：无法解析版本号", currentVersion);
       return;
     }
 
-    async function loadReleases() {
-      const cacheKey = “komari_releases_cache”;
-      const cacheTTL = 30 * 60 * 1000; // 30分钟缓存
+    const selectNewerReleases = (data: GithubReleaseInfo[]) =>
+      data
+        .filter((release) => !release.draft && !release.prerelease)
+        .filter((release) =>
+          isNewerVersion(release.tag_name || release.name, currentVersion),
+        )
+        .sort((left, right) => {
+          const leftVersion = parseSemver(left.tag_name || left.name);
+          const rightVersion = parseSemver(right.tag_name || right.name);
+          if (leftVersion && rightVersion) {
+            for (let index = 0; index < leftVersion.length; index += 1) {
+              if (leftVersion[index] !== rightVersion[index]) {
+                return rightVersion[index] - leftVersion[index];
+              }
+            }
+          }
+          return (
+            Date.parse(right.published_at || "") -
+            Date.parse(left.published_at || "")
+          );
+        });
 
+    async function loadReleases() {
       try {
         // 尝试从缓存读取
-        const cached = sessionStorage.getItem(cacheKey);
+        const cached = sessionStorage.getItem(KOMARI_RELEASE_CACHE_KEY);
         if (cached) {
           const { data, timestamp } = JSON.parse(cached);
-          if (Date.now() - timestamp < cacheTTL) {
+          if (
+            Array.isArray(data) &&
+            typeof timestamp === "number" &&
+            Date.now() - timestamp < KOMARI_RELEASE_CACHE_TTL
+          ) {
             if (ignore) return;
-            const valid = (data || [])
-              .filter((r: GithubReleaseInfo) => !r.draft && !r.prerelease)
-              .filter((r: GithubReleaseInfo) =>
-                isNewerVersion(r?.tag_name || r?.name, currentVersion),
-              );
+            const valid = selectNewerReleases(data);
             setReleasesSince(valid);
             setLatestRelease(valid.length ? valid[0] : null);
             setUpdateAvailable(valid.length > 0);
@@ -287,17 +312,19 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
         }
 
         const resp = await fetch(
-          “https://api.github.com/repos/r11234567/komari/releases?per_page=100”,
+          KOMARI_RELEASES_URL,
           {
             headers: {
-              Accept: “application/vnd.github+json”,
+              Accept: "application/vnd.github+json",
             },
+            cache: "no-store",
+            signal: controller.signal,
           },
         );
         if (!resp.ok) {
           // 遇到 429 等错误时，不清空现有状态，保持静默
           if (resp.status === 429 || resp.status === 403) {
-            console.warn(“GitHub API 速率限制或权限问题，跳过版本检查”);
+            console.warn("GitHub API 速率限制或权限问题，跳过版本检查");
             return;
           }
           throw new Error(`GitHub HTTP ${resp.status}`);
@@ -305,19 +332,19 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
         const data: GithubReleaseInfo[] = await resp.json();
 
         // 存入缓存
-        sessionStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+        sessionStorage.setItem(
+          KOMARI_RELEASE_CACHE_KEY,
+          JSON.stringify({ data, timestamp: Date.now() }),
+        );
 
         if (ignore) return;
-        const valid = (data || [])
-          .filter((r) => !r.draft && !r.prerelease)
-          .filter((r) =>
-            isNewerVersion(r?.tag_name || r?.name, currentVersion),
-          );
+        const valid = selectNewerReleases(data);
         setReleasesSince(valid);
         setLatestRelease(valid.length ? valid[0] : null);
         setUpdateAvailable(valid.length > 0);
       } catch (e) {
-        console.warn(“加载 GitHub 最新发布失败:”, e);
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        console.warn("加载 GitHub 最新发布失败:", e);
         // 失败时不清空状态，避免闪烁
       }
     }
@@ -325,8 +352,9 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     loadReleases();
     return () => {
       ignore = true;
+      controller.abort();
     };
-  }, [publicInfo, versionInfo]);
+  }, [currentVersion]);
   // Handle responsive behavior
   useEffect(() => {
     const handleResize = () => setSidebarOpen(!isMobile);
