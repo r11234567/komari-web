@@ -307,12 +307,18 @@ const chartsData = (charts?: ProtoCharts): DashboardChartsData => ({
   generated_at: isoOrUndefined(charts?.generatedAt) ?? new Date().toISOString(),
 });
 
+// The dashboard aggregates scan the metric store and the traffic ledger, so
+// they are budgeted against the server's own 30s policy rather than the shorter
+// default unary deadline. The REST bridge these replaced had no client timeout
+// at all, and a 15s cap would fail the heavy series on large deployments.
+const DASHBOARD_AGGREGATE_TIMEOUT_MS = 30_000;
+
 export async function requestDashboardSummary(
   sections: string[],
   rankingLimit: number,
   signal: AbortSignal,
 ): Promise<DashboardData> {
-  const response = await connectUnary({ signal }, (requestSignal, timeoutMs) =>
+  const response = await connectUnary({ signal, timeoutMs: DASHBOARD_AGGREGATE_TIMEOUT_MS }, (requestSignal, timeoutMs) =>
     connectClients.dashboard.getDashboardSummary(
       { sections: selectedSections(sections), rankingLimit },
       { signal: requestSignal, timeoutMs },
@@ -326,7 +332,7 @@ export async function requestDashboardChartSeries(
   rankingLimit: number,
   signal: AbortSignal,
 ): Promise<DashboardChartsData> {
-  const response = await connectUnary({ signal }, (requestSignal, timeoutMs) =>
+  const response = await connectUnary({ signal, timeoutMs: DASHBOARD_AGGREGATE_TIMEOUT_MS }, (requestSignal, timeoutMs) =>
     connectClients.dashboard.getDashboardCharts(
       { charts: selectedCharts(charts), rankingLimit },
       { signal: requestSignal, timeoutMs },
