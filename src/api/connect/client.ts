@@ -1,5 +1,8 @@
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
+import { DashboardService } from "@komari/proto/komari/admin/v1/dashboard_pb";
+import { MaintenanceService } from "@komari/proto/komari/admin/v1/maintenance_pb";
+import { PingTaskService } from "@komari/proto/komari/admin/v1/ping_pb";
 import { BrowserService } from "@komari/proto/komari/browser/v1/browser_pb";
 import { DeploymentService } from "@komari/proto/komari/deployment/v1/deployment_pb";
 import { RescueService } from "@komari/proto/komari/rescue/v1/rescue_pb";
@@ -29,6 +32,9 @@ const transport = createConnectTransport({
 });
 
 const browser = createClient(BrowserService, transport);
+const dashboard = createClient(DashboardService, transport);
+const maintenance = createClient(MaintenanceService, transport);
+const pingTask = createClient(PingTaskService, transport);
 const deployment = createClient(DeploymentService, transport);
 const rescue = createClient(RescueService, transport);
 const metrics = createClient(MetricsService, transport);
@@ -36,7 +42,7 @@ const execution = createClient(ExecutionService, transport);
 const webssh = createClient(WebSSHService, transport);
 const plugin = createClient(PluginService, transport);
 
-export const connectClients = { browser, deployment, rescue, metrics, execution, webssh, plugin };
+export const connectClients = { browser, dashboard, maintenance, pingTask, deployment, rescue, metrics, execution, webssh, plugin };
 
 export const connectUnary = <T>(
   options: ConnectCallOptions,

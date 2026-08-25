@@ -1,3 +1,8 @@
+import {
+  deletePingTasks,
+  reorderPingTasks,
+  updatePingTasks,
+} from "@/api/connect/ping";
 import NodeSelectorDialog from "@/components/NodeSelectorDialog";
 import {
   Table,
@@ -118,16 +123,7 @@ export const TaskView = ({ pingTasks }: { pingTasks: PingTask[] }) => {
     }, {} as Record<string, number>);
 
     try {
-      const response = await fetch("/api/admin/ping/order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderData),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data?.message || t("common.error"));
-      }
+      await reorderPingTasks(orderData);
     } catch (error: any) {
       setLocalTasks(previousTasks);
       toast.error(error?.message || t("common.error"));
@@ -205,31 +201,17 @@ const Row = ({
       return;
     }
     setEditSaving(true);
-    fetch("/api/admin/ping/edit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tasks: [
-          {
-            id: task.id,
-            name: newForm.name,
-            type: newForm.type,
-            target: newForm.target,
-            default_on: newForm.default_on,
-            clients: newForm.clients,
-            interval: newForm.interval,
-          },
-        ],
-      }),
-    })
-      .then((res) => {
-        if (!res.ok) {
-          return res.json().then((data) => {
-            throw new Error(data?.message || t("common.error"));
-          });
-        }
-        return res.json();
-      })
+    updatePingTasks([
+      {
+        id: task.id,
+        name: newForm.name,
+        type: newForm.type,
+        target: newForm.target,
+        default_on: newForm.default_on,
+        clients: newForm.clients,
+        interval: newForm.interval,
+      },
+    ])
       .then(() => {
         setEditOpen(false);
         toast.success(t("common.updated_successfully"));
@@ -250,19 +232,7 @@ const Row = ({
   // 删除
   const handleDelete = () => {
     setDeleteLoading(true);
-    fetch("/api/admin/ping/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: [task.id] }),
-    })
-      .then((res) => {
-        if (!res.ok) {
-          return res.json().then((data) => {
-            throw new Error(data?.message || t("common.error"));
-          });
-        }
-        return res.json();
-      })
+    deletePingTasks([task.id])
       .then(() => {
         setDeleteOpen(false);
         toast.success(t("common.deleted_successfully"));

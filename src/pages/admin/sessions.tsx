@@ -12,34 +12,19 @@ import { useTranslation } from "react-i18next";
 import { Dialog, Flex, Button } from "@radix-ui/themes";
 import { UserAgentHelper } from "@/utils/UserAgentHelper";
 import Loading from "@/components/loading";
-type Resp = {
-  current: string;
-  data: Array<{
-    uuid: string;
-    session: string;
-    user_agent: string;
-    ip: string;
-    login_method: string;
-    latest_online: string;
-    latest_ip: string;
-    latest_user_agent: string;
-    expires: string;
-    created_at: string;
-  }>;
-  status: string;
-};
+import {
+  deleteAdminSession,
+  deleteAllAdminSessions,
+  listAdminSessions,
+  type AdminSessionList,
+} from "@/api/connect/maintenance";
+type Resp = AdminSessionList;
 export default function Sessions() {
   const [t] = useTranslation();
   const [sessions, setSessions] = React.useState<Resp | null>(null);
   React.useEffect(() => {
-    fetch("/api/admin/session/get")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Error: ${response.status} ${response.statusText}`);
-        }
-        return response.json();
-      })
-      .then((data: Resp) => {
+    listAdminSessions()
+      .then((data) => {
         setSessions(data);
       })
       .catch((error) => {
@@ -50,51 +35,27 @@ export default function Sessions() {
 
   function deleteSession(sessionId: string) {
     const isCurrent = sessionId === sessions?.current;
-    fetch("/api/admin/session/remove", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session: sessionId }),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.status === "success") {
-          toast.success(t("sessions.deleted_successfully"));
-          if (isCurrent) {
-            window.location.href = "/"; // 登出
-            return;
-          }
-          setSessions((prev) => ({
-            ...prev!,
-            data: prev?.data.filter((s) => s.session !== sessionId) || [],
-          }));
-        } else {
-          console.error("Failed to delete session:", data);
-          toast.error(t("sessions.delete_failed"));
+    deleteAdminSession(sessionId)
+      .then(() => {
+        toast.success(t("sessions.deleted_successfully"));
+        if (isCurrent) {
+          window.location.href = "/"; // 登出
+          return;
         }
+        setSessions((prev) => ({
+          ...prev!,
+          data: prev?.data.filter((s) => s.session !== sessionId) || [],
+        }));
       })
       .catch((error) => {
         console.error("Error deleting session:", error);
-        toast.error(error.message);
+        toast.error(t("sessions.delete_failed"));
       });
   }
   function deleteAllSessions() {
-    fetch("/api/admin/session/remove/all", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          toast.error("Error:" + response.status);
-          return;
-        }
-        response
-          .json()
-          .then(() => {
-            window.location.href = "/"; // 登出
-          })
-          .catch((error) => {
-            toast.error("Error parsing JSON:" + error);
-          });
+    deleteAllAdminSessions()
+      .then(() => {
+        window.location.href = "/"; // 登出
       })
       .catch((error) => {
         toast.error(error.message);

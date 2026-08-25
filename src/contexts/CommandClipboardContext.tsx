@@ -1,14 +1,13 @@
 import React from "react";
+import {
+  createClipboardEntry,
+  deleteClipboardEntries,
+  listClipboardEntries,
+  updateClipboardEntry,
+  type ClipboardEntry,
+} from "@/api/connect/maintenance";
 
-export type CommandClipboard = {
-  id: number;
-  text: string;
-  name: string;
-  remark: string;
-  weight: number;
-  createdAt: string;
-  updatedAt: string;
-};
+export type CommandClipboard = ClipboardEntry;
 
 interface CommandClipboardContextType {
   commands: CommandClipboard[];
@@ -34,16 +33,7 @@ export const CommandClipboardProvider: React.FC<{
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/clipboard");
-      if (!response.ok) {
-        throw new Error("Failed to fetch commands");
-      }
-      const resp = await response.json();
-      if (resp && Array.isArray(resp.data)) {
-        setCommands(resp.data);
-      } else {
-        setCommands([]);
-      }
+      setCommands(await listClipboardEntries());
     } catch (err) {
       setError(err as Error);
     } finally {
@@ -52,16 +42,7 @@ export const CommandClipboardProvider: React.FC<{
   };
   const addCommand = async (name: string, text: string, remark: string, weight: number) => {
     try {
-      const response = await fetch("/api/admin/clipboard", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, text, remark, weight }),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to add command");
-      }
+      await createClipboardEntry({ name, text, remark, weight });
       refresh();
     } catch (err) {
       setError(err as Error);
@@ -78,16 +59,7 @@ export const CommandClipboardProvider: React.FC<{
     weight: number
   ) => {
     try {
-      const response = await fetch(`/api/admin/clipboard/${id}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, text, remark, weight }),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to update command");
-      }
+      await updateClipboardEntry({ id, name, text, remark, weight });
       refresh();
     } catch (err) {
       setError(err as Error);
@@ -98,12 +70,7 @@ export const CommandClipboardProvider: React.FC<{
 
   const deleteCommand = async (id: number) => {
     try {
-      const response = await fetch(`/api/admin/clipboard/${id}/remove`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        throw new Error("Failed to delete command");
-      }
+      await deleteClipboardEntries([id]);
       refresh();
     } catch (err) {
       setError(err as Error);

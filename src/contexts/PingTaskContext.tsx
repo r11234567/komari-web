@@ -1,4 +1,5 @@
 import React from "react";
+import { listPingTasks } from "@/api/connect/ping";
 
 export interface PingTask {
   clients?: string[];
@@ -7,13 +8,6 @@ export interface PingTask {
   interval?: number;
   target?: string;
   type?: string;
-  [property: string]: any;
-}
-
-interface Response {
-  data: PingTask[];
-  message: string;
-  status: string;
   [property: string]: any;
 }
 
@@ -37,19 +31,9 @@ export const PingTaskProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refresh = () => {
     setError(null);
-    fetch("/api/admin/ping")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to fetch ping tasks");
-        }
-        return response.json();
-      })
-      .then((resp: Response) => {
-        if (resp && Array.isArray(resp.data)) {
-          setPingTasks(resp.data);
-        } else {
-          setPingTasks([]);
-        }
+    listPingTasks()
+      .then((tasks) => {
+        setPingTasks(tasks);
       })
       .catch((err) => {
         setError(err.message || "An error occurred while fetching ping tasks");

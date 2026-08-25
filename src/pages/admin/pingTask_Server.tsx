@@ -1,3 +1,4 @@
+import { updatePingTasks } from "@/api/connect/ping";
 import {
   Table,
   TableBody,
@@ -114,18 +115,7 @@ const ServerRow: React.FC<{
       return;
     }
 
-    fetch("/api/admin/ping/edit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tasks: toUpdate }),
-    })
-      .then((res) => {
-        if (!res.ok)
-          return res.json().then((d) => {
-            throw new Error(d?.message || t("common.error"));
-          });
-        return res.json();
-      })
+    updatePingTasks(toUpdate)
       .then(() => {
         toast.success(t("common.updated_successfully"));
         setOpen(false);

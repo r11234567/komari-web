@@ -1,3 +1,4 @@
+import { createPingTask } from "@/api/connect/ping";
 import Loading from "@/components/loading";
 import NodeSelectorDialog from "@/components/NodeSelectorDialog";
 import {
@@ -96,30 +97,13 @@ const AddButton: React.FC = () => {
       interval: parseInt(e.currentTarget.interval.value, 10),
     };
     setSaving(true);
-    fetch("/api/admin/ping/add", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    })
-      .then((response) => {
-        if (response.ok) {
-          setIsOpen(false);
-          setSelected([]);
-          setDefaultOn(false);
-          setSelectedType("icmp");
-          toast.success(t("common.success"));
-        } else {
-          response
-            .json()
-            .then((data) => {
-              toast.error(data?.message || t("common.error"));
-            })
-            .catch((error) => {
-              toast.error(error.message);
-            });
-        }
+    createPingTask(payload)
+      .then(() => {
+        setIsOpen(false);
+        setSelected([]);
+        setDefaultOn(false);
+        setSelectedType("icmp");
+        toast.success(t("common.success"));
       })
       .catch((error) => {
         console.error("Error adding ping task:", error);

@@ -13,15 +13,9 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import NumberPicker from "@/components/ui/number-picker";
 import Loading from "@/components/loading";
+import { listAuditLogs, type AuditLogEntry } from "@/api/connect/maintenance";
 
-interface Log {
-  id: number;
-  ip: string;
-  uuid: string;
-  message: string;
-  msg_type: string;
-  time: string;
-}
+type Log = AuditLogEntry;
 const LogPage = () => {
   const [loading, setLoading] = React.useState<boolean>(true);
   const [logs, setLogs] = React.useState<Log[]>([]);
@@ -35,15 +29,9 @@ const LogPage = () => {
     const fetchLogs = async () => {
       setLoading(true);
       try {
-        const response = await fetch(
-          `/api/admin/logs?limit=${limit}&page=${page}`
-        );
-        if (!response.ok) {
-          throw new Error("Failed to fetch logs");
-        }
-        const data = await response.json();
-        setLogs(data.data.logs);
-        setTotal(data.data.total);
+        const data = await listAuditLogs(limit, page);
+        setLogs(data.logs);
+        setTotal(data.total);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {

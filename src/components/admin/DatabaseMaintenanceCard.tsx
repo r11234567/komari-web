@@ -5,6 +5,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { z } from "zod";
+import { getDatabaseStatus, vacuumDatabase } from "@/api/connect/maintenance";
 import { SettingCard } from "./SettingCard";
 
 const maintenanceActionSchema = z.enum([
@@ -44,40 +45,6 @@ type DatabaseInfo = z.infer<typeof databaseInfoSchema>;
 type DatabaseOverview = z.infer<typeof databaseOverviewSchema>;
 type DatabaseMaintenanceResult = z.infer<typeof maintenanceResultSchema>;
 type TranslationFunction = ReturnType<typeof useTranslation>["t"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-async function requestAdminData(
-  input: RequestInfo | URL,
-  fallbackMessage: string,
-  init?: RequestInit,
-): Promise<unknown> {
-  const response = await fetch(input, init);
-  let payload: unknown;
-
-  try {
-    payload = await response.json();
-  } catch {
-    throw new Error(fallbackMessage);
-  }
-
-  const message =
-    isRecord(payload) && typeof payload.message === "string"
-      ? payload.message
-      : fallbackMessage;
-  if (
-    !response.ok ||
-    !isRecord(payload) ||
-    payload.status !== "success" ||
-    !("data" in payload)
-  ) {
-    throw new Error(message);
-  }
-
-  return payload.data;
-}
 
 function driverLabel(driver: string): string {
   switch (driver.toLowerCase()) {
@@ -205,10 +172,7 @@ export function DatabaseMaintenanceCard() {
     const fallbackMessage = t("settings.database.load_error");
 
     try {
-      const data = await requestAdminData(
-        "/api/admin/database/size",
-        fallbackMessage,
-      );
+      const data = await getDatabaseStatus();
       const parsed = databaseOverviewSchema.safeParse(data);
       if (!parsed.success) {
         throw new Error(t("settings.database.invalid_response"));
@@ -239,11 +203,7 @@ export function DatabaseMaintenanceCard() {
     setConfirmOpen(false);
     setMaintaining(true);
     try {
-      const data = await requestAdminData(
-        "/api/admin/database/vacuum",
-        t("settings.database.maintenance_error"),
-        { method: "POST" },
-      );
+      const data = await vacuumDatabase();
       const parsed = maintenanceResultSchema.safeParse(data);
       if (!parsed.success) {
         throw new Error(t("settings.database.invalid_response"));

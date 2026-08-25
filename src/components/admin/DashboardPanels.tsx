@@ -28,6 +28,11 @@ import {
   YAxis,
 } from "recharts";
 
+import {
+  prefetchDashboardAlertItems,
+  requestDashboardChartSeries,
+  requestDashboardSummary,
+} from "@/api/connect/dashboard";
 import { ChartContainer } from "@/components/ui/chart";
 import {
   type DashboardAlertKind,
@@ -42,7 +47,6 @@ import {
   dashboardAlertCategoryPath,
   dashboardAlertDetailPath,
   formatBillingAlertStatus,
-  prefetchDashboardAlertItems,
   serverAlertKinds,
 } from "@/utils/adminAlertFilters";
 import { formatBytes } from "@/utils/unitHelper";
@@ -62,21 +66,7 @@ export async function requestDashboard(
   if (pendingDashboardRequest?.accountKey === accountKey && pendingDashboardRequest.key === key) {
     return pendingDashboardRequest.request;
   }
-  const params = new URLSearchParams({ sections: sections.join(","), limit: String(rankingLimit) });
-  const request = fetch(`/api/admin/dashboard?${params}`, { cache: "no-store" })
-    .then(async (response) => {
-      if (!response.ok) {
-        let message = `HTTP ${response.status}`;
-        try {
-          const payload = await response.json();
-          if (payload?.message) message = String(payload.message);
-        } catch {
-          // Keep the HTTP status fallback.
-        }
-        throw new Error(message);
-      }
-      return response.json() as Promise<DashboardData>;
-    })
+  const request = requestDashboardSummary(sections, rankingLimit, new AbortController().signal)
     .then((data) => {
       dashboardSnapshot = { accountKey, key, data };
       writeDashboardSession("summary", accountKey, key, data);
@@ -100,21 +90,7 @@ export async function requestDashboardCharts(
   if (pendingDashboardChartsRequest?.accountKey === accountKey && pendingDashboardChartsRequest.key === key) {
     return pendingDashboardChartsRequest.request;
   }
-  const params = new URLSearchParams({ sections: sections.join(","), limit: String(rankingLimit) });
-  const request = fetch(`/api/admin/dashboard/charts?${params}`, { cache: "no-store" })
-    .then(async (response) => {
-      if (!response.ok) {
-        let message = `HTTP ${response.status}`;
-        try {
-          const payload = await response.json();
-          if (payload?.message) message = String(payload.message);
-        } catch {
-          // Keep the HTTP status fallback.
-        }
-        throw new Error(message);
-      }
-      return response.json() as Promise<DashboardChartsData>;
-    })
+  const request = requestDashboardChartSeries(sections, rankingLimit, new AbortController().signal)
     .then((data) => {
       dashboardChartsSnapshot = { accountKey, key, data };
       writeDashboardSession("charts", accountKey, key, data);
