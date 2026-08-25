@@ -231,6 +231,9 @@ const Row = ({
 
   // 删除
   const handleDelete = () => {
+    // PingTask.id is optional in the context type; a task the server has not
+    // assigned an id to cannot be deleted.
+    if (task.id === undefined) return;
     setDeleteLoading(true);
     deletePingTasks([task.id])
       .then(() => {
