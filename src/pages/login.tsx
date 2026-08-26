@@ -31,7 +31,11 @@ const LoginPageContent = () => {
       p="4"
       style={{ minHeight: "100vh" }}
     >
-      <Card size="3" style={{ width: "100%", maxWidth: "26rem" }}>
+      <Card
+        className="km-login-dialog"
+        size="3"
+        style={{ width: "100%", maxWidth: "26rem" }}
+      >
         <Flex direction="column" gap="4">
           <Flex direction="column" gap="1">
             <Heading size="5">{publicInfo?.sitename || "Komari"}</Heading>
