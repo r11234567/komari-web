@@ -137,7 +137,7 @@ type RuleDocument = {
   asn_groups: Record<string, number[]>;
   prefix_groups: Record<string, string[]>;
   confidence: Record<string, number>;
-  custom_lines?: Record<string, { groups: string[]; confidence: number }>;
+  custom_lines?: Record<string, { name?: string; groups: string[]; confidence: number }>;
 };
 type RuleStatus = {
   source: "builtin" | "external";
@@ -749,7 +749,7 @@ function ReturnRouteContent() {
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rulesBusy, setRulesBusy] = useState<"reload" | "refresh" | "upload" | "">("");
   const allLineOptions = useMemo(() => {
-    const configured = Object.keys(ruleView?.rules.custom_lines || {});
+    const configured = Object.entries(ruleView?.rules.custom_lines || {}).map(([key, line]) => line.name?.trim() || key);
     return [...builtinLineOptions, ...configured.filter((line) => !builtinLineOptions.includes(line))];
   }, [ruleView]);
   const ruleFileInput = useRef<HTMLInputElement>(null);
