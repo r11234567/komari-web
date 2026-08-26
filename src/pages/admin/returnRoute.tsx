@@ -137,6 +137,7 @@ type RuleDocument = {
   asn_groups: Record<string, number[]>;
   prefix_groups: Record<string, string[]>;
   confidence: Record<string, number>;
+  custom_lines?: Record<string, { groups: string[]; confidence: number }>;
 };
 type RuleStatus = {
   source: "builtin" | "external";
@@ -273,7 +274,7 @@ const ruleGroupNames: Record<string, string> = {
 
 const ruleGroupOrder = ["cmin2", "cmi", "cmnet", "cn2_global", "cn2_backbone", "telecom_163", "unicom_10099", "unicom_9929", "unicom_4837", "softbank", "iij", "lumen"];
 
-const allLineOptions = [...Object.values(lineOptions).flat(), ...internationalLineOptions];
+const builtinLineOptions = [...Object.values(lineOptions).flat(), ...internationalLineOptions];
 
 const regionOptions = ["华北", "东北", "华东", "华中", "华南", "西南", "西北", "港澳台", "其他"];
 
@@ -743,6 +744,10 @@ function ReturnRouteContent() {
   const [ruleView, setRuleView] = useState<RuleView | null>(null);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rulesBusy, setRulesBusy] = useState<"reload" | "refresh" | "upload" | "">("");
+  const allLineOptions = useMemo(() => {
+    const configured = Object.keys(ruleView?.rules.custom_lines || {});
+    return [...builtinLineOptions, ...configured.filter((line) => !builtinLineOptions.includes(line))];
+  }, [ruleView]);
   const ruleFileInput = useRef<HTMLInputElement>(null);
 
   const loadSummary = useCallback(async (quiet = false) => {
@@ -804,6 +809,10 @@ function ReturnRouteContent() {
   useEffect(() => {
     loadSummary();
   }, [loadSummary]);
+
+  useEffect(() => {
+    loadRules(true);
+  }, [loadRules]);
 
   useEffect(() => {
     setTaskQuery((current) => ({ ...current, page: 1, page_size: defaultPageSize }));
