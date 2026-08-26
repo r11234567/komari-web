@@ -416,11 +416,13 @@ function RouteTaskDialog({
   task,
   nodes,
   onSaved,
+  lineOptions,
   children,
 }: {
   task?: Task;
   nodes: Array<{ uuid: string; name: string }>;
   onSaved: () => void;
+  lineOptions: string[];
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -548,7 +550,7 @@ function RouteTaskDialog({
             <Field label="预期线路">
               <Select.Root value={form.expected_line} onValueChange={(expected_line) => setForm({ ...form, expected_line })}>
                 <Select.Trigger className="w-full" />
-                <Select.Content>{allLineOptions.map((line) => <Select.Item key={line} value={line}>{line}</Select.Item>)}</Select.Content>
+                <Select.Content>{lineOptions.map((line) => <Select.Item key={line} value={line}>{line}</Select.Item>)}</Select.Content>
               </Select.Root>
             </Field>
             <Field label="探测协议">
@@ -587,11 +589,13 @@ function RouteTaskBatchDialog({
   tasks,
   onSaved,
   onClear,
+  lineOptions,
   children,
 }: {
   tasks: Task[];
   onSaved: () => void;
   onClear: () => void;
+  lineOptions: string[];
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -672,7 +676,7 @@ function RouteTaskBatchDialog({
             <Field label="预期线路">
               <Select.Root value={form.expected_line} onValueChange={(expected_line) => setForm({ ...form, expected_line })}>
                 <Select.Trigger className="w-full" />
-                <Select.Content>{allLineOptions.map((line) => <Select.Item key={line} value={line}>{line}</Select.Item>)}</Select.Content>
+                <Select.Content>{lineOptions.map((line) => <Select.Item key={line} value={line}>{line}</Select.Item>)}</Select.Content>
               </Select.Root>
             </Field>
             <Field label="探测协议">
@@ -1055,13 +1059,14 @@ function ReturnRouteContent() {
                     tasks={selectedTasks}
                     onClear={() => setSelectedTaskIDs(new Set())}
                     onSaved={refreshTasksAfterChange}
+                    lineOptions={allLineOptions}
                   >
                     <Button type="button" variant="soft" disabled={selectedTasks.length === 0}>
                       <Pencil size={16} />批量修改
                       {selectedTasks.length > 0 ? <Badge color="blue">{selectedTasks.length}</Badge> : null}
                     </Button>
                   </RouteTaskBatchDialog>
-                  <RouteTaskDialog nodes={nodes} onSaved={refreshTasksAfterChange}><Button><Plus size={16} />新建任务</Button></RouteTaskDialog>
+                  <RouteTaskDialog nodes={nodes} onSaved={refreshTasksAfterChange} lineOptions={allLineOptions}><Button><Plus size={16} />新建任务</Button></RouteTaskDialog>
                 </div>
               </div>
 
@@ -1086,7 +1091,7 @@ function ReturnRouteContent() {
                             <td data-label="状态" className="p-3"><div className="return-route-cell-content">{!task.enabled ? <Badge color="gray">已暂停</Badge> : probing ? <Badge color="blue"><RefreshCw size={12} className="mr-1 animate-spin" />探测中</Badge> : stateBadge(status)}{status?.candidate_line && <div className="mt-1 text-xs text-amber-600">{status.candidate_line}{status.candidate_line === "CN2 待确认" ? null : <> {status.candidate_count}/{needed}</>}</div>}{(status?.confidence ?? 0) > 0 && <div className="mt-1 text-xs text-gray-500">置信度 {((status?.confidence ?? 0) * 100).toFixed(0)}%</div>}</div></td>
                             <td data-label="关键 ASN" className="max-w-[320px] p-3"><div className="return-route-cell-content"><div className="flex flex-wrap gap-1">{status?.asn_path?.length ? status.asn_path.map((asn) => <Badge key={asn} color="gray" variant="soft">{asn}</Badge>) : <span className="text-gray-400">-</span>}</div>{status?.route_path?.length ? <details className="mt-2 text-xs text-gray-500"><summary className="cursor-pointer">查看完整路径</summary><div className="mt-2 max-h-48 overflow-auto whitespace-pre font-mono leading-5">{status.route_path.join("\n")}</div></details> : null}{status?.last_error && <div className="mt-2 max-w-xs text-xs text-red-600">{status.last_error}</div>}</div></td>
                             <td data-label="最后探测" className="p-3 text-gray-600"><div className="return-route-cell-pair"><span>{formatTime(status?.last_checked_at)}</span><div className="mt-1 text-xs text-gray-400">每 {Math.round(task.interval / 60)} 分钟</div></div></td>
-                            <td data-label="操作" className="p-3"><Flex justify="start" gap="1" className="admin-card-actions"><IconButton variant="ghost" title={probing ? "探测中" : "立即探测"} disabled={probing || !task.enabled} onClick={() => runNow(task.id)}>{probing ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}</IconButton><RouteTaskDialog task={task} nodes={nodes} onSaved={refreshTasksAfterChange}><IconButton variant="ghost" title="编辑"><Pencil size={16} /></IconButton></RouteTaskDialog><IconButton variant="ghost" color="red" title="删除" onClick={() => remove(task)}><Trash2 size={16} /></IconButton></Flex></td>
+                            <td data-label="操作" className="p-3"><Flex justify="start" gap="1" className="admin-card-actions"><IconButton variant="ghost" title={probing ? "探测中" : "立即探测"} disabled={probing || !task.enabled} onClick={() => runNow(task.id)}>{probing ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}</IconButton><RouteTaskDialog task={task} nodes={nodes} onSaved={refreshTasksAfterChange} lineOptions={allLineOptions}><IconButton variant="ghost" title="编辑"><Pencil size={16} /></IconButton></RouteTaskDialog><IconButton variant="ghost" color="red" title="删除" onClick={() => remove(task)}><Trash2 size={16} /></IconButton></Flex></td>
                           </tr>;
                         })}
                       </tbody>
