@@ -1,5 +1,5 @@
 import { Card, Flex, Heading, Text } from "@radix-ui/themes";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
 import { LoginForm } from "@/components/Login";
@@ -12,7 +12,6 @@ const LoginPageContent = () => {
   const { publicInfo } = usePublicInfo();
   const { t } = useTranslation();
   const location = useLocation();
-  const navigate = useNavigate();
   const returnTo = safeLoginReturnTo(
     new URLSearchParams(location.search).get("returnTo"),
   );
@@ -44,7 +43,11 @@ const LoginPageContent = () => {
             </Text>
           </Flex>
           <LoginForm
-            onLoginSuccess={() => navigate(returnTo, { replace: true })}
+            onLoginSuccess={() => {
+              // A full navigation guarantees the newly issued session cookie is
+              // observed by the admin route's fresh AccountProvider.
+              window.location.replace(returnTo);
+            }}
           />
         </Flex>
       </Card>

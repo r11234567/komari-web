@@ -309,6 +309,18 @@ export default function SiteSettings() {
         }}
         className="km-setting-card"
       />
+      <SettingCardSwitch
+        title={t("settings.site.rate_limit_enabled", "请求限流")}
+        description={t(
+          "settings.site.rate_limit_enabled_description",
+          "开启后按客户端和访客限制请求频率，并合并高成本历史读取。",
+        )}
+        defaultChecked={settings.rate_limit_enabled ?? false}
+        onChange={async (checked) => {
+          await updateSettingsWithToast({ rate_limit_enabled: checked }, t);
+        }}
+        className="km-setting-card"
+      />
       <SettingCardCollapse
         title={t("settings.site.temporary_share")}
         description={t("settings.site.temporary_share_description")}

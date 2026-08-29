@@ -9,6 +9,7 @@ export interface SettingsResponse {
   sitename: string;
   description: string;
   cors_origin_check_enabled: boolean;
+  rate_limit_enabled?: boolean;
   geo_ip_enabled: boolean;
   geo_ip_provider: string;
   o_auth_provider: string;
