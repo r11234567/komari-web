@@ -4,12 +4,14 @@ import {
   AlertCircle,
   ArrowDownToLine,
   ArrowUpFromLine,
+  CircleDollarSign,
   Database,
   RefreshCw,
   Server,
   WalletCards,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 import AdminPageTitle from "@/components/admin/AdminPageTitle";
 import { useAccount } from "@/contexts/AccountContext";
@@ -53,6 +55,14 @@ import {
 } from "@/utils/dashboardSettings";
 import { formatBytes } from "@/utils/unitHelper";
 import {
+  billingQuery,
+  formatBillingMoney,
+  getBillingSnapshot,
+  readStoredBillingCurrency,
+  requestBillingCached,
+  type BillingOverview,
+} from "@/utils/billing";
+import {
   readDashboardSession,
   writeDashboardSession,
   type DashboardViewState,
@@ -83,6 +93,9 @@ export default function AdminDashboard() {
   const summaryKey = `${summarySections.join(",")}:${settings.ranking_limit}`;
   const chartKey = `${chartSections.join(",")}:${settings.ranking_limit}`;
   const visibleModules = React.useMemo(() => enabledDashboardModules(settings), [settings]);
+  const costCenterVisible = visibleModules.includes("cost_center");
+  const billingCurrency = readStoredBillingCurrency();
+  const billingURL = billingQuery("/api/admin/billing/overview", { currency: billingCurrency });
   const moduleSpans = React.useMemo(() => dashboardModuleSpans(settings), [settings]);
   const packedModules = React.useMemo(
     () => packDashboardModules(visibleModules, moduleSpans, settings.preset !== "custom"),
@@ -102,6 +115,7 @@ export default function AdminDashboard() {
   const [data, setData] = React.useState<DashboardData | null>(() => getDashboardSnapshot(summaryKey, accountKey));
   const [charts, setCharts] = React.useState<DashboardChartsData | null>(() => getDashboardChartsSnapshot(chartKey, accountKey));
   const [trafficTrend, setTrafficTrend] = React.useState<DashboardTrafficBucket[] | null>(null);
+  const [billing, setBilling] = React.useState<BillingOverview | null>(() => getBillingSnapshot<BillingOverview>(billingURL));
   const [loading, setLoading] = React.useState(() => getDashboardSnapshot(summaryKey, accountKey) === null);
   const [error, setError] = React.useState<string | null>(null);
   const [chartsError, setChartsError] = React.useState<string | null>(null);
@@ -161,13 +175,38 @@ export default function AdminDashboard() {
     }
   }, [chartSections]);
 
+  const loadBilling = React.useCallback(async () => {
+    if (!costCenterVisible) {
+      setBilling(null);
+      return;
+    }
+    try {
+      setBilling(await requestBillingCached<BillingOverview>(billingURL));
+    } catch {
+      // The card remains available with placeholders; dashboard errors stay
+      // scoped to the metric panels instead of hiding the whole first screen.
+    }
+  }, [billingURL, costCenterVisible]);
+
   React.useEffect(() => () => trafficTrendControllerRef.current?.abort(), []);
 
   const refreshAll = React.useCallback(() => {
     void loadSummary(false);
     void loadCharts();
     void loadTrafficTrend();
-  }, [loadCharts, loadSummary, loadTrafficTrend]);
+    void loadBilling();
+  }, [loadBilling, loadCharts, loadSummary, loadTrafficTrend]);
+
+  React.useEffect(() => {
+    if (settingsLoading || !costCenterVisible) return;
+    const snapshot = getBillingSnapshot<BillingOverview>(billingURL);
+    if (snapshot) setBilling(snapshot);
+    void loadBilling();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadBilling();
+    }, settings.refresh_seconds * 1000);
+    return () => window.clearInterval(interval);
+  }, [billingURL, costCenterVisible, loadBilling, settings.refresh_seconds, settingsLoading]);
 
   React.useEffect(() => {
     if (settingsLoading) return;
@@ -365,6 +404,24 @@ export default function AdminDashboard() {
             </div>
           </SummaryPanel>
         ) : <Skeleton className="h-[112px] w-full" />;
+      case "cost_center":
+        return (
+          <Link to="/admin/billing" className="block h-full min-w-0 text-inherit no-underline">
+            <SummaryPanel
+              icon={<CircleDollarSign size={18} />}
+              label={t("admin_dashboard.cost_center", "成本中心")}
+              value={billing ? formatBillingMoney(billing.summary.month.total, billingCurrency) : "-"}
+              tone="green"
+            >
+              {billing ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span>{t("admin_dashboard.cost_year", "本年")} {formatBillingMoney(billing.summary.year.total, billingCurrency)}</span>
+                  <span>{t("admin_dashboard.remaining_value", "剩余价值")} {formatBillingMoney(billing.summary.remaining_value, billingCurrency)}</span>
+                </div>
+              ) : <span>{t("admin_dashboard.data_unavailable")}</span>}
+            </SummaryPanel>
+          </Link>
+        );
       case "resource_ranking":
         return data
           ? <ResourceRankingPanel data={data} limit={settings.ranking_limit} />
@@ -441,8 +498,8 @@ export default function AdminDashboard() {
   const generatedAt = data?.generated_at || charts?.generated_at;
   const formalLayout = (
     <>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {(["server_status", "traffic_summary", "storage_summary"] as const).map((module) => (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {(["server_status", "traffic_summary", "storage_summary", "cost_center"] as const).map((module) => (
           <div key={module} data-dashboard-module={module} className="min-w-0">{renderModule(module)}</div>
         ))}
       </div>

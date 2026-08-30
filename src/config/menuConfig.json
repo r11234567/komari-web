@@ -11,6 +11,11 @@
       "icon": "Server"
     },
     {
+      "labelKey": "billing.title",
+      "path": "/admin/billing",
+      "icon": "CircleDollarSign"
+    },
+    {
       "labelKey": "settings.title",
       "path": "/admin/settings",
       "icon": "Bolt",

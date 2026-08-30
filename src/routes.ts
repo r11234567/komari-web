@@ -67,6 +67,12 @@ export const routes: RouteObject[] = [
         element: React.createElement(Admin),
       },
       {
+        path: "billing",
+        element: React.createElement(
+          lazy(() => import("./pages/admin/billing")),
+        ),
+      },
+      {
         path: "theme_managed",
         element: React.createElement(
           lazy(() => import("./pages/admin/theme_managed.tsx"))

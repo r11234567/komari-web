@@ -1644,6 +1644,9 @@
   },
   "warn_https": "The current connection is not HTTPS! Your sensitive data is at serious risk. Take immediate action to secure the connection! Copy may not available!",
   "warn_live_data": "Live data request failed. Please check the network connection or server status!",
+  "billing": {
+    "title": "Cost Center"
+  },
   "admin_dashboard": {
     "affected_nodes": "Affected nodes",
     "alert_billing": "Billing reminder",

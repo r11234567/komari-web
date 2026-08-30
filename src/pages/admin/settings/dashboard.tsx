@@ -74,6 +74,7 @@ const moduleIcons: Record<DashboardModuleId, React.ComponentType<{ size?: number
   server_status: Server,
   traffic_summary: WalletCards,
   storage_summary: Database,
+  cost_center: CircleGauge,
   resource_ranking: Gauge,
   daily_traffic_ranking: ArrowUpDown,
   latency_ranking: Timer,

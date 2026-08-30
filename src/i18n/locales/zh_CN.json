@@ -1644,6 +1644,9 @@
   },
   "warn_https": "当前连接不是 HTTPS！您的敏感数据存在严重风险。请立即采取措施确保连接安全！复制操作可能无法使用！",
   "warn_live_data": "实时数据请求失败，请检查网络连接或服务器状态！",
+  "billing": {
+    "title": "成本中心"
+  },
   "admin_dashboard": {
     "affected_nodes": "受影响节点",
     "alert_billing": "账单提醒",

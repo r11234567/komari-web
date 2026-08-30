@@ -28,6 +28,7 @@ import { CircleFadingArrowUp } from "lucide-react";
 import { listAdminPlugins } from "@/api/connect/admin";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import type { PluginInfo } from "@/types/plugin";
+import { preloadAdminRoute, scheduleAdminWarmup } from "@/utils/adminPreload";
 import {
   getThemeConfigurationType,
   normalizeThemeManifest,
@@ -64,6 +65,8 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
   const ishttps = window.location.protocol === "https:";
   const [t, i18n] = useTranslation();
   const location = useLocation();
+
+  useEffect(() => scheduleAdminWarmup(location.pathname), [location.pathname]);
   const isConfigFormPage =
     location.pathname === "/admin/theme_managed" ||
     location.pathname === "/admin/plugins/config";
@@ -918,6 +921,8 @@ const SidebarItem = ({
     <Link
       to={to}
       onClick={onClick}
+      onMouseEnter={() => void preloadAdminRoute(to)}
+      onFocus={() => void preloadAdminRoute(to)}
       className="group transition-colors duration-200 hover:bg-accent-3 rounded-md"
     >
       <Flex

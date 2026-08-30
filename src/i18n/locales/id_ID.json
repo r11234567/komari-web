@@ -1580,6 +1580,9 @@
   },
   "warn_https": "Koneksi saat ini bukan HTTPS! Data sensitif Anda berisiko. Amankan koneksi sekarang! Fitur salin mungkin tidak tersedia!",
   "warn_live_data": "Permintaan data langsung gagal, periksa koneksi jaringan atau status server!",
+  "billing": {
+    "title": "Pusat Biaya"
+  },
   "admin_dashboard": {
     "affected_nodes": "Node terdampak",
     "alert_billing": "Pengingat tagihan",
