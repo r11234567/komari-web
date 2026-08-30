@@ -38,6 +38,7 @@ test("overview preset exactly matches the default dashboard modules", () => {
     "server_status",
     "traffic_summary",
     "storage_summary",
+    "cost_center",
     "latency_trend",
     "traffic_trend",
     "billing_trend",
