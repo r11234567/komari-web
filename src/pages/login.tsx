@@ -46,7 +46,12 @@ const LoginPageContent = () => {
             onLoginSuccess={() => {
               // A full navigation guarantees the newly issued session cookie is
               // observed by the admin route's fresh AccountProvider.
-              window.location.replace(returnTo);
+              const destination = new URL(returnTo, window.location.origin);
+              if (destination.origin === window.location.origin) {
+                window.location.replace(destination.href);
+              } else {
+                window.location.replace("/admin/dashboard");
+              }
             }}
           />
         </Flex>
