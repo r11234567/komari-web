@@ -12,6 +12,9 @@ import { TablerSettings } from "./Icones/Tabler";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 
+const PASSKEY_REDIRECT_KEY = "komari:passkey-login-redirect";
+const PASSKEY_REDIRECT_MAX_AGE_MS = 60_000;
+
 type LoginDialogProps = {
   trigger?: React.ReactNode | string;
   autoOpen?: boolean;
@@ -38,6 +41,43 @@ export const LoginForm = ({ onLoginSuccess }: LoginFormProps) => {
   const passwordLoginEnabled = !publicInfo?.disable_password_login;
   const isFormValid =
     passwordLoginEnabled && username.trim() !== "" && password.trim() !== "";
+
+  React.useEffect(() => {
+    const markPasskeyLogin = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest(".km-passkey-login")) {
+        return;
+      }
+      try {
+        sessionStorage.setItem(PASSKEY_REDIRECT_KEY, String(Date.now()));
+      } catch {
+        // Storage may be unavailable in privacy-restricted browser contexts.
+      }
+    };
+    document.addEventListener("click", markPasskeyLogin, true);
+    return () => document.removeEventListener("click", markPasskeyLogin, true);
+  }, []);
+
+  React.useEffect(() => {
+    if (account?.logged_in !== true) {
+      return;
+    }
+    let shouldRedirect = false;
+    try {
+      const markedAt = Number(sessionStorage.getItem(PASSKEY_REDIRECT_KEY));
+      if (Number.isFinite(markedAt) && Date.now() - markedAt <= PASSKEY_REDIRECT_MAX_AGE_MS) {
+        shouldRedirect = true;
+      }
+      if (shouldRedirect) {
+        sessionStorage.removeItem(PASSKEY_REDIRECT_KEY);
+      }
+    } catch {
+      return;
+    }
+    if (shouldRedirect && !window.location.pathname.startsWith("/admin")) {
+      window.location.assign("/admin/dashboard");
+    }
+  }, [account?.logged_in]);
 
   const handleLogin = async () => {
     if (!isFormValid) {
