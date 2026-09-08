@@ -313,7 +313,7 @@ export default function SiteSettings() {
         title={t("settings.site.rate_limit_enabled", "请求限流")}
         description={t(
           "settings.site.rate_limit_enabled_description",
-          "开启后按客户端和访客限制请求频率，并合并高成本历史读取。",
+          "开启后按 agent、账号与访客地址限制请求频率，超出部分返回 HTTP 429。高成本历史读取的合并始终生效，与本开关无关。",
         )}
         defaultChecked={settings.rate_limit_enabled ?? false}
         onChange={async (checked) => {
