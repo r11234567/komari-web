@@ -32,6 +32,7 @@ import {
   Settings,
   Terminal,
   Trash2Icon,
+  UserPlus,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -1120,6 +1121,15 @@ const Header = ({
               settings={settings}
               loading={settingsLoading}
             />
+            <Flex mt="4" pt="3" style={{ borderTop: "1px solid var(--gray-a5)" }} gap="2" align="center">
+              <Text size="2" color="gray">需要人工批准？</Text>
+              <Link to="/admin/enroll">
+                <Button variant="soft" size="2" onClick={() => setDialogOpen(false)}>
+                  <UserPlus size={14} />
+                  添加机器向导
+                </Button>
+              </Link>
+            </Flex>
           </Dialog.Content>
         </Dialog.Root>
       </Flex>

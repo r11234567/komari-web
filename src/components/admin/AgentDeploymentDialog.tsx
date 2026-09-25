@@ -26,6 +26,7 @@ import { Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { connectUnary } from "@/api/connect/client";
 import { useConnect } from "@/contexts/ConnectContext";
+import { RescueConsole } from "@/components/admin/RescueConsole";
 
 type InstallPlatform = "linux" | "windows" | "macos";
 
@@ -343,6 +344,12 @@ export function AgentDeploymentDialog({
               <Text size="2">状态：{deliveryText[delivery?.state ?? DeliveryState.UNSPECIFIED]}</Text>
               <Text size="2">保存：{toLocalTime(delivery?.savedAt)}；发送：{toLocalTime(delivery?.sentAt)}；完成：{toLocalTime(delivery?.finishedAt)}</Text>
               {delivery?.error && <Text size="2" color="red">{delivery.error.message}</Text>}
+              <Flex mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }} gap="2" align="center">
+                <Text size="1" color="gray">特权配置（远程控制、WebSSH、执行权限、救援辅助程序）需要额外确认。</Text>
+                <a href={`/admin/privileged-config?agent=${agentId}`} target="_blank" rel="noreferrer">
+                  <Button variant="ghost" size="1">特权配置 →</Button>
+                </a>
+              </Flex>
             </Flex>
 
             <Flex direction="column" gap="1" className="rounded border p-3">
@@ -355,6 +362,8 @@ export function AgentDeploymentDialog({
               </Text>
               {rescueHelper?.error && <Text size="2" color="red">{rescueHelper.error.message}</Text>}
             </Flex>
+
+            <RescueConsole agentId={agentId} />
 
             <Flex gap="3" justify="end" wrap="wrap">
               <Button variant="soft" onClick={() => void generateCommand()}>生成安装指令</Button>
