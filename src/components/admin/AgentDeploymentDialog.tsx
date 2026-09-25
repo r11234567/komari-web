@@ -1,7 +1,6 @@
 import * as React from "react";
 import { durationFromMs, timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
-  AgentRuntimeIdentity,
   type ConfigDelivery,
   type DeploymentProfile,
   Platform,
