@@ -129,6 +129,11 @@
       ]
     },
     {
+      "labelKey": "rescue.title",
+      "path": "/admin/rescue",
+      "icon": "ShieldAlert"
+    },
+    {
       "labelKey": "exec.title",
       "path": "/admin/exec",
       "icon": "Code"

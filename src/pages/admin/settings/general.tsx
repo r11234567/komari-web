@@ -3,7 +3,6 @@ import { Button, Code, Flex, Text, TextField } from "@radix-ui/themes";
 import {
   updateSettingsWithToast,
   useSettings,
-  type SettingsResponse,
 } from "@/lib/api";
 import {
   SettingCardButton,
@@ -34,10 +33,6 @@ export default function GeneralSettings() {
 
   return (
     <>
-      <SettingCardLabel>
-        {t("settings.general.auto_discovery")}
-      </SettingCardLabel>
-      <ApiCard settings={settings} />
       <SettingCardLabel>
         {t("settings.general.integrations", "Agent 兼容")}
       </SettingCardLabel>

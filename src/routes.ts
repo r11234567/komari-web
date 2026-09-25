@@ -253,7 +253,15 @@ export const routes: RouteObject[] = [
       },
       {
         path: "enroll",
-        element: React.createElement(lazy(() => import("./pages/admin/enroll"))),
+        element: React.createElement(
+          lazy(() => import("./components/ForceLoginGuard")),
+          null,
+          React.createElement(lazy(() => import("./pages/admin/enroll")))
+        ),
+      },
+      {
+        path: "rescue",
+        element: React.createElement(lazy(() => import("./pages/admin/rescue"))),
       },
       {
         path: "privileged-config",

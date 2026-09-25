@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  Copy,
   RefreshCw,
   ShieldCheck,
   ShieldAlert,
@@ -24,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { connectUnary, connectClients } from "@/api/connect/client";
 import { create } from "@bufbuild/protobuf";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { TwoFactorProofSchema } from "@komari/proto/komari/common/v1/common_pb";
 import {
   PrivilegedDeliveryState,
@@ -58,41 +60,48 @@ function stateInfo(state: PrivilegedDeliveryState): {
 
 function privilegeModeLabel(mode: PrivilegeMode): string {
   switch (mode) {
-    case PrivilegeMode.LINUX_ROOT:
-      return "root（Linux）";
-    case PrivilegeMode.LINUX_NON_ROOT:
-      return "非 root 服务账号（Linux）";
-    case PrivilegeMode.WINDOWS_ADMINISTRATOR:
-      return "管理员（Windows）";
-    case PrivilegeMode.WINDOWS_STANDARD_USER:
-      return "标准用户（Windows）";
-    default:
-      return "未知";
+    case PrivilegeMode.LINUX_ROOT: return "root（Linux）";
+    case PrivilegeMode.LINUX_NON_ROOT: return "非 root 服务账号（Linux）";
+    case PrivilegeMode.WINDOWS_ADMINISTRATOR: return "管理员（Windows）";
+    case PrivilegeMode.WINDOWS_STANDARD_USER: return "标准用户（Windows）";
+    default: return "未知";
   }
 }
 
 function upgradeClassLabel(cls: UpgradeClass): string {
   switch (cls) {
-    case UpgradeClass.MANUAL_CONFIRM:
-      return "同权限级（面板确认）";
-    case UpgradeClass.MANUAL_PRIVILEGED:
-      return "跨权限级（机器上执行）";
-    case UpgradeClass.AUTOMATIC:
-      return "自动（已阻止）";
-    default:
-      return "未知";
+    case UpgradeClass.MANUAL_CONFIRM: return "同权限级（面板确认）";
+    case UpgradeClass.MANUAL_PRIVILEGED: return "跨权限级（机器上执行）";
+    case UpgradeClass.AUTOMATIC: return "自动（已阻止）";
+    default: return "未知";
   }
 }
 
 function formatTime(ts: unknown): string {
   if (!ts) return "—";
   try {
-    // protobuf-es Timestamp
-    if (typeof (ts as any).toDate === "function") {
-      return (ts as any).toDate().toLocaleString();
-    }
-  } catch { /* noop */ }
-  return "—";
+    if (typeof (ts as any).toDate === "function") return (ts as any).toDate().toLocaleString();
+    return timestampDate(ts as any).toLocaleString();
+  } catch { return "—"; }
+}
+
+// Countdown until a deadline timestamp; returns null if no deadline or already expired.
+function useCountdown(deadline: Date | null): string | null {
+  const [remaining, setRemaining] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!deadline) { setRemaining(null); return; }
+    const update = () => {
+      const diff = deadline.getTime() - Date.now();
+      if (diff <= 0) { setRemaining("已过期"); return; }
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(`${m}:${String(s).padStart(2, "0")} 后过期`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [deadline]);
+  return remaining;
 }
 
 // ─── main page ───────────────────────────────────────────────────────────────
@@ -120,6 +129,7 @@ export default function PrivilegedConfigPage() {
   const [saving, setSaving] = React.useState(false);
 
   const abortRef = React.useRef<AbortController | null>(null);
+  const pollRef = React.useRef<number | undefined>(undefined);
 
   const loadHistory = React.useCallback(async (agentId: string) => {
     if (!agentId) return;
@@ -145,10 +155,24 @@ export default function PrivilegedConfigPage() {
     }
   }, []);
 
+  // Poll every 10s when there is a pending revision awaiting action
+  const hasPending = React.useMemo(() => revisions.some(
+    (r) => r.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION ||
+           r.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
+  ), [revisions]);
+
   React.useEffect(() => {
     if (selectedAgent) void loadHistory(selectedAgent);
-    return () => abortRef.current?.abort();
+    return () => { abortRef.current?.abort(); };
   }, [selectedAgent, loadHistory]);
+
+  React.useEffect(() => {
+    if (pollRef.current !== undefined) window.clearInterval(pollRef.current);
+    if (selectedAgent && hasPending) {
+      pollRef.current = window.setInterval(() => void loadHistory(selectedAgent), 10_000);
+    }
+    return () => { if (pollRef.current !== undefined) window.clearInterval(pollRef.current); };
+  }, [selectedAgent, hasPending, loadHistory]);
 
   const confirm = async (revision: PrivilegedRevision) => {
     if (!twoFaCode.trim()) { toast.error("请输入 2FA 验证码"); return; }
@@ -208,7 +232,6 @@ export default function PrivilegedConfigPage() {
     }
   };
 
-  // The latest pending revision, if any
   const pendingRevision = revisions.find(
     (r) =>
       r.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION ||
@@ -237,6 +260,7 @@ export default function PrivilegedConfigPage() {
             <Text size="1" color="gray">
               已安装权限：{privilegeModeLabel(installedMode)} &nbsp;·&nbsp;
               当前运行配置版本：{appliedRevision ? `r${appliedRevision.toString()}` : "未知"}
+              {hasPending && <> &nbsp;·&nbsp; <Badge color="orange" size="1">有待处理变更，自动刷新中</Badge></>}
             </Text>
           )}
         </Flex>
@@ -287,15 +311,7 @@ export default function PrivilegedConfigPage() {
 
             {pendingRevision.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION &&
               pendingRevision.plan?.manualTask && (
-              <Callout.Root color="orange" size="1">
-                <Callout.Icon><ShieldAlert size={13} /></Callout.Icon>
-                <Callout.Text>
-                  此变更跨越权限级别，需要在机器上以 root 运行升级命令。面板已确认，等待机器上执行。
-                  {pendingRevision.plan.manualTask.command && (
-                    <><br /><code style={{ fontFamily: "monospace" }}>{pendingRevision.plan.manualTask.command}</code></>
-                  )}
-                </Callout.Text>
-              </Callout.Root>
+              <ManualTaskCard task={pendingRevision.plan.manualTask} />
             )}
           </Flex>
         </Card>
@@ -377,6 +393,80 @@ export default function PrivilegedConfigPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+// ─── ManualTaskCard ───────────────────────────────────────────────────────────
+
+function ManualTaskCard({ task }: { task: NonNullable<NonNullable<PrivilegedRevision["plan"]>["manualTask"]> }) {
+  const expiresDate = React.useMemo(() => {
+    if (!task.expiresAt) return null;
+    try {
+      return timestampDate(task.expiresAt);
+    } catch { return null; }
+  }, [task.expiresAt]);
+
+  const countdown = useCountdown(expiresDate);
+  const isExpired = expiresDate && expiresDate.getTime() < Date.now();
+
+  const copyCommand = () => {
+    if (!task.command) return;
+    navigator.clipboard.writeText(task.command).then(() => toast.success("命令已复制"));
+  };
+
+  return (
+    <Callout.Root color={isExpired ? "red" : "orange"} size="1">
+      <Callout.Icon><ShieldAlert size={13} /></Callout.Icon>
+      <Callout.Text>
+        <Flex direction="column" gap="2">
+          <Text size="2">
+            此变更跨越权限级别，需要在机器上以管理员权限运行升级命令。面板已确认，等待机器上执行。
+          </Text>
+
+          {task.requireLocalPassword && (
+            <Text size="1" color="gray">本次升级需要本地系统认证（sudo 密码或 PAM）</Text>
+          )}
+
+          {countdown && (
+            <Flex align="center" gap="1">
+              <Clock size={12} />
+              <Text size="1" color={isExpired ? "red" : "orange"}>{countdown}</Text>
+            </Flex>
+          )}
+
+          {task.command && (
+            <Flex direction="column" gap="1">
+              <Text size="1" weight="medium" color="gray">在机器上运行：</Text>
+              <Flex gap="2" align="start">
+                <code
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    background: "var(--gray-a3)",
+                    padding: "6px 10px",
+                    borderRadius: "4px",
+                    wordBreak: "break-all",
+                    flex: 1,
+                  }}
+                >
+                  {task.command}
+                </code>
+                <Button variant="soft" size="1" onClick={copyCommand} title="复制命令">
+                  <Copy size={12} />
+                  复制
+                </Button>
+              </Flex>
+            </Flex>
+          )}
+
+          {task.taskId && (
+            <Text size="1" color="gray" style={{ fontFamily: "monospace" }}>
+              任务 ID：{task.taskId}
+            </Text>
+          )}
+        </Flex>
+      </Callout.Text>
+    </Callout.Root>
   );
 }
 

@@ -1,16 +1,14 @@
 import * as React from "react";
-import { create } from "@bufbuild/protobuf";
 import { durationFromMs, timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
   AgentRuntimeIdentity,
-  RescueInstallConfigSchema,
   type ConfigDelivery,
   type DeploymentProfile,
   Platform,
 } from "@komari/proto/komari/deployment/v1/deployment_pb";
 import { RuntimeConfigSchema } from "@komari/proto/komari/config/v1/config_pb";
 import { DeliveryState } from "@komari/proto/komari/common/v1/common_pb";
-import type { RescueHelperStatus } from "@komari/proto/komari/rescue/v1/rescue_pb";
+import { create } from "@bufbuild/protobuf";
 import {
   Button,
   Checkbox,
@@ -22,11 +20,10 @@ import {
   TextArea,
   TextField,
 } from "@radix-ui/themes";
-import { Copy, Download } from "lucide-react";
+import { Copy, Download, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { connectUnary } from "@/api/connect/client";
 import { useConnect } from "@/contexts/ConnectContext";
-import { RescueConsole } from "@/components/admin/RescueConsole";
 
 type InstallPlatform = "linux" | "windows" | "macos";
 
@@ -79,7 +76,6 @@ export function AgentDeploymentDialog({
   const [saving, setSaving] = React.useState(false);
   const [profile, setProfile] = React.useState<DeploymentProfile>();
   const [delivery, setDelivery] = React.useState<ConfigDelivery>();
-  const [rescueHelper, setRescueHelper] = React.useState<RescueHelperStatus>();
   const [platform, setPlatform] = React.useState<InstallPlatform>("linux");
   const [command, setCommand] = React.useState("");
   const controllerRef = React.useRef<AbortController | null>(null);
@@ -98,7 +94,6 @@ export function AgentDeploymentDialog({
       if (!controller.signal.aborted) {
         setProfile(response.profile);
         setDelivery(response.delivery);
-        setRescueHelper(response.rescueHelper);
         setPlatform(platformFromProfile(response.profile?.install?.platform));
       }
     } catch (error) {
@@ -281,22 +276,7 @@ export function AgentDeploymentDialog({
                 <Toggle label="从网卡获取 IP" checked={install?.getIpAddressFromNic ?? false} onChange={(value) => updateInstall("getIpAddressFromNic", value)} />
               </div>
               {nonPrivilegedRuntime && (
-                <Text size="2" color="gray">非特权 Agent 不能执行远程命令或终端；如需特权操作，请关闭普通远程控制后启用下方救援模式。</Text>
-              )}
-              {!remoteControlEnabled && (
-                <Flex direction="column" gap="2" className="rounded border p-3">
-                  <Toggle
-                    label="启用紧急命令 / 救援模式"
-                    checked={install?.rescue?.enabled ?? false}
-                    onChange={(value) =>
-                      updateInstall(
-                        "rescue",
-                        create(RescueInstallConfigSchema, { enabled: value }),
-                      )
-                    }
-                  />
-                  <Text size="2" color="gray">救援辅助程序独立以管理员权限运行；安装时不会修改防火墙，仅在管理员通过 2FA 明确执行隔离动作时创建可撤销的 Komari 专属规则。</Text>
-                </Flex>
+                <Text size="2" color="gray">非特权 Agent 不能执行远程命令或终端；如需特权操作，请通过救援模式页面操作。</Text>
               )}
               <TextField.Root value={install?.installDirectory ?? ""} placeholder="安装目录" onChange={(event) => updateInstall("installDirectory", event.target.value)} />
               <TextField.Root value={install?.serviceName ?? ""} placeholder="服务名称" onChange={(event) => updateInstall("serviceName", event.target.value)} />
@@ -344,26 +324,18 @@ export function AgentDeploymentDialog({
               <Text size="2">状态：{deliveryText[delivery?.state ?? DeliveryState.UNSPECIFIED]}</Text>
               <Text size="2">保存：{toLocalTime(delivery?.savedAt)}；发送：{toLocalTime(delivery?.sentAt)}；完成：{toLocalTime(delivery?.finishedAt)}</Text>
               {delivery?.error && <Text size="2" color="red">{delivery.error.message}</Text>}
-              <Flex mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }} gap="2" align="center">
-                <Text size="1" color="gray">特权配置（远程控制、WebSSH、执行权限、救援辅助程序）需要额外确认。</Text>
+              <Flex mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }} gap="2" align="center" wrap="wrap">
+                <Text size="1" color="gray">特权配置（远程控制、WebSSH、执行权限、救援辅助程序）需额外确认，救援模式与性能诊断在独立页面操作。</Text>
                 <a href={`/admin/privileged-config?agent=${agentId}`} target="_blank" rel="noreferrer">
                   <Button variant="ghost" size="1">特权配置 →</Button>
                 </a>
+                <a href={`/admin/rescue?agent=${agentId}`} target="_blank" rel="noreferrer">
+                  <Button variant="ghost" size="1">
+                    <ShieldAlert size={12} />救援 / 诊断 →
+                  </Button>
+                </a>
               </Flex>
             </Flex>
-
-            <Flex direction="column" gap="1" className="rounded border p-3">
-              <Text weight="bold">救援辅助程序状态</Text>
-              <Text size="2">
-                请求安装：{rescueHelper?.requested ? "是" : "否"}；已安装：{rescueHelper?.installed ? "是" : "否"}；守护程序：{rescueHelper?.guardianRunning ? "运行中" : "未运行"}
-              </Text>
-              <Text size="2">
-                辅助程序：{rescueHelper?.helperRunning ? "运行中" : "未运行"}；网络隔离：{rescueHelper?.networkIsolation === 1 ? "无" : rescueHelper?.networkIsolation ? "已启用" : "未知"}
-              </Text>
-              {rescueHelper?.error && <Text size="2" color="red">{rescueHelper.error.message}</Text>}
-            </Flex>
-
-            <RescueConsole agentId={agentId} />
 
             <Flex gap="3" justify="end" wrap="wrap">
               <Button variant="soft" onClick={() => void generateCommand()}>生成安装指令</Button>

@@ -1123,12 +1123,20 @@ const Header = ({
             />
             <Flex mt="4" pt="3" style={{ borderTop: "1px solid var(--gray-a5)" }} gap="2" align="center">
               <Text size="2" color="gray">需要人工批准？</Text>
-              <Link to="/admin/enroll">
-                <Button variant="soft" size="2" onClick={() => setDialogOpen(false)}>
-                  <UserPlus size={14} />
-                  添加机器向导
-                </Button>
-              </Link>
+              <Button
+                variant="soft"
+                size="2"
+                onClick={() => {
+                  // Open enroll in a new tab. Append a timestamp so the browser never
+                  // reuses a cached page, and the SPA route guard will demand a fresh
+                  // login each time this URL is opened.
+                  window.open(`/admin/enroll?t=${Date.now()}`, "_blank", "noopener,noreferrer");
+                  setDialogOpen(false);
+                }}
+              >
+                <UserPlus size={14} />
+                添加机器向导
+              </Button>
             </Flex>
           </Dialog.Content>
         </Dialog.Root>
