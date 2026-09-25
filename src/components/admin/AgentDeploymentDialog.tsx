@@ -303,9 +303,9 @@ export function AgentDeploymentDialog({
   };
 
   const generateCommand = async () => {
-    const runtimeIdentity = serviceAccount
-      ? AgentRuntimeIdentity.SERVICE_ACCOUNT  // 专用非特权服务账号
-      : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR;
+    // serviceAccount controls install identity:
+    // true  → AgentRuntimeIdentity.SERVICE_ACCOUNT (专用非特权服务账号)
+    // false → AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR
     stopActiveRequest();
     const controller = new AbortController();
     controllerRef.current = controller;
