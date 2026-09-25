@@ -1,6 +1,7 @@
 import * as React from "react";
 import { durationFromMs, timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
+  AgentRuntimeIdentity,
   type ConfigDelivery,
   type DeploymentProfile,
   Platform,
@@ -144,6 +145,7 @@ export function AgentDeploymentDialog({
   const [profile, setProfile] = React.useState<DeploymentProfile>();
   const [delivery, setDelivery] = React.useState<ConfigDelivery>();
   const [platform, setPlatform] = React.useState<InstallPlatform>("linux");
+  const [serviceAccount, setServiceAccount] = React.useState(false);
   const [command, setCommand] = React.useState("");
 
   // privileged delivery state
@@ -301,13 +303,16 @@ export function AgentDeploymentDialog({
   };
 
   const generateCommand = async () => {
+    const runtimeIdentity = serviceAccount
+      ? AgentRuntimeIdentity.SERVICE_ACCOUNT  // 专用非特权服务账号
+      : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR;
     stopActiveRequest();
     const controller = new AbortController();
     controllerRef.current = controller;
     try {
       const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
         deployment.generateInstallCommand(
-          { agentId, platform: platformValue[platform] },
+          { agentId, platform: platformValue[platform], runtimeIdentity },
           { signal, timeoutMs },
         ),
       );
@@ -445,6 +450,21 @@ export function AgentDeploymentDialog({
                     <ShieldAlert size={12} />救援 / 诊断 →
                   </Button>
                 </a>
+              </Flex>
+            </Flex>
+
+            <Flex direction="column" gap="2">
+              <Text size="2" color="gray">Agent 运行身份（影响安装指令）</Text>
+              <Flex gap="3">
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                  <input type="radio" checked={!serviceAccount} onChange={() => setServiceAccount(false)} />
+                  <Text size="2">root / 管理员</Text>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                  {/* AgentRuntimeIdentity.SERVICE_ACCOUNT — 专用非特权服务账号 */}
+                  <input type="radio" checked={serviceAccount} onChange={() => setServiceAccount(true)} />
+                  <Text size="2">专用非特权服务账号</Text>
+                </label>
               </Flex>
             </Flex>
 
