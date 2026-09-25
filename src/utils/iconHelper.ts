@@ -30,6 +30,7 @@ import {
   ChartNoAxesCombined,
   CircleDollarSign,
   ShieldCheck,
+  ShieldAlert,
   UserPlus,
 } from "lucide-react";
 
@@ -66,6 +67,7 @@ export const iconMap: Record<string, React.ComponentType<any>> = {
   ChartNoAxesCombined,
   CircleDollarSign,
   ShieldCheck,
+  ShieldAlert,
   UserPlus,
 };
 // 解析插件/插件页面声明的 icon：

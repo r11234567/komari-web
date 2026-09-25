@@ -1755,5 +1755,8 @@
   },
   "privileged_config": {
     "title": "Privileged Config"
+  },
+  "rescue": {
+    "title": "Rescue"
   }
 }

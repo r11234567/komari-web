@@ -6,11 +6,17 @@ import {
   type DeploymentProfile,
   Platform,
 } from "@komari/proto/komari/deployment/v1/deployment_pb";
-import { RuntimeConfigSchema } from "@komari/proto/komari/config/v1/config_pb";
-import { DeliveryState } from "@komari/proto/komari/common/v1/common_pb";
+import {
+  RuntimeConfigSchema,
+  PrivilegedDeliveryState,
+  type PrivilegedRevision,
+} from "@komari/proto/komari/config/v1/config_pb";
+import { DeliveryState, TwoFactorProofSchema } from "@komari/proto/komari/common/v1/common_pb";
 import { create } from "@bufbuild/protobuf";
 import {
+  Badge,
   Button,
+  Callout,
   Checkbox,
   Dialog,
   Flex,
@@ -20,9 +26,9 @@ import {
   TextArea,
   TextField,
 } from "@radix-ui/themes";
-import { Copy, Download, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Copy, Download, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import { connectUnary } from "@/api/connect/client";
+import { connectUnary, connectClients } from "@/api/connect/client";
 import { useConnect } from "@/contexts/ConnectContext";
 
 type InstallPlatform = "linux" | "windows" | "macos";
@@ -59,6 +65,69 @@ const intervalSeconds = (seconds: string) => {
   return Number.isFinite(parsed) && parsed >= 1 ? Math.round(parsed * 1000) : undefined;
 };
 
+// ─── helpers shared with privileged state display ────────────────────────────
+
+function useCountdown(deadline: Date | null): string | null {
+  const [remaining, setRemaining] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!deadline) { setRemaining(null); return; }
+    const update = () => {
+      const diff = deadline.getTime() - Date.now();
+      if (diff <= 0) { setRemaining("已过期"); return; }
+      const m = Math.floor(diff / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(`${m}:${String(s).padStart(2, "0")} 后过期`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [deadline]);
+  return remaining;
+}
+
+function InlineManualTaskCard({ task }: { task: NonNullable<NonNullable<PrivilegedRevision["plan"]>["manualTask"]> }) {
+  const expiresDate = React.useMemo(() => {
+    if (!task.expiresAt) return null;
+    try { return timestampDate(task.expiresAt); } catch { return null; }
+  }, [task.expiresAt]);
+  const countdown = useCountdown(expiresDate);
+  const isExpired = expiresDate && expiresDate.getTime() < Date.now();
+  return (
+    <Callout.Root color={isExpired ? "red" : "orange"} size="1">
+      <Callout.Icon><ShieldAlert size={13} /></Callout.Icon>
+      <Callout.Text>
+        <Flex direction="column" gap="2">
+          <Text size="2">跨权限级变更，需要在机器上以管理员权限运行升级命令。</Text>
+          {task.requireLocalPassword && (
+            <Text size="1" color="gray">需要本地系统认证（sudo 密码或 PAM）</Text>
+          )}
+          {countdown && (
+            <Flex align="center" gap="1">
+              <Clock size={12} />
+              <Text size="1" color={isExpired ? "red" : "orange"}>{countdown}</Text>
+            </Flex>
+          )}
+          {task.command && (
+            <Flex gap="2" align="start">
+              <code style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--gray-a3)", padding: "6px 10px", borderRadius: "4px", wordBreak: "break-all", flex: 1 }}>
+                {task.command}
+              </code>
+              <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText(task.command!).then(() => toast.success("命令已复制"))} title="复制命令">
+                <Copy size={12} />复制
+              </Button>
+            </Flex>
+          )}
+          {task.taskId && (
+            <Text size="1" color="gray" style={{ fontFamily: "monospace" }}>任务 ID：{task.taskId}</Text>
+          )}
+        </Flex>
+      </Callout.Text>
+    </Callout.Root>
+  );
+}
+
+// ─── main component ───────────────────────────────────────────────────────────
+
 type AgentDeploymentDialogProps = {
   agentId: string;
   title?: string;
@@ -78,6 +147,12 @@ export function AgentDeploymentDialog({
   const [delivery, setDelivery] = React.useState<ConfigDelivery>();
   const [platform, setPlatform] = React.useState<InstallPlatform>("linux");
   const [command, setCommand] = React.useState("");
+
+  // privileged delivery state
+  const [pendingPriv, setPendingPriv] = React.useState<PrivilegedRevision | undefined>();
+  const [twoFaCode, setTwoFaCode] = React.useState("");
+  const [confirming, setConfirming] = React.useState(false);
+
   const controllerRef = React.useRef<AbortController | null>(null);
 
   const stopActiveRequest = () => controllerRef.current?.abort();
@@ -88,13 +163,28 @@ export function AgentDeploymentDialog({
     controllerRef.current = controller;
     setLoading(true);
     try {
-      const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
-        deployment.getDeployment({ agentId }, { signal, timeoutMs }),
-      );
+      const [deployResp, privResp] = await Promise.all([
+        connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
+          deployment.getDeployment({ agentId }, { signal, timeoutMs }),
+        ),
+        connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
+          connectClients.privilegedDelivery.listPrivilegedRevisions(
+            { agentId, limit: 5 },
+            { signal, timeoutMs },
+          ),
+        ).catch(() => null),
+      ]);
       if (!controller.signal.aborted) {
-        setProfile(response.profile);
-        setDelivery(response.delivery);
-        setPlatform(platformFromProfile(response.profile?.install?.platform));
+        setProfile(deployResp.profile);
+        setDelivery(deployResp.delivery);
+        setPlatform(platformFromProfile(deployResp.profile?.install?.platform));
+        setPendingPriv(
+          privResp?.revisions?.find(
+            (r) =>
+              r.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION ||
+              r.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
+          ),
+        );
       }
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -104,6 +194,30 @@ export function AgentDeploymentDialog({
       if (!controller.signal.aborted) setLoading(false);
     }
   }, [agentId, deployment]);
+
+  const confirmPriv = async () => {
+    if (!pendingPriv || !twoFaCode.trim()) { toast.error("请输入 2FA 验证码"); return; }
+    setConfirming(true);
+    try {
+      await connectUnary({ signal: new AbortController().signal }, (signal, timeoutMs) =>
+        connectClients.privilegedDelivery.confirmPrivilegedDelivery(
+          {
+            agentId,
+            revision: pendingPriv.revision,
+            twoFactor: create(TwoFactorProofSchema, { code: twoFaCode.trim() }),
+          },
+          { signal, timeoutMs },
+        ),
+      );
+      setTwoFaCode("");
+      toast.success("已确认，等待机器应用");
+      void load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "确认失败");
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   React.useEffect(() => {
     if (open) void load();
@@ -290,6 +404,52 @@ export function AgentDeploymentDialog({
               />
             </Flex>
 
+            {/* ── privileged delivery state ── */}
+            <Flex direction="column" gap="2">
+              <Text weight="bold">以下特权配置需要下发后确认</Text>
+              <Text size="2" color="gray">远程控制、WebSSH、执行权限、救援辅助程序等特权功能不能在线静默生效，每次变更需要面板二次确认，跨权限级变更还需在机器上执行。</Text>
+
+              {pendingPriv && (
+                <Flex direction="column" gap="2" className="rounded border p-3">
+                  <Flex align="center" gap="2" wrap="wrap">
+                    <Text size="2" weight="medium">待处理特权变更</Text>
+                    {pendingPriv.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION && (
+                      <Badge color="orange" size="1">需要面板二次确认</Badge>
+                    )}
+                    {pendingPriv.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION && (
+                      <Badge color="orange" size="1">需要在机器上执行</Badge>
+                    )}
+                  </Flex>
+
+                  {pendingPriv.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION && (
+                    <>
+                      <Callout.Root color="orange" size="1">
+                        <Callout.Icon><AlertTriangle size={13} /></Callout.Icon>
+                        <Callout.Text>确认将授权机器应用此特权变更。</Callout.Text>
+                      </Callout.Root>
+                      <Flex gap="2" align="center" wrap="wrap">
+                        <TextField.Root
+                          type="password"
+                          placeholder="2FA 验证码"
+                          value={twoFaCode}
+                          onChange={(e) => setTwoFaCode(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") void confirmPriv(); }}
+                        />
+                        <Button onClick={() => void confirmPriv()} disabled={confirming || !twoFaCode.trim()}>
+                          <CheckCircle2 size={14} />{confirming ? "确认中..." : "确认变更"}
+                        </Button>
+                      </Flex>
+                    </>
+                  )}
+
+                  {pendingPriv.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION &&
+                    pendingPriv.plan?.manualTask && (
+                    <InlineManualTaskCard task={pendingPriv.plan.manualTask} />
+                  )}
+                </Flex>
+              )}
+            </Flex>
+
             <Flex direction="column" gap="2">
               <Text weight="bold">以下配置将下发</Text>
               <Text size="2" color="gray">仅以下七项可在线生效。基础 GPU、远程控制和其它安装设置必须重新安装。</Text>
@@ -325,10 +485,7 @@ export function AgentDeploymentDialog({
               <Text size="2">保存：{toLocalTime(delivery?.savedAt)}；发送：{toLocalTime(delivery?.sentAt)}；完成：{toLocalTime(delivery?.finishedAt)}</Text>
               {delivery?.error && <Text size="2" color="red">{delivery.error.message}</Text>}
               <Flex mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }} gap="2" align="center" wrap="wrap">
-                <Text size="1" color="gray">特权配置（远程控制、WebSSH、执行权限、救援辅助程序）需额外确认，救援模式与性能诊断在独立页面操作。</Text>
-                <a href={`/admin/privileged-config?agent=${agentId}`} target="_blank" rel="noreferrer">
-                  <Button variant="ghost" size="1">特权配置 →</Button>
-                </a>
+                <Text size="1" color="gray">救援模式与性能诊断在独立页面操作。</Text>
                 <a href={`/admin/rescue?agent=${agentId}`} target="_blank" rel="noreferrer">
                   <Button variant="ghost" size="1">
                     <ShieldAlert size={12} />救援 / 诊断 →

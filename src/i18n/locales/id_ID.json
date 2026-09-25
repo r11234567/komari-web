@@ -1661,5 +1661,8 @@
   "return_route": {
     "title": "Pemantauan Rute Balik",
     "description": "Identifikasi rute balik China Mobile, Telecom, dan Unicom, lalu beri tahu saat perpindahan dan pemulihan terkonfirmasi."
+  },
+  "rescue": {
+    "title": "Mode Penyelamatan"
   }
 }

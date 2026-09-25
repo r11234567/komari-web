@@ -1755,5 +1755,8 @@
   },
   "privileged_config": {
     "title": "特权配置下发"
+  },
+  "rescue": {
+    "title": "救援模式"
   }
 }

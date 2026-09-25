@@ -3,10 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { Flex, Text, Tabs } from "@radix-ui/themes";
 import { Activity, ShieldAlert } from "lucide-react";
 import NodeSelector from "@/components/NodeSelector";
+import { NodeDetailsProvider } from "@/contexts/NodeDetailsContext";
 import { RescueConsole } from "@/components/admin/RescueConsole";
 import { PerformanceDiagnostics } from "@/components/admin/PerformanceDiagnostics";
 
-export default function RescuePage() {
+function RescuePageInner() {
   const [params, setParams] = useSearchParams();
   const initialAgent = params.get("agent") ?? "";
   const [selectedAgent, setSelectedAgent] = React.useState<string>(initialAgent);
@@ -64,5 +65,13 @@ export default function RescuePage() {
         <Text size="2" color="gray">请先选择一台机器。</Text>
       )}
     </div>
+  );
+}
+
+export default function RescuePage() {
+  return (
+    <NodeDetailsProvider>
+      <RescuePageInner />
+    </NodeDetailsProvider>
   );
 }

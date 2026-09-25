@@ -263,10 +263,6 @@ export const routes: RouteObject[] = [
         path: "rescue",
         element: React.createElement(lazy(() => import("./pages/admin/rescue"))),
       },
-      {
-        path: "privileged-config",
-        element: React.createElement(lazy(() => import("./pages/admin/privileged-config"))),
-      }
     ],
   },
   {
