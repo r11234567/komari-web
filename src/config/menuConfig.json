@@ -134,6 +134,16 @@
       "icon": "Code"
     },
     {
+      "labelKey": "enroll.title",
+      "path": "/admin/enroll",
+      "icon": "UserPlus"
+    },
+    {
+      "labelKey": "privileged_config.title",
+      "path": "/admin/privileged-config",
+      "icon": "ShieldCheck"
+    },
+    {
       "labelKey": "ping.title",
       "path": "/admin/ping",
       "icon": "Activity"

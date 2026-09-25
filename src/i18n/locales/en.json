@@ -1748,5 +1748,12 @@
   "return_route": {
     "title": "Return Route Monitoring",
     "description": "Identify return routes for China Mobile, Telecom, and Unicom, then notify on confirmed route changes and recovery."
+  },
+  "enroll": {
+    "title": "Enroll Machine",
+    "wizard_title": "Machine Enrollment Wizard"
+  },
+  "privileged_config": {
+    "title": "Privileged Config"
   }
 }

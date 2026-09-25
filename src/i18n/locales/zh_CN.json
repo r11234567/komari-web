@@ -1748,5 +1748,12 @@
   "return_route": {
     "description": "识别移动、电信、联通回程线路，确认切线后告警，恢复后自动通知。",
     "title": "回程线路监测"
+  },
+  "enroll": {
+    "title": "添加机器",
+    "wizard_title": "机器注册向导"
+  },
+  "privileged_config": {
+    "title": "特权配置下发"
   }
 }

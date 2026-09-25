@@ -10,6 +10,8 @@ import { MetricsService } from "@komari/proto/komari/metrics/v1/metrics_pb";
 import { ExecutionService } from "@komari/proto/komari/exec/v1/exec_pb";
 import { WebSSHService } from "@komari/proto/komari/webssh/v1/webssh_pb";
 import { PluginService } from "@komari/proto/komari/plugin/v1/plugin_pb";
+import { EnrollmentService, EnrollmentAdminService } from "@komari/proto/komari/enrollment/v1/enrollment_pb";
+import { PrivilegedDeliveryService } from "@komari/proto/komari/config/v1/config_pb";
 import {
   ConnectCompatibilityError,
   isCompatibilityFailure,
@@ -41,8 +43,11 @@ const metrics = createClient(MetricsService, transport);
 const execution = createClient(ExecutionService, transport);
 const webssh = createClient(WebSSHService, transport);
 const plugin = createClient(PluginService, transport);
+const enrollment = createClient(EnrollmentService, transport);
+const enrollmentAdmin = createClient(EnrollmentAdminService, transport);
+const privilegedDelivery = createClient(PrivilegedDeliveryService, transport);
 
-export const connectClients = { browser, dashboard, maintenance, pingTask, deployment, rescue, metrics, execution, webssh, plugin };
+export const connectClients = { browser, dashboard, maintenance, pingTask, deployment, rescue, metrics, execution, webssh, plugin, enrollment, enrollmentAdmin, privilegedDelivery };
 
 export const connectUnary = <T>(
   options: ConnectCallOptions,

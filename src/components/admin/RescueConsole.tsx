@@ -27,7 +27,12 @@ import { DEFAULT_STREAM_DEADLINE_MS } from "@/api/connect/deadline";
 import { useConnect } from "@/contexts/ConnectContext";
 
 const actions = [
-  { value: RescueAction.DIAGNOSTICS, label: "机器状态诊断", detail: "采集系统、内存、磁盘、网卡、路由和失败服务状态。", destructive: false },
+  { value: RescueAction.DIAGNOSTICS, label: "机器状态诊断", detail: "采集系统、内存、磁盘、网卡、路由和失败服务状态。", destructive: false, noTwoFactor: true },
+  { value: RescueAction.DETAILED_CPU_METRICS, label: "详细 CPU 统计", detail: "采集 user/kernel/softirq/steal 细分及 PSI 压力指标，用于对照 VirtFusion 的统计。", destructive: false, noTwoFactor: true },
+  { value: RescueAction.DETAILED_MEMORY_METRICS, label: "详细内存统计", detail: "采集 swap 使用、换页抖动、zswap 和 PSI 压力指标。", destructive: false, noTwoFactor: true },
+  { value: RescueAction.TEMPORARY_SSH_ACCESS, label: "临时开放 SSH", detail: "在指定端口（默认 22）开放 15 分钟的 SSH 公网访问，超时自动关闭。仅手动触发。", destructive: false, noTwoFactor: false },
+  { value: RescueAction.REVOKE_TEMPORARY_SSH_ACCESS, label: "关闭临时 SSH", detail: "立即撤销临时 SSH 访问规则。", destructive: false, noTwoFactor: false },
+  { value: RescueAction.ROLLBACK_PRIVILEGED_CONFIG, label: "回滚特权配置", detail: "在机器上撤销最近一次特权配置变更，无需面板连接。", destructive: true, noTwoFactor: false },
   { value: RescueAction.SHUTDOWN, label: "关闭 VPS", detail: "立即关闭操作系统。恢复需要云厂商控制台或物理电源。", destructive: true },
   { value: RescueAction.REBOOT, label: "重启 VPS", detail: "立即重启整台机器，不只是重启 Agent。", destructive: true },
   { value: RescueAction.BLOCK_PUBLIC_INTERFACES, label: "阻断公网网卡", detail: "阻断默认路由网卡全部入站和出站，可能立即失去远程连接。", destructive: true },
@@ -71,6 +76,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   const [helperStatus, setHelperStatus] = React.useState<RescueHelperStatus>();
   const [action, setAction] = React.useState<RescueAction>(RescueAction.DIAGNOSTICS);
   const [twoFactorCode, setTwoFactorCode] = React.useState("");
+  const [sshPort, setSshPort] = React.useState("22");
   const [session, setSession] = React.useState<RescueSession>();
   const [output, setOutput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -163,7 +169,8 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   };
 
   const start = async () => {
-    if (!agentId || !twoFactorCode.trim()) {
+    const needsTwoFactor = !(actions.find(a => a.value === action) as any)?.noTwoFactor;
+    if (!agentId || (needsTwoFactor && !twoFactorCode.trim())) {
       toast.error("请输入新的 2FA 验证码");
       return;
     }
@@ -179,6 +186,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
             agentId,
             action,
             arguments: [],
+            sshPort: action === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0,
             timeout: durationFromMs(5 * 60_000),
             maxOutputBytes: 256n * 1024n,
             idempotencyKey: crypto.randomUUID(),
