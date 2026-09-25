@@ -296,6 +296,18 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
           </Select.Content>
         </Select.Root>
         <Text size="2" color={selectedAction.destructive ? "red" : "gray"}>{selectedAction.detail}</Text>
+        {action === RescueAction.TEMPORARY_SSH_ACCESS && (
+          <Flex gap="2" align="center">
+            <Text size="2" color="gray" style={{ whiteSpace: "nowrap" }}>SSH 端口</Text>
+            <TextField.Root
+              type="number"
+              placeholder="22"
+              value={sshPort}
+              onChange={(event) => setSshPort(event.target.value)}
+              style={{ width: "90px" }}
+            />
+          </Flex>
+        )}
         <Flex gap="2" justify="end" wrap="wrap">
           <TextField.Root
             type="password"
