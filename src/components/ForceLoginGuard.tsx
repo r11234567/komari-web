@@ -1,17 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import Loading from "@/components/loading";
 
-/**
- * ForceLoginGuard — navigates to the login page unconditionally on every mount.
- *
- * Used to wrap /admin/enroll so that opening the page in a new tab always
- * demands a fresh authentication, even if the browser already has a valid
- * session. The guard hits /api/logout first (which invalidates the current
- * session cookie server-side), then sends the user to the login page with a
- * returnTo pointing back here.
- */
-export default function ForceLoginGuard({ children }: { children: React.ReactNode }) {
+export default function ForceLoginGuard() {
   const navigate = useNavigate();
 
   React.useEffect(() => {
