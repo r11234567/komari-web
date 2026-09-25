@@ -84,7 +84,7 @@ function upgradeClassLabel(cls: UpgradeClass): string {
   }
 }
 
-function formatTime(ts: { toDate?: () => Date } | undefined): string {
+function formatTime(ts: unknown): string {
   if (!ts) return "—";
   try {
     // protobuf-es Timestamp
