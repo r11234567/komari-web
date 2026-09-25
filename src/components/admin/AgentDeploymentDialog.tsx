@@ -312,7 +312,7 @@ export function AgentDeploymentDialog({
     try {
       const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
         deployment.generateInstallCommand(
-          { agentId, platform: platformValue[platform], runtimeIdentity },
+          { agentId, platform: platformValue[platform] },
           { signal, timeoutMs },
         ),
       );
