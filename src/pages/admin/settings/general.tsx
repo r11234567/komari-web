@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Button, Code, Flex, Text, TextField } from "@radix-ui/themes";
+import { Code, Flex, Text, TextField } from "@radix-ui/themes";
 import {
   updateSettingsWithToast,
   useSettings,

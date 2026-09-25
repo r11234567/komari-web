@@ -12,21 +12,17 @@ import Loading from "@/components/loading";
  * returnTo pointing back here.
  */
 export default function ForceLoginGuard({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = React.useState(false);
   const navigate = useNavigate();
 
   React.useEffect(() => {
     let cancelled = false;
     const run = async () => {
       try {
-        // Invalidate any existing session. /api/logout clears the session_token
-        // cookie server-side and returns a redirect; we do not follow it.
         await fetch("/api/logout", { method: "GET", redirect: "manual" });
       } catch {
-        // network errors are non-fatal — the login page will handle auth state
+        // network errors are non-fatal
       }
       if (!cancelled) {
-        // Redirect to login with returnTo pointing at the current path.
         const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
         navigate(`/login?returnTo=${returnTo}`, { replace: true });
       }
@@ -35,7 +31,5 @@ export default function ForceLoginGuard({ children }: { children: React.ReactNod
     return () => { cancelled = true; };
   }, [navigate]);
 
-  // Show a loading indicator while the logout/redirect is in flight.
-  if (!ready) return <Loading />;
-  return <>{children}</>;
+  return null;
 }
