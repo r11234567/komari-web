@@ -1,7 +1,6 @@
 import * as React from "react";
 import { durationFromMs, timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
-  AgentRuntimeIdentity,
   type ConfigDelivery,
   type DeploymentProfile,
   Platform,
@@ -21,7 +20,6 @@ import {
   Dialog,
   Flex,
   IconButton,
-  SegmentedControl,
   Text,
   TextArea,
   TextField,
@@ -149,6 +147,7 @@ export function AgentDeploymentDialog({
   const [command, setCommand] = React.useState("");
 
   // privileged delivery state
+  const [privRevision, setPrivRevision] = React.useState<PrivilegedRevision | undefined>();
   const [pendingPriv, setPendingPriv] = React.useState<PrivilegedRevision | undefined>();
   const [twoFaCode, setTwoFaCode] = React.useState("");
   const [confirming, setConfirming] = React.useState(false);
@@ -178,12 +177,19 @@ export function AgentDeploymentDialog({
         setProfile(deployResp.profile);
         setDelivery(deployResp.delivery);
         setPlatform(platformFromProfile(deployResp.profile?.install?.platform));
-        setPendingPriv(
+        const pending = privResp?.revisions?.find(
+          (r) =>
+            r.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION ||
+            r.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
+        );
+        setPendingPriv(pending);
+        // Most recently applied revision — first one that isn't pending
+        setPrivRevision(
           privResp?.revisions?.find(
             (r) =>
-              r.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION ||
-              r.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
-          ),
+              r.state !== PrivilegedDeliveryState.NEEDS_CONFIRMATION &&
+              r.state !== PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
+          ) ?? privResp?.revisions?.[0],
         );
       }
     } catch (error) {
@@ -224,16 +230,6 @@ export function AgentDeploymentDialog({
     else stopActiveRequest();
     return stopActiveRequest;
   }, [open, load]);
-
-  const updateInstall = <K extends keyof NonNullable<DeploymentProfile["install"]>>(
-    key: K,
-    value: NonNullable<DeploymentProfile["install"]>[K],
-  ) => {
-    setProfile((current) => {
-      if (!current?.install) return current;
-      return { ...current, install: { ...current.install, [key]: value } };
-    });
-  };
 
   const updateRuntime = (changes: Partial<NonNullable<DeploymentProfile["runtime"]>>) => {
     setProfile((current) => {
@@ -323,12 +319,7 @@ export function AgentDeploymentDialog({
     }
   };
 
-  const install = profile?.install;
   const runtime = profile?.runtime;
-  const nonPrivilegedRuntime =
-    install?.runtimeIdentity === AgentRuntimeIdentity.SERVICE_ACCOUNT ||
-    install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER;
-  const remoteControlEnabled = !nonPrivilegedRuntime && (install?.remoteControlEnabled ?? true);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -343,111 +334,74 @@ export function AgentDeploymentDialog({
           <Text color="gray">正在读取部署配置...</Text>
         ) : (
           <Flex direction="column" gap="5" mt="4">
-            <Flex direction="column" gap="2">
-              <Text weight="bold">安装配置（变更后需要重新安装 Agent）</Text>
-              <SegmentedControl.Root
-                value={platform}
-                onValueChange={(value) => {
-                  const selected = value as InstallPlatform;
-                  setPlatform(selected);
-                  updateInstall("platform", platformValue[selected]);
-                }}
-              >
-                <SegmentedControl.Item value="linux">Linux</SegmentedControl.Item>
-                <SegmentedControl.Item value="windows">Windows</SegmentedControl.Item>
-                <SegmentedControl.Item value="macos">macOS</SegmentedControl.Item>
-              </SegmentedControl.Root>
-              <Text size="2" color="gray">普通 Agent 的运行身份</Text>
-              <SegmentedControl.Root
-                value={nonPrivilegedRuntime ? "service-account" : "administrator"}
-                onValueChange={(value) => {
-                  const serviceAccount = value === "service-account";
-                  updateInstall(
-                    "runtimeIdentity",
-                    serviceAccount
-                      ? AgentRuntimeIdentity.SERVICE_ACCOUNT
-                      : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR,
-                  );
-                  if (serviceAccount) updateInstall("remoteControlEnabled", false);
-                }}
-              >
-                <SegmentedControl.Item value="administrator">root / 管理员</SegmentedControl.Item>
-                <SegmentedControl.Item value="service-account">专用非特权服务账号</SegmentedControl.Item>
-              </SegmentedControl.Root>
-              {nonPrivilegedRuntime && (
-                <Text size="2" color="gray">安装器以 root / 管理员权限创建或配置不可登录的专用普通服务账号，不使用当前交互用户。</Text>
-              )}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Toggle label="启用基础 GPU 采集" checked={install?.enableGpu ?? false} onChange={(value) => updateInstall("enableGpu", value)} />
-                <Toggle
-                  label="启用远程控制"
-                  checked={remoteControlEnabled}
-                  disabled={nonPrivilegedRuntime}
-                  onChange={(value) => updateInstall("remoteControlEnabled", value)}
-                />
-                <Toggle label="禁用自动更新" checked={install?.disableAutoUpdate ?? false} onChange={(value) => updateInstall("disableAutoUpdate", value)} />
-                <Toggle label="忽略不安全证书" checked={install?.ignoreUnsafeCertificate ?? false} onChange={(value) => updateInstall("ignoreUnsafeCertificate", value)} />
-                <Toggle label="从网卡获取 IP" checked={install?.getIpAddressFromNic ?? false} onChange={(value) => updateInstall("getIpAddressFromNic", value)} />
-              </div>
-              {nonPrivilegedRuntime && (
-                <Text size="2" color="gray">非特权 Agent 不能执行远程命令或终端；如需特权操作，请通过救援模式页面操作。</Text>
-              )}
-              <TextField.Root value={install?.installDirectory ?? ""} placeholder="安装目录" onChange={(event) => updateInstall("installDirectory", event.target.value)} />
-              <TextField.Root value={install?.serviceName ?? ""} placeholder="服务名称" onChange={(event) => updateInstall("serviceName", event.target.value)} />
-              <TextField.Root
-                value={install?.githubProxy ?? ""}
-                placeholder="GitHub 代理"
-                onChange={(event) => {
-                  updateInstall("githubProxy", event.target.value);
-                  updateInstall("enableGithubProxy", event.target.value.trim() !== "");
-                }}
-              />
-            </Flex>
-
             {/* ── privileged delivery state ── */}
             <Flex direction="column" gap="2">
               <Text weight="bold">以下特权配置需要下发后确认</Text>
               <Text size="2" color="gray">远程控制、WebSSH、执行权限、救援辅助程序等特权功能不能在线静默生效，每次变更需要面板二次确认，跨权限级变更还需在机器上执行。</Text>
 
-              {pendingPriv && (
-                <Flex direction="column" gap="2" className="rounded border p-3">
-                  <Flex align="center" gap="2" wrap="wrap">
-                    <Text size="2" weight="medium">待处理特权变更</Text>
-                    {pendingPriv.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION && (
-                      <Badge color="orange" size="1">需要面板二次确认</Badge>
-                    )}
-                    {pendingPriv.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION && (
-                      <Badge color="orange" size="1">需要在机器上执行</Badge>
-                    )}
+              <Flex direction="column" gap="2" className="rounded border p-3">
+                {/* current privileged settings */}
+                {privRevision?.privileged ? (
+                  <Flex direction="column" gap="1">
+                    <Text size="1" color="gray" weight="medium">当前特权配置（r{privRevision.revision.toString()}）</Text>
+                    <PrivSettingRow label="远程控制" value={privRevision.privileged.remoteControlEnabled} />
+                    <PrivSettingRow label="WebSSH" value={privRevision.privileged.websshEnabled} />
+                    <PrivSettingRow label="远程执行" value={privRevision.privileged.executionEnabled} />
+                    <PrivSettingRow label="救援辅助程序" value={privRevision.privileged.rescueHelperEnabled} />
                   </Flex>
+                ) : (
+                  <Text size="1" color="gray">暂无特权配置记录。</Text>
+                )}
 
-                  {pendingPriv.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION && (
-                    <>
-                      <Callout.Root color="orange" size="1">
-                        <Callout.Icon><AlertTriangle size={13} /></Callout.Icon>
-                        <Callout.Text>确认将授权机器应用此特权变更。</Callout.Text>
-                      </Callout.Root>
-                      <Flex gap="2" align="center" wrap="wrap">
-                        <TextField.Root
-                          type="password"
-                          placeholder="2FA 验证码"
-                          value={twoFaCode}
-                          onChange={(e) => setTwoFaCode(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") void confirmPriv(); }}
-                        />
-                        <Button onClick={() => void confirmPriv()} disabled={confirming || !twoFaCode.trim()}>
-                          <CheckCircle2 size={14} />{confirming ? "确认中..." : "确认变更"}
-                        </Button>
+                {pendingPriv && (
+                  <>
+                    <Flex align="center" gap="2" wrap="wrap" mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }}>
+                      <Text size="2" weight="medium">待处理特权变更</Text>
+                      {pendingPriv.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION && (
+                        <Badge color="orange" size="1">需要面板二次确认</Badge>
+                      )}
+                      {pendingPriv.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION && (
+                        <Badge color="orange" size="1">需要在机器上执行</Badge>
+                      )}
+                    </Flex>
+
+                    {pendingPriv.privileged && (
+                      <Flex direction="column" gap="1">
+                        <PrivSettingRow label="远程控制" value={pendingPriv.privileged.remoteControlEnabled} />
+                        <PrivSettingRow label="WebSSH" value={pendingPriv.privileged.websshEnabled} />
+                        <PrivSettingRow label="远程执行" value={pendingPriv.privileged.executionEnabled} />
+                        <PrivSettingRow label="救援辅助程序" value={pendingPriv.privileged.rescueHelperEnabled} />
                       </Flex>
-                    </>
-                  )}
+                    )}
 
-                  {pendingPriv.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION &&
-                    pendingPriv.plan?.manualTask && (
-                    <InlineManualTaskCard task={pendingPriv.plan.manualTask} />
-                  )}
-                </Flex>
-              )}
+                    {pendingPriv.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION && (
+                      <>
+                        <Callout.Root color="orange" size="1">
+                          <Callout.Icon><AlertTriangle size={13} /></Callout.Icon>
+                          <Callout.Text>确认将授权机器应用此特权变更。</Callout.Text>
+                        </Callout.Root>
+                        <Flex gap="2" align="center" wrap="wrap">
+                          <TextField.Root
+                            type="password"
+                            placeholder="2FA 验证码"
+                            value={twoFaCode}
+                            onChange={(e) => setTwoFaCode(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") void confirmPriv(); }}
+                          />
+                          <Button onClick={() => void confirmPriv()} disabled={confirming || !twoFaCode.trim()}>
+                            <CheckCircle2 size={14} />{confirming ? "确认中..." : "确认变更"}
+                          </Button>
+                        </Flex>
+                      </>
+                    )}
+
+                    {pendingPriv.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION &&
+                      pendingPriv.plan?.manualTask && (
+                      <InlineManualTaskCard task={pendingPriv.plan.manualTask} />
+                    )}
+                  </>
+                )}
+              </Flex>
             </Flex>
 
             <Flex direction="column" gap="2">
@@ -517,6 +471,15 @@ function platformFromProfile(platform: Platform | undefined): InstallPlatform {
   if (platform === Platform.WINDOWS_AMD64 || platform === Platform.WINDOWS_386) return "windows";
   if (platform === Platform.DARWIN_AMD64 || platform === Platform.DARWIN_ARM64) return "macos";
   return "linux";
+}
+
+function PrivSettingRow({ label, value }: { label: string; value: boolean | undefined }) {
+  return (
+    <Flex gap="2" align="center">
+      <Text size="2" style={{ width: "100px" }} color="gray">{label}</Text>
+      <Badge color={value ? "green" : "gray"} size="1">{value ? "开启" : "关闭"}</Badge>
+    </Flex>
+  );
 }
 
 function Toggle({ label, checked, disabled = false, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {

@@ -10,13 +10,11 @@ import {
     Separator,
     Badge,
     TextField,
-    Select
 } from "@radix-ui/themes";
 import { Play, AlertCircle, CheckCircle2, Copy, Clock, Square } from "lucide-react";
 import { toast } from "sonner";
 import NodeSelector from "@/components/NodeSelector";
 import { SettingCardCollapse } from "@/components/admin/SettingCard";
-import { RescueConsole } from "@/components/admin/RescueConsole";
 import { cancelRemoteExecution, createRemoteExecutions, listRemoteAgentCapabilities, watchRemoteExecution } from "@/api/connect/remote";
 import { OperationState } from "@komari/proto/komari/common/v1/common_pb";
 
@@ -77,7 +75,6 @@ const ExecContent = () => {
     const { nodeDetail, isLoading, error } = useNodeDetails();
     const [command, setCommand] = useState("");
     const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
-    const [rescueAgentId, setRescueAgentId] = useState("");
     const [executing, setExecuting] = useState(false);
     const [results, setResults] = useState<TaskResult[]>([]);
     const [taskId, setTaskId] = useState<string | null>(null);
@@ -364,25 +361,6 @@ const ExecContent = () => {
             </div>
 
             <Separator size="4" />
-
-            <Card className="p-6">
-                <Flex direction="column" gap="4">
-                    <Text size="4" weight="bold">救援模式</Text>
-                    <Text size="2" color="gray">
-                        救援辅助程序独立于远程命令，即使节点禁用了远程控制也可使用。
-                    </Text>
-                    <Select.Root value={rescueAgentId} onValueChange={setRescueAgentId}>
-                        <Select.Trigger placeholder="选择救援节点" aria-label="选择救援节点" />
-                        <Select.Content>
-                            {nodeDetail.map((node) => (
-                                <Select.Item key={node.uuid} value={node.uuid}>{node.name}</Select.Item>
-                            ))}
-                        </Select.Content>
-                    </Select.Root>
-                </Flex>
-            </Card>
-
-            <RescueConsole agentId={rescueAgentId || undefined} />
 
             {/* 命令输入区域 */}
             <Card className="km-exec-editor-card p-6">
