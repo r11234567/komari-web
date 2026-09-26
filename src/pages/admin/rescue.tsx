@@ -17,11 +17,16 @@ function RescuePageInner() {
     const id = ids[0] ?? "";
     setSelectedAgent(id);
     if (id) {
-      setParams({ agent: id });
+      setParams({ agent: id }, { replace: true });
     } else {
-      setParams({});
+      setParams({}, { replace: true });
     }
   };
+
+  React.useEffect(() => {
+    const queryAgent = params.get("agent") ?? "";
+    if (queryAgent !== selectedAgent) setSelectedAgent(queryAgent);
+  }, [params, selectedAgent]);
 
   return (
     <div className="max-w-3xl mx-auto p-6 flex flex-col gap-6">
@@ -30,10 +35,12 @@ function RescuePageInner() {
         <Text size="5" weight="bold">救援模式与性能诊断</Text>
       </Flex>
 
-      <NodeSelector
-        value={selectedAgent ? [selectedAgent] : []}
-        onChange={handleAgentChange}
-      />
+      <div className="rounded-md border p-4">
+        <NodeSelector
+          value={selectedAgent ? [selectedAgent] : []}
+          onChange={handleAgentChange}
+        />
+      </div>
 
       {selectedAgent && (
         <Tabs.Root value={tab} onValueChange={setTab}>

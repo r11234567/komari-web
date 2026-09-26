@@ -47,6 +47,17 @@ export const routes: RouteObject[] = [
     path: "/login",
     element: React.createElement(LoginPage),
   },
+  // Enrollment is intentionally outside the admin shell. It has its own
+  // short-lived, per-tab access gate because opening this page always starts
+  // a fresh device-approval decision.
+  {
+    path: "/admin/enroll",
+    element: React.createElement(
+      lazy(() => import("./components/ForceLoginGuard")),
+      null,
+      React.createElement(lazy(() => import("./pages/admin/enroll"))),
+    ),
+  },
   {
     path: "/database-recovery",
     element: React.createElement(
@@ -250,14 +261,6 @@ export const routes: RouteObject[] = [
       {
         path: "exec",
         element: React.createElement(lazy(() => import("./pages/admin/exec"))),
-      },
-      {
-        path: "enroll",
-        element: React.createElement(
-          lazy(() => import("./components/ForceLoginGuard")),
-          null,
-          React.createElement(lazy(() => import("./pages/admin/enroll")))
-        ),
       },
       {
         path: "rescue",

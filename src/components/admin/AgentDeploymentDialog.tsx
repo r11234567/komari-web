@@ -49,6 +49,15 @@ const deliveryText: Record<DeliveryState, string> = {
   [DeliveryState.UPGRADE_REQUIRED]: "需要升级 Agent",
 };
 
+const privilegedDeliveryText: Record<PrivilegedDeliveryState, string> = {
+  [PrivilegedDeliveryState.UNSPECIFIED]: "未知",
+  [PrivilegedDeliveryState.NEEDS_CONFIRMATION]: "等待面板确认",
+  [PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION]: "需要在机器上执行",
+  [PrivilegedDeliveryState.DELIVERED]: "已应用",
+  [PrivilegedDeliveryState.ROLLED_BACK]: "已回滚",
+  [PrivilegedDeliveryState.FAILED]: "失败",
+};
+
 const toLocalTime = (timestamp: Timestamp | undefined) =>
   timestamp ? timestampDate(timestamp).toLocaleString() : "-";
 
@@ -154,8 +163,17 @@ export function AgentDeploymentDialog({
   // privileged delivery state
   const [privRevision, setPrivRevision] = React.useState<PrivilegedRevision | undefined>();
   const [pendingPriv, setPendingPriv] = React.useState<PrivilegedRevision | undefined>();
+  const [privAppliedRevision, setPrivAppliedRevision] = React.useState<bigint>(0n);
+  const [privDraft, setPrivDraft] = React.useState({
+    remoteControlEnabled: false,
+    websshEnabled: false,
+    executionEnabled: false,
+    rescueHelperEnabled: false,
+  });
   const [twoFaCode, setTwoFaCode] = React.useState("");
   const [confirming, setConfirming] = React.useState(false);
+  const [savingPrivileged, setSavingPrivileged] = React.useState(false);
+  const [privReason, setPrivReason] = React.useState("");
 
   const controllerRef = React.useRef<AbortController | null>(null);
 
@@ -188,13 +206,16 @@ export function AgentDeploymentDialog({
             r.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
         );
         setPendingPriv(pending);
-        setPrivRevision(
-          privResp?.revisions?.find(
-            (r) =>
-              r.state !== PrivilegedDeliveryState.NEEDS_CONFIRMATION &&
-              r.state !== PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
-          ) ?? privResp?.revisions?.[0],
-        );
+        setPrivAppliedRevision(privResp?.appliedRevision ?? 0n);
+        const latest = privResp?.revisions?.[0];
+        const settings = latest?.privileged;
+        setPrivDraft({
+          remoteControlEnabled: settings?.remoteControlEnabled ?? false,
+          websshEnabled: settings?.websshEnabled ?? false,
+          executionEnabled: settings?.executionEnabled ?? false,
+          rescueHelperEnabled: settings?.rescueHelperEnabled ?? false,
+        });
+        setPrivRevision(privResp?.revisions?.[0]);
       }
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -226,6 +247,35 @@ export function AgentDeploymentDialog({
       toast.error(err instanceof Error ? err.message : "确认失败");
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const savePrivileged = async () => {
+    setSavingPrivileged(true);
+    try {
+      const response = await connectUnary({ signal: new AbortController().signal }, (signal, timeoutMs) =>
+        connectClients.privilegedDelivery.updatePrivilegedDelivery(
+          {
+            agentId,
+            expectedRevision: privRevision?.revision ?? 0n,
+            reason: privReason.trim(),
+            privileged: {
+              ...privDraft,
+              enableGpu: false,
+            },
+          },
+          { signal, timeoutMs },
+        ),
+      );
+      setPrivRevision(response.revision);
+      setPendingPriv(response.revision);
+      setPrivReason("");
+      toast.success("特权配置已保存，等待面板确认");
+      void load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存特权配置失败");
+    } finally {
+      setSavingPrivileged(false);
     }
   };
 
@@ -347,7 +397,8 @@ export function AgentDeploymentDialog({
 
             {/* ── 安装配置 ── */}
             <Flex direction="column" gap="2">
-              <Text weight="bold">安装配置（变更后需要重新安装 Agent）</Text>
+              <Text weight="bold">以下特权配置需要下发后确认</Text>
+              <Text size="2" color="gray">远程控制、WebSSH、执行权限、救援辅助程序等特权功能不能在线静默生效，每次变更需要面板二次确认，跨权限级变更还需在机器上执行。</Text>
               <SegmentedControl.Root
                 value={platform}
                 onValueChange={(value) => {
@@ -409,13 +460,36 @@ export function AgentDeploymentDialog({
 
             {/* ── 特权配置下发状态 ── */}
             <Flex direction="column" gap="2">
-              <Text weight="bold">以下特权配置需要下发后确认</Text>
-              <Text size="2" color="gray">远程控制、WebSSH、执行权限、救援辅助程序等特权功能不能在线静默生效，每次变更需要面板二次确认，跨权限级变更还需在机器上执行。</Text>
+              <Text weight="bold">特权配置下发状态</Text>
+
+              <Flex direction="column" gap="1" className="rounded border p-3">
+                <Text size="2">期望版本：{privRevision?.revision?.toString() ?? "0"}；已应用版本：{privAppliedRevision.toString()}</Text>
+                <Text size="2">状态：{privilegedDeliveryText[privRevision?.state ?? PrivilegedDeliveryState.UNSPECIFIED]}</Text>
+                <Text size="2">保存：{toLocalTime(privRevision?.savedAt)}；确认：{toLocalTime(privRevision?.confirmedAt)}；完成：{toLocalTime(privRevision?.finishedAt)}</Text>
+                {privRevision?.errors?.[0] && <Text size="2" color="red">{privRevision.errors[0].message}</Text>}
+                {pendingPriv?.plan?.manualTask && <InlineManualTaskCard task={pendingPriv.plan.manualTask} />}
+              </Flex>
+
+              <Flex direction="column" gap="2" className="rounded border p-3">
+                <Text size="2" weight="medium">特权配置</Text>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Toggle label="远程控制" checked={privDraft.remoteControlEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, remoteControlEnabled: value }))} />
+                  <Toggle label="WebSSH" checked={privDraft.websshEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, websshEnabled: value }))} />
+                  <Toggle label="执行权限" checked={privDraft.executionEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, executionEnabled: value }))} />
+                  <Toggle label="救援辅助程序" checked={privDraft.rescueHelperEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, rescueHelperEnabled: value }))} />
+                </div>
+                <TextField.Root value={privReason} onChange={(event) => setPrivReason(event.target.value)} placeholder="变更原因（可选）" />
+                <Flex justify="end">
+                  <Button variant="soft" disabled={savingPrivileged} onClick={() => void savePrivileged()}>
+                    {savingPrivileged ? "正在保存..." : "保存特权配置"}
+                  </Button>
+                </Flex>
+              </Flex>
 
               <Flex direction="column" gap="2" className="rounded border p-3">
                 {privRevision?.privileged ? (
                   <Flex direction="column" gap="1">
-                    <Text size="1" color="gray" weight="medium">当前特权配置（r{privRevision.revision.toString()}）</Text>
+                    <Text size="1" color="gray" weight="medium">最新特权配置（r{privRevision.revision.toString()}）</Text>
                     <PrivSettingRow label="远程控制" value={privRevision.privileged.remoteControlEnabled} />
                     <PrivSettingRow label="WebSSH" value={privRevision.privileged.websshEnabled} />
                     <PrivSettingRow label="远程执行" value={privRevision.privileged.executionEnabled} />
@@ -467,10 +541,6 @@ export function AgentDeploymentDialog({
                       </>
                     )}
 
-                    {pendingPriv.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION &&
-                      pendingPriv.plan?.manualTask && (
-                      <InlineManualTaskCard task={pendingPriv.plan.manualTask} />
-                    )}
                   </>
                 )}
               </Flex>

@@ -1,34 +1,36 @@
 import * as React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 
-// Enroll pages require a fresh login every time they are opened.
-// The caller (index.tsx) generates a random nonce, stores it in sessionStorage
-// with a 3-minute TTL, and opens the page as /admin/enroll?nonce=<uuid>.
-//
-// On mount, this guard reads the nonce from the URL, checks sessionStorage for
-// a matching entry that hasn't expired, deletes it immediately (single-use),
-// and if valid triggers logout → redirect to /login?returnTo=/admin/enroll.
-// After the user logs in, they land back here WITHOUT a nonce, so the guard
-// renders children normally.
-//
-// An attacker cannot forge a valid nonce because it is a random UUID that was
-// never transmitted over the network — it only ever exists in sessionStorage of
-// the same browser session that opened the tab.
+const NONCE_TTL_MS = 3 * 60 * 1000;
+const AUTH_TTL_MS = 10 * 60 * 1000;
+const NONCE_PREFIX = "komari:enroll:nonce:";
+const TAB_ID_KEY = "komari:enroll:tab";
 
-const NONCE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+function tabStorageKey(prefix: string): string {
+  let tabId = sessionStorage.getItem(TAB_ID_KEY);
+  if (!tabId) {
+    tabId = crypto.randomUUID();
+    sessionStorage.setItem(TAB_ID_KEY, tabId);
+  }
+  return `${prefix}:${tabId}`;
+}
 
 export function generateEnrollNonce(): string {
   const nonce = crypto.randomUUID();
-  const key = `enroll_nonce_${nonce}`;
-  sessionStorage.setItem(key, JSON.stringify({ expires: Date.now() + NONCE_TTL_MS }));
+  // localStorage is shared with a newly opened tab; sessionStorage is not.
+  localStorage.setItem(
+    `${NONCE_PREFIX}${nonce}`,
+    JSON.stringify({ expires: Date.now() + NONCE_TTL_MS }),
+  );
   return nonce;
 }
 
 function consumeNonce(nonce: string): boolean {
-  const key = `enroll_nonce_${nonce}`;
-  const raw = sessionStorage.getItem(key);
+  const key = `${NONCE_PREFIX}${nonce}`;
+  const raw = localStorage.getItem(key);
   if (!raw) return false;
-  sessionStorage.removeItem(key);
+  localStorage.removeItem(key);
   try {
     const { expires } = JSON.parse(raw) as { expires: number };
     return Date.now() < expires;
@@ -37,42 +39,87 @@ function consumeNonce(nonce: string): boolean {
   }
 }
 
-export default function ForceLoginGuard({ children }: { children?: React.ReactNode }) {
+function readAuth(): boolean {
+  const authKey = tabStorageKey("komari:enroll:access");
+  try {
+    const raw = sessionStorage.getItem(authKey);
+    if (!raw) return false;
+    const value = JSON.parse(raw) as { token?: string; expires?: number };
+    if (!value.token || !value.expires || Date.now() >= value.expires) {
+      sessionStorage.removeItem(authKey);
+      return false;
+    }
+    return true;
+  } catch {
+    sessionStorage.removeItem(authKey);
+    return false;
+  }
+}
+
+function writeAuth() {
+  sessionStorage.setItem(
+    tabStorageKey("komari:enroll:access"),
+    JSON.stringify({ token: crypto.randomUUID(), expires: Date.now() + AUTH_TTL_MS }),
+  );
+}
+
+function GuardContent({ children }: { children?: React.ReactNode }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { account, loading } = useAccount();
   const nonce = searchParams.get("nonce");
-
-  // valid is tri-state: null = not yet checked, true/false = result.
-  const [valid, setValid] = React.useState<boolean | null>(null);
+  const [state, setState] = React.useState<"checking" | "redirecting" | "allowed">("checking");
+  const handledRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!nonce) {
-      setValid(false);
+    if (loading || handledRef.current) return;
+    handledRef.current = true;
+
+    if (nonce) consumeNonce(nonce);
+    const authenticated = readAuth();
+    const pendingKey = tabStorageKey("komari:enroll:login-pending");
+    if (nonce) sessionStorage.removeItem(pendingKey);
+    const pendingLogin = sessionStorage.getItem(pendingKey) === "1";
+
+    // The return from /login is the only path that can turn the short-lived
+    // browser marker into an authorized enroll view.
+    if (account?.logged_in && pendingLogin) {
+      sessionStorage.removeItem(pendingKey);
+      writeAuth();
+      setState("allowed");
       return;
     }
-    const ok = consumeNonce(nonce);
-    setValid(ok);
-    if (ok) {
-      let cancelled = false;
-      const run = async () => {
-        try {
-          await fetch("/api/logout", { method: "GET", redirect: "manual" });
-        } catch {
-          // non-fatal
-        }
-        if (!cancelled) {
-          const returnTo = encodeURIComponent(window.location.pathname);
-          navigate(`/login?returnTo=${returnTo}`, { replace: true });
-        }
-      };
-      void run();
-      return () => { cancelled = true; };
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);  // run once on mount — nonce is consumed and must not re-run
 
-  // Still checking, or valid nonce triggered logout redirect — render nothing.
-  if (valid === null || valid === true) return null;
-  // No nonce or expired nonce — render the page normally (post-login landing).
+    // An opener nonce, or an expired/missing ten-minute marker, always starts
+    // a fresh login. This also handles direct navigation to the page.
+    if (account?.logged_in && authenticated && !nonce) {
+      setState("allowed");
+      return;
+    }
+
+    if (sessionStorage.getItem(pendingKey) !== "1") {
+      sessionStorage.setItem(pendingKey, "1");
+      sessionStorage.removeItem(tabStorageKey("komari:enroll:access"));
+      setState("redirecting");
+      void fetch("/api/logout", { method: "GET", redirect: "manual" }).finally(() => {
+        const next = new URL(window.location.href);
+        next.searchParams.delete("nonce");
+        navigate(`/login?returnTo=${encodeURIComponent(next.pathname + next.search)}`, { replace: true });
+      });
+    } else {
+      setState("redirecting");
+      navigate(`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`, { replace: true });
+    }
+  }, [account?.logged_in, loading, navigate, nonce]);
+
+  if (state !== "allowed") return null;
   return <>{children}</>;
+}
+
+export default function ForceLoginGuard({ children }: { children?: React.ReactNode }) {
+  return (
+    <AccountProvider>
+      <GuardContent>{children}</GuardContent>
+    </AccountProvider>
+  );
 }
