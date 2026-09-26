@@ -85,6 +85,7 @@ import {
 import { useSettings } from "@/lib/api";
 import { SelectOrInput } from "@/components/ui/select-or-input";
 import { AgentDeploymentDialog } from "@/components/admin/AgentDeploymentDialog";
+import { generateEnrollNonce } from "@/components/ForceLoginGuard";
 
 
 const NodeDetailsPage = () => {
@@ -1130,7 +1131,8 @@ const Header = ({
                   // Open enroll in a new tab. Append a timestamp so the browser never
                   // reuses a cached page, and the SPA route guard will demand a fresh
                   // login each time this URL is opened.
-                  window.open(`/admin/enroll?t=${Date.now()}`, "_blank", "noopener,noreferrer");
+                  const nonce = generateEnrollNonce();
+                  window.open(`/admin/enroll?nonce=${nonce}`, "_blank", "noopener,noreferrer");
                   setDialogOpen(false);
                 }}
               >

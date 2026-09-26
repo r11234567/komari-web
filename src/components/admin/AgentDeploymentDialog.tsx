@@ -1,6 +1,7 @@
 import * as React from "react";
 import { durationFromMs, timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
+  AgentRuntimeIdentity,
   type ConfigDelivery,
   type DeploymentProfile,
   Platform,
@@ -20,6 +21,7 @@ import {
   Dialog,
   Flex,
   IconButton,
+  SegmentedControl,
   Text,
   TextArea,
   TextField,
@@ -63,7 +65,7 @@ const intervalSeconds = (seconds: string) => {
   return Number.isFinite(parsed) && parsed >= 1 ? Math.round(parsed * 1000) : undefined;
 };
 
-// ─── helpers shared with privileged state display ────────────────────────────
+// ─── helpers ────────────────────────────────────────────────────────────────
 
 function useCountdown(deadline: Date | null): string | null {
   const [remaining, setRemaining] = React.useState<string | null>(null);
@@ -106,13 +108,16 @@ function InlineManualTaskCard({ task }: { task: NonNullable<NonNullable<Privileg
             </Flex>
           )}
           {task.command && (
-            <Flex gap="2" align="start">
-              <code style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--gray-a3)", padding: "6px 10px", borderRadius: "4px", wordBreak: "break-all", flex: 1 }}>
-                {task.command}
-              </code>
-              <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText(task.command!).then(() => toast.success("命令已复制"))} title="复制命令">
-                <Copy size={12} />复制
-              </Button>
+            <Flex direction="column" gap="1">
+              <Text size="1" weight="medium" color="gray">在机器上运行：</Text>
+              <Flex gap="2" align="start">
+                <code style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--gray-a3)", padding: "6px 10px", borderRadius: "4px", wordBreak: "break-all", flex: 1 }}>
+                  {task.command}
+                </code>
+                <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText(task.command!).then(() => toast.success("命令已复制"))} title="复制命令">
+                  <Copy size={12} />复制
+                </Button>
+              </Flex>
             </Flex>
           )}
           {task.taskId && (
@@ -144,7 +149,6 @@ export function AgentDeploymentDialog({
   const [profile, setProfile] = React.useState<DeploymentProfile>();
   const [delivery, setDelivery] = React.useState<ConfigDelivery>();
   const [platform, setPlatform] = React.useState<InstallPlatform>("linux");
-  const [serviceAccount, setServiceAccount] = React.useState(false);
   const [command, setCommand] = React.useState("");
 
   // privileged delivery state
@@ -184,7 +188,6 @@ export function AgentDeploymentDialog({
             r.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
         );
         setPendingPriv(pending);
-        // Most recently applied revision — first one that isn't pending
         setPrivRevision(
           privResp?.revisions?.find(
             (r) =>
@@ -232,6 +235,16 @@ export function AgentDeploymentDialog({
     return stopActiveRequest;
   }, [open, load]);
 
+  const updateInstall = <K extends keyof NonNullable<DeploymentProfile["install"]>>(
+    key: K,
+    value: NonNullable<DeploymentProfile["install"]>[K],
+  ) => {
+    setProfile((current) => {
+      if (!current?.install) return current;
+      return { ...current, install: { ...current.install, [key]: value } };
+    });
+  };
+
   const updateRuntime = (changes: Partial<NonNullable<DeploymentProfile["runtime"]>>) => {
     setProfile((current) => {
       if (!current) return current;
@@ -239,21 +252,13 @@ export function AgentDeploymentDialog({
       return {
         ...current,
         runtime: create(RuntimeConfigSchema, {
-          memoryIncludeCache:
-            changes.memoryIncludeCache ?? previous?.memoryIncludeCache,
+          memoryIncludeCache: changes.memoryIncludeCache ?? previous?.memoryIncludeCache,
           detailedGpu: changes.detailedGpu ?? previous?.detailedGpu,
           includeNics: changes.includeNics ?? previous?.includeNics ?? [],
           excludeNics: changes.excludeNics ?? previous?.excludeNics ?? [],
-          includeMountpoints:
-            changes.includeMountpoints ?? previous?.includeMountpoints ?? [],
-          reportInterval:
-            "reportInterval" in changes
-              ? changes.reportInterval
-              : previous?.reportInterval,
-          trafficResetDay:
-            "trafficResetDay" in changes
-              ? changes.trafficResetDay
-              : previous?.trafficResetDay,
+          includeMountpoints: changes.includeMountpoints ?? previous?.includeMountpoints ?? [],
+          reportInterval: "reportInterval" in changes ? changes.reportInterval : previous?.reportInterval,
+          trafficResetDay: "trafficResetDay" in changes ? changes.trafficResetDay : previous?.trafficResetDay,
         }),
       };
     });
@@ -266,7 +271,6 @@ export function AgentDeploymentDialog({
     controllerRef.current = controller;
     setSaving(true);
     try {
-      // Deliberately construct only the seven online-dispatchable settings.
       const runtime = create(RuntimeConfigSchema, {
         memoryIncludeCache: profile.runtime?.memoryIncludeCache ?? false,
         detailedGpu: profile.runtime?.detailedGpu ?? false,
@@ -302,9 +306,6 @@ export function AgentDeploymentDialog({
   };
 
   const generateCommand = async () => {
-    // serviceAccount controls install identity:
-    // true  → AgentRuntimeIdentity.SERVICE_ACCOUNT (专用非特权服务账号)
-    // false → AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR
     stopActiveRequest();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -323,7 +324,12 @@ export function AgentDeploymentDialog({
     }
   };
 
+  const install = profile?.install;
   const runtime = profile?.runtime;
+  const nonPrivilegedRuntime =
+    install?.runtimeIdentity === AgentRuntimeIdentity.SERVICE_ACCOUNT ||
+    install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER;
+  const remoteControlEnabled = !nonPrivilegedRuntime && (install?.remoteControlEnabled ?? true);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -338,13 +344,75 @@ export function AgentDeploymentDialog({
           <Text color="gray">正在读取部署配置...</Text>
         ) : (
           <Flex direction="column" gap="5" mt="4">
-            {/* ── privileged delivery state ── */}
+
+            {/* ── 安装配置 ── */}
+            <Flex direction="column" gap="2">
+              <Text weight="bold">安装配置（变更后需要重新安装 Agent）</Text>
+              <SegmentedControl.Root
+                value={platform}
+                onValueChange={(value) => {
+                  const selected = value as InstallPlatform;
+                  setPlatform(selected);
+                  updateInstall("platform", platformValue[selected]);
+                }}
+              >
+                <SegmentedControl.Item value="linux">Linux</SegmentedControl.Item>
+                <SegmentedControl.Item value="windows">Windows</SegmentedControl.Item>
+                <SegmentedControl.Item value="macos">macOS</SegmentedControl.Item>
+              </SegmentedControl.Root>
+              <Text size="2" color="gray">普通 Agent 的运行身份</Text>
+              <SegmentedControl.Root
+                value={nonPrivilegedRuntime ? "service-account" : "administrator"}
+                onValueChange={(value) => {
+                  const isServiceAccount = value === "service-account";
+                  updateInstall(
+                    "runtimeIdentity",
+                    isServiceAccount
+                      ? AgentRuntimeIdentity.SERVICE_ACCOUNT
+                      : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR,
+                  );
+                  if (isServiceAccount) updateInstall("remoteControlEnabled", false);
+                }}
+              >
+                <SegmentedControl.Item value="administrator">root / 管理员</SegmentedControl.Item>
+                <SegmentedControl.Item value="service-account">专用非特权服务账号</SegmentedControl.Item>
+              </SegmentedControl.Root>
+              {nonPrivilegedRuntime && (
+                <Text size="2" color="gray">安装器以 root / 管理员权限创建或配置不可登录的专用普通服务账号，不使用当前交互用户。</Text>
+              )}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Toggle label="启用基础 GPU 采集" checked={install?.enableGpu ?? false} onChange={(value) => updateInstall("enableGpu", value)} />
+                <Toggle
+                  label="启用远程控制"
+                  checked={remoteControlEnabled}
+                  disabled={nonPrivilegedRuntime}
+                  onChange={(value) => updateInstall("remoteControlEnabled", value)}
+                />
+                <Toggle label="禁用自动更新" checked={install?.disableAutoUpdate ?? false} onChange={(value) => updateInstall("disableAutoUpdate", value)} />
+                <Toggle label="忽略不安全证书" checked={install?.ignoreUnsafeCertificate ?? false} onChange={(value) => updateInstall("ignoreUnsafeCertificate", value)} />
+                <Toggle label="从网卡获取 IP" checked={install?.getIpAddressFromNic ?? false} onChange={(value) => updateInstall("getIpAddressFromNic", value)} />
+              </div>
+              {nonPrivilegedRuntime && (
+                <Text size="2" color="gray">非特权 Agent 不能执行远程命令或终端；如需特权操作，请通过救援模式页面操作。</Text>
+              )}
+              <TextField.Root value={install?.installDirectory ?? ""} placeholder="安装目录" onChange={(event) => updateInstall("installDirectory", event.target.value)} />
+              <TextField.Root value={install?.serviceName ?? ""} placeholder="服务名称" onChange={(event) => updateInstall("serviceName", event.target.value)} />
+              <TextField.Root
+                value={install?.githubProxy ?? ""}
+                placeholder="GitHub 代理"
+                onChange={(event) => {
+                  updateInstall("githubProxy", event.target.value);
+                  updateInstall("enableGithubProxy", event.target.value.trim() !== "");
+                }}
+              />
+            </Flex>
+
+            {/* ── 特权配置下发状态 ── */}
             <Flex direction="column" gap="2">
               <Text weight="bold">以下特权配置需要下发后确认</Text>
               <Text size="2" color="gray">远程控制、WebSSH、执行权限、救援辅助程序等特权功能不能在线静默生效，每次变更需要面板二次确认，跨权限级变更还需在机器上执行。</Text>
 
               <Flex direction="column" gap="2" className="rounded border p-3">
-                {/* current privileged settings */}
                 {privRevision?.privileged ? (
                   <Flex direction="column" gap="1">
                     <Text size="1" color="gray" weight="medium">当前特权配置（r{privRevision.revision.toString()}）</Text>
@@ -408,6 +476,7 @@ export function AgentDeploymentDialog({
               </Flex>
             </Flex>
 
+            {/* ── 以下配置将下发 ── */}
             <Flex direction="column" gap="2">
               <Text weight="bold">以下配置将下发</Text>
               <Text size="2" color="gray">仅以下七项可在线生效。基础 GPU、远程控制和其它安装设置必须重新安装。</Text>
@@ -436,6 +505,7 @@ export function AgentDeploymentDialog({
               />
             </Flex>
 
+            {/* ── 下发状态 ── */}
             <Flex direction="column" gap="1" className="rounded border p-3">
               <Text weight="bold">下发状态</Text>
               <Text size="2">期望版本：{delivery?.desiredRevision?.toString() ?? "0"}；已应用版本：{delivery?.appliedRevision?.toString() ?? "0"}</Text>
@@ -449,21 +519,6 @@ export function AgentDeploymentDialog({
                     <ShieldAlert size={12} />救援 / 诊断 →
                   </Button>
                 </a>
-              </Flex>
-            </Flex>
-
-            <Flex direction="column" gap="2">
-              <Text size="2" color="gray">Agent 运行身份（影响安装指令）</Text>
-              <Flex gap="3">
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
-                  <input type="radio" checked={!serviceAccount} onChange={() => setServiceAccount(false)} />
-                  <Text size="2">root / 管理员</Text>
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
-                  {/* AgentRuntimeIdentity.SERVICE_ACCOUNT — 专用非特权服务账号 */}
-                  <input type="radio" checked={serviceAccount} onChange={() => setServiceAccount(true)} />
-                  <Text size="2">专用非特权服务账号</Text>
-                </label>
               </Flex>
             </Flex>
 

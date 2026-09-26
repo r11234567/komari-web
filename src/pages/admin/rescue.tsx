@@ -11,6 +11,7 @@ function RescuePageInner() {
   const [params, setParams] = useSearchParams();
   const initialAgent = params.get("agent") ?? "";
   const [selectedAgent, setSelectedAgent] = React.useState<string>(initialAgent);
+  const [tab, setTab] = React.useState<string>("diagnostics");
 
   const handleAgentChange = (ids: string[]) => {
     const id = ids[0] ?? "";
@@ -35,7 +36,7 @@ function RescuePageInner() {
       />
 
       {selectedAgent && (
-        <Tabs.Root defaultValue="diagnostics">
+        <Tabs.Root value={tab} onValueChange={setTab}>
           <Tabs.List>
             <Tabs.Trigger value="diagnostics">
               <Flex align="center" gap="1">
