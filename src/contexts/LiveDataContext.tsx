@@ -52,6 +52,11 @@ const LiveDataContext = createContext<LiveDataContextType>({
   onRefresh: () => () => {},
 });
 
+const LIVE_DATA_CHANNEL = "komari:live-data-channel";
+const LIVE_DATA_LOCK = "komari:live-stream-leader-lock";
+const INITIAL_BACKOFF_MS = 1_500;
+const MAX_BACKOFF_MS = 30_000;
+
 export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -73,33 +78,129 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const refreshCallbacks = refreshCallbacksRef.current;
+    const rootController = new AbortController();
+    const rootSignal = rootController.signal;
+    let channel: BroadcastChannel | null = null;
+
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        channel = new BroadcastChannel(LIVE_DATA_CHANNEL);
+        channel.onmessage = (event) => {
+          if (event.data?.type === "LIVE_DATA_UPDATE" && event.data.payload) {
+            const next = event.data.payload as LiveDataResponse;
+            liveDataRef.current = next;
+            setLiveData(next);
+            notifyRefreshCallbacks(next);
+            setShowCallout(true);
+          }
+        };
+      }
+    } catch {
+      // BroadcastChannel unavailable; proceed with direct connection
+    }
+
+    const broadcastUpdate = (next: LiveDataResponse) => {
+      try {
+        channel?.postMessage({
+          type: "LIVE_DATA_UPDATE",
+          payload: next,
+        });
+      } catch {
+        // Channel post failed; ignore
+      }
+    };
+
+    let backoffMs = INITIAL_BACKOFF_MS;
     let afterEventId = "";
 
-    const waitToReconnect = () =>
+    const waitWithBackoff = (signal: AbortSignal) =>
       new Promise<void>((resolve) => {
-        const timer = window.setTimeout(resolve, 2_000);
-        controller.signal.addEventListener(
-          "abort",
-          () => {
+        if (signal.aborted) {
+          resolve();
+          return;
+        }
+
+        // If tab is hidden, pause reconnecting until it becomes visible
+        const computeDelay = () => {
+          const jitter = (Math.random() - 0.5) * 0.4; // +/- 20%
+          const delay = Math.min(MAX_BACKOFF_MS, Math.round(backoffMs * (1 + jitter)));
+          backoffMs = Math.min(MAX_BACKOFF_MS, Math.round(backoffMs * 1.8));
+          return Math.max(1_000, delay);
+        };
+
+        let timer: number | null = null;
+
+        const cleanup = () => {
+          if (timer !== null) {
             window.clearTimeout(timer);
+            timer = null;
+          }
+          document.removeEventListener("visibilitychange", onVisibilityChange);
+          signal.removeEventListener("abort", onAbort);
+        };
+
+        const onAbort = () => {
+          cleanup();
+          resolve();
+        };
+
+        const onVisibilityChange = () => {
+          if (document.visibilityState === "visible") {
+            // Wake up immediately upon tab becoming visible
+            cleanup();
             resolve();
-          },
-          { once: true },
-        );
+          }
+        };
+
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+          document.addEventListener("visibilitychange", onVisibilityChange);
+          signal.addEventListener("abort", onAbort, { once: true });
+          return;
+        }
+
+        signal.addEventListener("abort", onAbort, { once: true });
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        timer = window.setTimeout(() => {
+          cleanup();
+          resolve();
+        }, computeDelay());
       });
 
-    const watch = async () => {
-      while (!controller.signal.aborted) {
+    const runStreamLoop = async (signal: AbortSignal) => {
+      while (!signal.aborted) {
+        // Pause while tab is hidden
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+          await new Promise<void>((resolve) => {
+            const onVis = () => {
+              if (document.visibilityState === "visible") {
+                document.removeEventListener("visibilitychange", onVis);
+                signal.removeEventListener("abort", onAbort);
+                resolve();
+              }
+            };
+            const onAbort = () => {
+              document.removeEventListener("visibilitychange", onVis);
+              resolve();
+            };
+            document.addEventListener("visibilitychange", onVis);
+            signal.addEventListener("abort", onAbort, { once: true });
+          });
+          if (signal.aborted) break;
+        }
+
         try {
           for await (const event of browser.watchAgentStatus(
             { agentIds: [], afterEventId },
-            { signal: controller.signal, timeoutMs: 0 },
+            { signal, timeoutMs: 0 },
           )) {
+            if (signal.aborted) break;
             const agent = event.agent;
-            if (!agent || controller.signal.aborted) continue;
+            if (!agent) continue;
+
+            // Reset backoff on receiving live events
+            backoffMs = INITIAL_BACKOFF_MS;
             afterEventId = agent.eventId || afterEventId;
+
             const previous = liveDataRef.current?.data ?? {
               online: [],
               data: {},
@@ -123,26 +224,54 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
               online === previous.online
                 ? liveDataRef.current
                 : { data: { online, data }, status: "ok" };
+
             if (live !== liveDataRef.current) {
               liveDataRef.current = live;
               setLiveData(live);
               notifyRefreshCallbacks(live);
+              broadcastUpdate(live);
             }
             setShowCallout(true);
           }
         } catch (error) {
-          if (controller.signal.aborted) return;
-          console.error("Connect status stream failed:", error);
+          if (signal.aborted) return;
+          console.error("Connect status stream encountered error, backing off:", error);
           setShowCallout(false);
         }
-        if (!controller.signal.aborted) await waitToReconnect();
+
+        if (!signal.aborted) {
+          await waitWithBackoff(signal);
+        }
       }
     };
 
-    void watch();
+    // Leader election via Web Locks API (or direct streaming fallback)
+    const startLeaderElection = async () => {
+      if (typeof navigator !== "undefined" && "locks" in navigator) {
+        try {
+          await navigator.locks.request(LIVE_DATA_LOCK, { signal: rootSignal }, async () => {
+            if (rootSignal.aborted) return;
+            await runStreamLoop(rootSignal);
+          });
+          return;
+        } catch (err: any) {
+          if (err?.name === "AbortError") return;
+          // Fall back to direct stream loop if lock request failed
+        }
+      }
+      await runStreamLoop(rootSignal);
+    };
+
+    void startLeaderElection();
+
     return () => {
-      controller.abort(new DOMException("Provider unmounted", "AbortError"));
-      refreshCallbacks.clear();
+      rootController.abort(new DOMException("Provider unmounted", "AbortError"));
+      try {
+        channel?.close();
+      } catch {
+        // Channel close safe ignore
+      }
+      refreshCallbacksRef.current.clear();
     };
   }, [browser, notifyRefreshCallbacks]);
 

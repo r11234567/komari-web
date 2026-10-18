@@ -12,6 +12,11 @@ test("admin login redirects retain only local admin destinations", () => {
     "/admin/servers?state=offline#node-1",
   );
   assert.equal(
+    safeLoginReturnTo("/bind?code=ABCD-1234"),
+    "/bind?code=ABCD-1234",
+  );
+  assert.equal(safeLoginReturnTo("/bind"), "/bind");
+  assert.equal(
     safeLoginReturnTo("https://example.invalid/admin"),
     "/admin/dashboard",
   );

@@ -5,6 +5,14 @@ export function safeLoginReturnTo(value: string | null | undefined): string {
     return DEFAULT_ADMIN_RETURN_TO;
   }
 
+  if (
+    value === "/bind" ||
+    value.startsWith("/bind?") ||
+    value.startsWith("/bind/")
+  ) {
+    return value;
+  }
+
   return value === "/admin" || value.startsWith("/admin/")
     ? value
     : DEFAULT_ADMIN_RETURN_TO;

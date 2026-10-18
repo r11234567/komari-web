@@ -53,23 +53,37 @@ function settingsRestartFrom(responseData: unknown): SettingsRestart | undefined
 }
 
 function waitForMigrationGuide(guidePath: string) {
+  let attempts = 0;
+  const maxAttempts = 40;
+  let delay = migrationGuidePollInterval;
+
   const check = async () => {
+    attempts++;
     try {
       const response = await fetch(migrationGuideStatusPath, {
         cache: "no-store",
       });
-      const payload: unknown = await response.json();
-      if (response.ok && isRecord(payload) && payload.status === "success") {
-        window.location.replace(guidePath);
-        return;
+      if (response.ok) {
+        const payload: unknown = await response.json();
+        if (isRecord(payload) && payload.status === "success") {
+          window.location.replace(guidePath);
+          return;
+        }
       }
     } catch {
       // The previous process may still be stopping or the replacement may not be ready.
     }
-    window.setTimeout(check, migrationGuidePollInterval);
+
+    if (attempts >= maxAttempts) {
+      window.location.replace(guidePath);
+      return;
+    }
+
+    delay = Math.min(2_000, Math.round(delay * 1.2));
+    window.setTimeout(check, delay);
   };
 
-  window.setTimeout(check, migrationGuidePollInterval);
+  window.setTimeout(check, delay);
 }
 
 /**

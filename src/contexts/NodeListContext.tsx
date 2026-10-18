@@ -104,6 +104,9 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const refresh = React.useCallback(() => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
     const refreshSeq = ++refreshSeqRef.current;
     activeRequest.current?.abort(
       new DOMException("Superseded", "AbortError"),
@@ -143,8 +146,9 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
       })
       .catch((err: any) => {
         if (!mountedRef.current || refreshSeq !== refreshSeqRef.current) return;
+        if (err?.name === "AbortError") return;
         setError(err?.message || "An error occurred while fetching data");
-        setNodeList([]);
+        // Keep previous list on error so the page doesn't blank out
       })
       .finally(() => {
         if (!mountedRef.current || refreshSeq !== refreshSeqRef.current) return;

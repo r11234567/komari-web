@@ -110,6 +110,8 @@ export default function AdminDashboard() {
   const dashboardRootRef = React.useRef<HTMLDivElement>(null);
   const navigationAnchorRef = React.useRef<Omit<DashboardViewState, "scrollTop"> | null>(null);
   const restoredViewKeyRef = React.useRef<string | null>(null);
+  const summaryControllerRef = React.useRef<AbortController | null>(null);
+  const chartsControllerRef = React.useRef<AbortController | null>(null);
   const trafficTrendControllerRef = React.useRef<AbortController | null>(null);
 
   const [data, setData] = React.useState<DashboardData | null>(() => getDashboardSnapshot(summaryKey, accountKey));
@@ -127,15 +129,21 @@ export default function AdminDashboard() {
       if (!silent) setLoading(false);
       return;
     }
+    summaryControllerRef.current?.abort();
+    const controller = new AbortController();
+    summaryControllerRef.current = controller;
     if (!silent && !getDashboardSnapshot(summaryKey, accountKey)) setLoading(true);
     try {
-      const next = await requestDashboard(summarySections, settings.ranking_limit, accountKey);
+      const next = await requestDashboard(summarySections, settings.ranking_limit, accountKey, controller.signal);
+      if (controller.signal.aborted) return;
       setData(next);
       setError(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      if (!controller.signal.aborted) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent && !controller.signal.aborted) setLoading(false);
     }
   }, [accountKey, settings.ranking_limit, summaryKey, summarySections]);
 
@@ -145,12 +153,18 @@ export default function AdminDashboard() {
       setChartsError(null);
       return;
     }
+    chartsControllerRef.current?.abort();
+    const controller = new AbortController();
+    chartsControllerRef.current = controller;
     try {
-      const next = await requestDashboardCharts(chartSections, settings.ranking_limit, accountKey);
+      const next = await requestDashboardCharts(chartSections, settings.ranking_limit, accountKey, controller.signal);
+      if (controller.signal.aborted) return;
       setCharts(next);
       setChartsError(null);
     } catch (reason) {
-      setChartsError(reason instanceof Error ? reason.message : String(reason));
+      if (!controller.signal.aborted) {
+        setChartsError(reason instanceof Error ? reason.message : String(reason));
+      }
     }
   }, [accountKey, chartSections, settings.ranking_limit]);
 
@@ -188,7 +202,27 @@ export default function AdminDashboard() {
     }
   }, [billingURL, costCenterVisible]);
 
-  React.useEffect(() => () => trafficTrendControllerRef.current?.abort(), []);
+  React.useEffect(() => () => {
+    summaryControllerRef.current?.abort();
+    chartsControllerRef.current?.abort();
+    trafficTrendControllerRef.current?.abort();
+  }, []);
+
+  React.useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        summaryControllerRef.current?.abort();
+        chartsControllerRef.current?.abort();
+        trafficTrendControllerRef.current?.abort();
+      } else if (document.visibilityState === "visible") {
+        void loadSummary(true);
+        void loadCharts();
+        void loadTrafficTrend();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [loadCharts, loadSummary, loadTrafficTrend]);
 
   const refreshAll = React.useCallback(() => {
     void loadSummary(false);

@@ -1,4 +1,5 @@
 import {
+  Button,
   Callout,
   Card,
   Flex,
@@ -14,7 +15,7 @@ import { formatBytes } from "@/utils/unitHelper";
 import { useLiveData } from "../contexts/LiveDataContext";
 import { useNodeList } from "@/contexts/NodeListContext";
 import Loading from "@/components/loading";
-import { Settings } from "lucide-react";
+import { AlertCircle, RefreshCw, Settings } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import type { LiveData } from "@/types/LiveData";
 
@@ -147,7 +148,7 @@ const Index = () => {
     };
     const startPolling = () => {
       if (interval === undefined && !document.hidden) {
-        interval = window.setInterval(refresh, 5000);
+        interval = window.setInterval(refresh, 30_000);
       }
     };
     const handleVisibilityChange = () => {
@@ -170,7 +171,22 @@ const Index = () => {
     return <Loading />;
   }
   if (error) {
-    return <div>Error: {error}</div>;
+    return (
+      <div className="p-4 max-w-2xl mx-auto">
+        <Callout.Root color="red" role="alert">
+          <Callout.Icon>
+            <AlertCircle size={16} />
+          </Callout.Icon>
+          <Callout.Text className="flex items-center justify-between gap-3">
+            <span>{error}</span>
+            <Button size="1" variant="soft" onClick={refresh}>
+              <RefreshCw size={14} />
+              {t("common.retry", "重试")}
+            </Button>
+          </Callout.Text>
+        </Callout.Root>
+      </div>
+    );
   }
 
   return (
