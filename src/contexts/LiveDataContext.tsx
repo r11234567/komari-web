@@ -62,7 +62,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [live_data, setLiveData] = useState<LiveDataResponse | null>(null);
   const liveDataRef = useRef<LiveDataResponse | null>(null);
-  const [showCallout, setShowCallout] = useState(false);
+  const [showCallout, setShowCallout] = useState(true);
   const refreshCallbacksRef = useRef<Set<(data: LiveDataResponse) => void>>(
     new Set(),
   );
@@ -189,10 +189,12 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         try {
-          for await (const event of browser.watchAgentStatus(
+          const stream = browser.watchAgentStatus(
             { agentIds: [], afterEventId },
             { signal, timeoutMs: 0 },
-          )) {
+          );
+          setShowCallout(true);
+          for await (const event of stream) {
             if (signal.aborted) break;
             const agent = event.agent;
             if (!agent) continue;
