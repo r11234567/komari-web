@@ -3,6 +3,8 @@ import type { RouteObject } from "react-router-dom";
 
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/404"));
+const BindPage = lazy(() => import("./pages/bind"));
+const LoginPage = lazy(() => import("./pages/login"));
 
 export const publicRoutes: RouteObject[] = [
   {
@@ -15,6 +17,18 @@ export const publicRoutes: RouteObject[] = [
         element: React.createElement(lazy(() => import("./pages/instance"))),
       },
     ],
+  },
+  {
+    path: "/bind",
+    element: React.createElement(BindPage),
+  },
+  {
+    path: "/enroll",
+    element: React.createElement(BindPage),
+  },
+  {
+    path: "/login",
+    element: React.createElement(LoginPage),
   },
   { path: "*", element: React.createElement(NotFound) },
 ];

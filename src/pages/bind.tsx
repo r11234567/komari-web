@@ -79,6 +79,8 @@ const BindPageContent = () => {
   const [twoFaCode, setTwoFaCode] = React.useState("");
   const [confirmBindOpen, setConfirmBindOpen] = React.useState(false);
 
+  const [lookupError, setLookupError] = React.useState<string | null>(null);
+  const initialLookupDoneRef = React.useRef(false);
   const abortRef = React.useRef<AbortController | null>(null);
 
   const lookup = React.useCallback(async (lookupCode: string) => {
@@ -88,6 +90,7 @@ const BindPageContent = () => {
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
+    setLookupError(null);
     setEnrollment(null);
     setCandidates([]);
     try {
@@ -97,17 +100,23 @@ const BindPageContent = () => {
           { signal, timeoutMs },
         ),
       );
-      setEnrollment(response.enrollment ?? null);
-      setCandidates(response.candidates ?? []);
-      if (response.enrollment?.device?.hostname) {
-        setNewName((prev) => prev || response.enrollment?.device?.hostname || "");
+      if (!controller.signal.aborted) {
+        setEnrollment(response.enrollment ?? null);
+        setCandidates(response.candidates ?? []);
+        if (response.enrollment?.device?.hostname) {
+          setNewName((prev) => prev || response.enrollment?.device?.hostname || "");
+        }
       }
     } catch (err) {
       if (!controller.signal.aborted) {
-        toast.error(err instanceof Error ? err.message : "验证码不存在或已过期");
+        const msg = err instanceof Error ? err.message : "验证码不存在或已过期";
+        setLookupError(msg);
+        toast.error(msg);
       }
     } finally {
-      if (!controller.signal.aborted) setLoading(false);
+      if (abortRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -126,12 +135,18 @@ const BindPageContent = () => {
   React.useEffect(() => {
     if (account?.logged_in) {
       void loadServers();
-      if (initialCode) {
+      if (initialCode && !initialLookupDoneRef.current) {
+        initialLookupDoneRef.current = true;
         void lookup(initialCode);
       }
     }
-    return () => abortRef.current?.abort();
   }, [account?.logged_in, initialCode, lookup, loadServers]);
+
+  React.useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const approveNew = async () => {
     if (!enrollment) return;
@@ -299,6 +314,12 @@ const BindPageContent = () => {
               {loading ? <RefreshCw size={14} className="animate-spin" /> : "查询验证码"}
             </Button>
           </Flex>
+          {lookupError && (
+            <Callout.Root color="red" size="1">
+              <Callout.Icon><XCircle size={14} /></Callout.Icon>
+              <Callout.Text>{lookupError}</Callout.Text>
+            </Callout.Root>
+          )}
         </Flex>
       </Card>
 
@@ -446,7 +467,7 @@ const BindPageContent = () => {
               <Flex direction="column" gap="2" mt="2">
                 <Text size="2" weight="medium">或者从所有机器中手动选择：</Text>
                 <Flex gap="2" align="center">
-                  <Select.Root value={bindTarget} onValueChange={setBindTarget}>
+                  <Select.Root value={bindTarget || undefined} onValueChange={setBindTarget}>
                     <Select.Trigger placeholder="选择目标机器..." style={{ minWidth: "220px" }} />
                     <Select.Content>
                       {allServers.map((s) => (

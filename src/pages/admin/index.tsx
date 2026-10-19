@@ -3,7 +3,7 @@ import {
   quoteShellArg,
   quoteShellArgs,
 } from "@/utils/shellQuote";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   NodeDetailsProvider,
   useNodeDetails,
@@ -96,7 +96,7 @@ const NodeDetailsPage = () => {
 };
 
 const Layout = () => {
-  const { nodeDetail, isLoading, error, refresh } = useNodeDetails();
+  const { nodeDetail, isLoading, error } = useNodeDetails();
   const { settings, loading: settingsLoading } = useSettings();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -108,18 +108,8 @@ const Layout = () => {
         .sort((a, b) => a.weight - b.weight)
     : [];
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
-        return;
-      }
-      refresh();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [refresh]);
-
-  if (isLoading) return <Loading text="" />;
-  if (error) return <div>{error}</div>;
+  if (isLoading && (!nodeDetail || nodeDetail.length === 0)) return <Loading text="" />;
+  if (error && (!nodeDetail || nodeDetail.length === 0)) return <div>{error}</div>;
 
   const isEmpty = Array.isArray(nodeDetail) && nodeDetail.length === 0;
 

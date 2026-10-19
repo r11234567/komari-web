@@ -2,20 +2,32 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("Audit P0 Bug 1: /bind page prevents input wipe and recreation loops", () => {
+test("Audit P0 Bug 1: /bind page prevents input wipe, deadlock on abort, and works across routes", () => {
   const source = readFileSync(new URL("../src/pages/bind.tsx", import.meta.url), "utf8");
   // lookup should have empty deps [] and not depend on [newName]
   assert.match(source, /lookup\s*=\s*React\.useCallback\([\s\S]*?\},\s*\[\s*\]\)/);
   // setNewName should preserve user typed value if present
   assert.match(source, /setNewName\(\(prev\)\s*=>\s*prev\s*\|\|\s*response\.enrollment\?\.device\?\.hostname\s*\|\|\s*""\)/);
+  // finally block should reset loading without being blocked by signal.aborted
+  assert.match(source, /if\s*\(abortRef\.current\s*===\s*controller\)\s*\{\s*setLoading\(false\);\s*\}/);
+  // Radix UI Select must use bindTarget || undefined to avoid empty string value bug
+  assert.match(source, /value=\{bindTarget \|\| undefined\}/);
+  // Error feedback Callout is rendered on invalid/expired code
+  assert.match(source, /lookupError/);
 });
 
-test("Audit P0 Bug 2: routes include /enroll pointing to bind page and /admin/privileged-config", () => {
+test("Audit P0 Bug 2: routes and public-routes include /enroll and /bind, privileged-config is removed", () => {
   const routesSource = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
+  const publicRoutesSource = readFileSync(new URL("../src/public-routes.ts", import.meta.url), "utf8");
+
+  // /enroll and /bind exist in both bundles
   assert.match(routesSource, /path:\s*["']\/enroll["']/);
   assert.match(routesSource, /path:\s*["']\/bind["']/);
-  assert.match(routesSource, /path:\s*["']privileged-config["']/);
-  assert.match(routesSource, /import\("\.\/pages\/admin\/privileged-config"\)/);
+  assert.match(publicRoutesSource, /path:\s*["']\/enroll["']/);
+  assert.match(publicRoutesSource, /path:\s*["']\/bind["']/);
+
+  // privileged-config route is removed per user requirement
+  assert.doesNotMatch(routesSource, /path:\s*["']privileged-config["']/);
 });
 
 test("Audit P0 Bug 3: LiveDataContext releases Web Locks on hidden tab to prevent starvation", () => {
@@ -27,7 +39,7 @@ test("Audit P0 Bug 3: LiveDataContext releases Web Locks on hidden tab to preven
   assert.match(source, /document\.addEventListener\(["']visibilitychange["'],\s*handleGlobalVisibility\)/);
 });
 
-test("Audit P0 Bug 4: NodeDetailsContext uses ConnectRPC with AbortController and pauses when hidden", () => {
+test("Audit P0 Bug 4: NodeDetailsContext uses ConnectRPC with silent refresh and no polling storm in admin", () => {
   const contextSource = readFileSync(new URL("../src/contexts/NodeDetailsContext.tsx", import.meta.url), "utf8");
   const adminPageSource = readFileSync(new URL("../src/pages/admin/index.tsx", import.meta.url), "utf8");
 
@@ -36,8 +48,11 @@ test("Audit P0 Bug 4: NodeDetailsContext uses ConnectRPC with AbortController an
   assert.match(contextSource, /abortRef\.current\?\.abort\(\)/);
   assert.doesNotMatch(contextSource, /\/api\/admin\/client\/list/);
 
-  // admin/index.tsx checks visibility before polling refresh
-  assert.match(adminPageSource, /document\.visibilityState\s*!==\s*["']visible["']/);
+  // Background refresh does not toggle isLoading or cause screen flashing
+  assert.match(contextSource, /hasLoadedRef/);
+  assert.match(adminPageSource, /isLoading\s*&&\s*\(!nodeDetail\s*\|\|\s*nodeDetail\.length\s*===\s*0\)/);
+  // admin/index.tsx does not run setInterval polling storms
+  assert.doesNotMatch(adminPageSource, /setInterval/);
 });
 
 test("Audit P0 Bug 5: useSettings uses module-level singleton state and listener sync", () => {
@@ -49,21 +64,10 @@ test("Audit P0 Bug 5: useSettings uses module-level singleton state and listener
   assert.match(source, /settingsListeners\.delete\(/);
 });
 
-test("Audit P0 Bug 6: menuConfig and all locales mount privileged-config navigation", () => {
+test("Audit P0 Bug 6: menuConfig has removed privileged-config navigation entry", () => {
   const menuConfig = JSON.parse(readFileSync(new URL("../src/config/menuConfig.json", import.meta.url), "utf8"));
   const privItem = menuConfig.menu.find((item: { path: string }) => item.path === "/admin/privileged-config");
-  assert.ok(privItem, "privileged-config must exist in menuConfig.menu");
-  assert.equal(privItem.icon, "ShieldCheck");
-  assert.equal(privItem.labelKey, "privileged_config.title");
-
-  const locales = ["zh_CN", "zh_TW", "en", "ja_JP", "id_ID"];
-  for (const locale of locales) {
-    const localeJson = JSON.parse(readFileSync(new URL(`../src/i18n/locales/${locale}.json`, import.meta.url), "utf8"));
-    assert.ok(
-      localeJson.privileged_config?.title,
-      `privileged_config.title missing in ${locale}.json`
-    );
-  }
+  assert.equal(privItem, undefined, "privileged-config must be removed from menuConfig.menu");
 });
 
 test("Audit Bonus: PerformanceDiagnostics renders structured DiagnosticsReport", () => {

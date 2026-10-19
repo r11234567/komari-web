@@ -42,6 +42,7 @@ export const NodeDetailsProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  const hasLoadedRef = React.useRef<boolean>(false);
 
   const refresh = React.useCallback(async () => {
     if (typeof document !== "undefined" && document.visibilityState === "hidden") {
@@ -51,12 +52,15 @@ export const NodeDetailsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setIsLoading(true);
+    if (!hasLoadedRef.current) {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
       const data = await listAdminNodes(controller.signal);
       setNodeDetail(data as NodeDetail[]);
+      hasLoadedRef.current = true;
     } catch (err: any) {
       if (!controller.signal.aborted) {
         setError(err instanceof Error ? err.message : "Failed to load node list");
