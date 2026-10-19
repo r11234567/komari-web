@@ -109,9 +109,14 @@ const Layout = () => {
     : [];
 
   useEffect(() => {
-    const interval = setInterval(() => { refresh() }, 5000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+      refresh();
+    }, 5000);
     return () => clearInterval(interval);
-  }, [nodeDetail]);
+  }, [refresh]);
 
   if (isLoading) return <Loading text="" />;
   if (error) return <div>{error}</div>;

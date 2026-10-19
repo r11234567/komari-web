@@ -99,7 +99,7 @@ test("new deployment profiles use a dedicated service account identity", async (
 
 test("admin console reads go through typed Connect adapters, not REST bridges", async () => {
   const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
-  const [panels, alertFilters, sessions, logs, clipboard, database, pingContext] =
+  const [panels, alertFilters, sessions, logs, clipboard, database, pingContext, nodeDetailsContext] =
     await Promise.all([
       read("../src/components/admin/DashboardPanels.tsx"),
       read("../src/utils/adminAlertFilters.ts"),
@@ -108,6 +108,7 @@ test("admin console reads go through typed Connect adapters, not REST bridges", 
       read("../src/contexts/CommandClipboardContext.tsx"),
       read("../src/components/admin/DatabaseMaintenanceCard.tsx"),
       read("../src/contexts/PingTaskContext.tsx"),
+      read("../src/contexts/NodeDetailsContext.tsx"),
     ]);
   assert.doesNotMatch(panels, /\/api\/admin\/dashboard/);
   assert.doesNotMatch(alertFilters, /\/api\/admin\//);
@@ -116,6 +117,7 @@ test("admin console reads go through typed Connect adapters, not REST bridges", 
   assert.doesNotMatch(clipboard, /\/api\/admin\/clipboard/);
   assert.doesNotMatch(database, /\/api\/admin\/database\//);
   assert.doesNotMatch(pingContext, /\/api\/admin\/ping/);
+  assert.doesNotMatch(nodeDetailsContext, /\/api\/admin\/client\/list/);
 });
 
 // adminAlertFilters is imported directly by dashboard.test.ts under
@@ -131,10 +133,11 @@ test("adminAlertFilters stays free of runtime imports the test runner cannot res
 });
 
 test("admin console adapters call the generated Connect clients", async () => {
-  const [dashboardAdapter, maintenanceAdapter, pingAdapter] = await Promise.all([
+  const [dashboardAdapter, maintenanceAdapter, pingAdapter, adminAdapter] = await Promise.all([
     readFile(new URL("../src/api/connect/dashboard.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/api/connect/maintenance.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/api/connect/ping.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/api/connect/admin.ts", import.meta.url), "utf8"),
   ]);
   assert.match(dashboardAdapter, /dashboard\.getDashboardSummary/);
   assert.match(dashboardAdapter, /dashboard\.getDashboardCharts/);
@@ -142,6 +145,7 @@ test("admin console adapters call the generated Connect clients", async () => {
   assert.match(maintenanceAdapter, /maintenance\.listSessions/);
   assert.match(maintenanceAdapter, /maintenance\.vacuumDatabase/);
   assert.match(pingAdapter, /pingTask\.reorderPingTasks/);
+  assert.match(adminAdapter, /agentLifecycleClient\.listAgents/);
 });
 
 test("default application graph does not import the RPC2 compatibility client", async () => {

@@ -168,34 +168,32 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const runStreamLoop = async (signal: AbortSignal) => {
       while (!signal.aborted) {
-        // Pause while tab is hidden
+        // Exit loop and release Web Lock when tab is hidden so visible tabs can take over
         if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-          await new Promise<void>((resolve) => {
-            const onVis = () => {
-              if (document.visibilityState === "visible") {
-                document.removeEventListener("visibilitychange", onVis);
-                signal.removeEventListener("abort", onAbort);
-                resolve();
-              }
-            };
-            const onAbort = () => {
-              document.removeEventListener("visibilitychange", onVis);
-              resolve();
-            };
-            document.addEventListener("visibilitychange", onVis);
-            signal.addEventListener("abort", onAbort, { once: true });
-          });
-          if (signal.aborted) break;
+          break;
         }
+
+        const streamController = new AbortController();
+        const onVisChange = () => {
+          if (document.visibilityState === "hidden") {
+            streamController.abort(new DOMException("Tab hidden, releasing lock", "AbortError"));
+          }
+        };
+        const onParentAbort = () => streamController.abort();
+        if (typeof document !== "undefined") {
+          document.addEventListener("visibilitychange", onVisChange);
+        }
+        signal.addEventListener("abort", onParentAbort, { once: true });
 
         try {
           const stream = browser.watchAgentStatus(
             { agentIds: [], afterEventId },
-            { signal, timeoutMs: 0 },
+            { signal: streamController.signal, timeoutMs: 0 },
           );
           setShowCallout(true);
           for await (const event of stream) {
             if (signal.aborted) break;
+            if (typeof document !== "undefined" && document.visibilityState === "hidden") break;
             const agent = event.agent;
             if (!agent) continue;
 
@@ -235,10 +233,19 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
             }
             setShowCallout(true);
           }
-        } catch (error) {
-          if (signal.aborted) return;
+        } catch (error: any) {
+          if (signal.aborted || streamController.signal.aborted) return;
           console.error("Connect status stream encountered error, backing off:", error);
           setShowCallout(false);
+        } finally {
+          if (typeof document !== "undefined") {
+            document.removeEventListener("visibilitychange", onVisChange);
+          }
+          signal.removeEventListener("abort", onParentAbort);
+        }
+
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+          break;
         }
 
         if (!signal.aborted) {
@@ -248,26 +255,47 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     // Leader election via Web Locks API (or direct streaming fallback)
+    let isElectionActive = false;
     const startLeaderElection = async () => {
-      if (typeof navigator !== "undefined" && "locks" in navigator) {
-        try {
-          await navigator.locks.request(LIVE_DATA_LOCK, { signal: rootSignal }, async () => {
-            if (rootSignal.aborted) return;
-            await runStreamLoop(rootSignal);
-          });
-          return;
-        } catch (err: any) {
-          if (err?.name === "AbortError") return;
-          // Fall back to direct stream loop if lock request failed
+      if (rootSignal.aborted || isElectionActive) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      isElectionActive = true;
+      try {
+        if (typeof navigator !== "undefined" && "locks" in navigator) {
+          try {
+            await navigator.locks.request(LIVE_DATA_LOCK, { signal: rootSignal }, async () => {
+              if (rootSignal.aborted) return;
+              if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+              await runStreamLoop(rootSignal);
+            });
+            return;
+          } catch (err: any) {
+            if (err?.name === "AbortError") return;
+            // Fall back to direct stream loop if lock request failed
+          }
         }
+        await runStreamLoop(rootSignal);
+      } finally {
+        isElectionActive = false;
       }
-      await runStreamLoop(rootSignal);
     };
+
+    const handleGlobalVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void startLeaderElection();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleGlobalVisibility);
+    }
 
     void startLeaderElection();
 
     return () => {
       rootController.abort(new DOMException("Provider unmounted", "AbortError"));
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleGlobalVisibility);
+      }
       try {
         channel?.close();
       } catch {

@@ -47,7 +47,22 @@ const enrollment = createClient(EnrollmentService, transport);
 const enrollmentAdmin = createClient(EnrollmentAdminService, transport);
 const privilegedDelivery = createClient(PrivilegedDeliveryService, transport);
 
-export const connectClients = { browser, dashboard, maintenance, pingTask, deployment, rescue, metrics, execution, webssh, plugin, enrollment, enrollmentAdmin, privilegedDelivery };
+export const connectClients = {
+  browser,
+  agentLifecycleClient: browser,
+  dashboard,
+  maintenance,
+  pingTask,
+  deployment,
+  rescue,
+  metrics,
+  execution,
+  webssh,
+  plugin,
+  enrollment,
+  enrollmentAdmin,
+  privilegedDelivery,
+};
 
 export const connectUnary = <T>(
   options: ConnectCallOptions,

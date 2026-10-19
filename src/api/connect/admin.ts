@@ -340,3 +340,54 @@ export const cancelAdminMetricMigration = async (signal: AbortSignal) => {
   );
   return migrationValue(response.migration);
 };
+
+export const listAdminNodes = async (signal: AbortSignal) => {
+  const response = await connectUnary(
+    { signal },
+    (requestSignal, timeoutMs) =>
+      connectClients.agentLifecycleClient.listAgents(
+        {},
+        { signal: requestSignal, timeoutMs },
+      ),
+  );
+  return response.agents.map((agent) => {
+    const b = agent.basicInfo;
+    return {
+      uuid: agent.agentId,
+      token: "",
+      name: agent.name,
+      cpu_name: b?.cpuName ?? "",
+      virtualization: b?.virtualization ?? "",
+      arch: b?.architecture ?? "",
+      cpu_cores: b?.cpuCores ?? 0,
+      os: b?.os ?? "",
+      gpu_name: b?.gpuName ?? "",
+      ipv4: b?.ipv4 ?? "",
+      ipv6: b?.ipv6 ?? "",
+      region: b?.region ?? "",
+      mem_total: Number(b?.memoryTotalBytes ?? 0),
+      swap_total: Number(b?.swapTotalBytes ?? 0),
+      disk_total: Number(b?.diskTotalBytes ?? 0),
+      version: b?.agentVersion ?? "",
+      weight: b?.weight ?? 0,
+      price: b?.price ?? 0,
+      remark: "",
+      public_remark: b?.publicRemark ?? "",
+      group: b?.group ?? "",
+      billing_cycle: b?.billingCycleDays ?? 0,
+      expired_at: b?.expiresAt ? timestampDate(b.expiresAt).toISOString() : "",
+      created_at: b?.createdAt ? timestampDate(b.createdAt).toISOString() : "",
+      updated_at: b?.updatedAt ? timestampDate(b.updatedAt).toISOString() : "",
+      tags: b?.tags ?? "",
+      traffic_limit: Number(b?.trafficLimitBytes ?? 0),
+      traffic_limit_type: b?.trafficLimitType ?? "",
+      auto_renewal: b?.autoRenewal ?? false,
+      currency: b?.currency ?? "$",
+      hidden: false,
+      status: agent.status,
+      cpu_percent: agent.cpuPercent,
+      memory_percent: agent.memoryPercent,
+    };
+  });
+};
+

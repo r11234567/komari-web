@@ -99,8 +99,8 @@ const BindPageContent = () => {
       );
       setEnrollment(response.enrollment ?? null);
       setCandidates(response.candidates ?? []);
-      if (response.enrollment?.device?.hostname && !newName) {
-        setNewName(response.enrollment.device.hostname);
+      if (response.enrollment?.device?.hostname) {
+        setNewName((prev) => prev || response.enrollment?.device?.hostname || "");
       }
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -109,7 +109,7 @@ const BindPageContent = () => {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [newName]);
+  }, []);
 
   // Load all server nodes for manual bind selection
   const loadServers = React.useCallback(async () => {

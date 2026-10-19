@@ -48,6 +48,10 @@ export const routes: RouteObject[] = [
     element: React.createElement(LoginPage),
   },
   {
+    path: "/enroll",
+    element: React.createElement(lazy(() => import("./pages/bind"))),
+  },
+  {
     path: "/bind",
     element: React.createElement(lazy(() => import("./pages/bind"))),
   },
@@ -266,6 +270,12 @@ export const routes: RouteObject[] = [
       {
         path: "rescue",
         element: React.createElement(lazy(() => import("./pages/admin/rescue"))),
+      },
+      {
+        path: "privileged-config",
+        element: React.createElement(
+          lazy(() => import("./pages/admin/privileged-config"))
+        ),
       },
     ],
   },

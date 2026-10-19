@@ -134,6 +134,11 @@
       "icon": "ShieldAlert"
     },
     {
+      "labelKey": "privileged_config.title",
+      "path": "/admin/privileged-config",
+      "icon": "ShieldCheck"
+    },
+    {
       "labelKey": "exec.title",
       "path": "/admin/exec",
       "icon": "Code"

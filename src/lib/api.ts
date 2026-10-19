@@ -165,6 +165,9 @@ export async function updateSettings(
   const restart = settingsRestartFrom(responseData);
   if (restart) {
     waitForMigrationGuide(restart.guidePath);
+  } else {
+    cachedSettings = { ...cachedSettings, ...settings };
+    notifySettingsListeners();
   }
   return restart;
 }
@@ -199,93 +202,115 @@ export async function updateSingleSetting<K extends keyof SettingsResponse>(
   return updateSettings(updatedSettings);
 }
 
+const defaultSettings: SettingsResponse = {
+  sitename: "",
+  description: "",
+  cors_origin_check_enabled: true,
+  geo_ip_enabled: false,
+  geo_ip_provider: "",
+  o_auth_provider: "",
+  o_auth_enabled: false,
+  custom_head: "",
+  CreatedAt: "",
+  UpdatedAt: "",
+};
+
+let cachedSettings: SettingsResponse = { ...defaultSettings };
+let isSettingsLoading = true;
+let settingsError: string | null = null;
+let settingsPromise: Promise<SettingsResponse> | null = null;
+const settingsListeners = new Set<() => void>();
+
+function notifySettingsListeners() {
+  for (const listener of settingsListeners) {
+    listener();
+  }
+}
+
+export async function reloadGlobalSettings(force = false): Promise<SettingsResponse> {
+  if (settingsPromise && !force) {
+    return settingsPromise;
+  }
+  isSettingsLoading = true;
+  settingsError = null;
+  notifySettingsListeners();
+
+  settingsPromise = getSettings()
+    .then((data) => {
+      cachedSettings = data;
+      isSettingsLoading = false;
+      settingsError = null;
+      notifySettingsListeners();
+      return data;
+    })
+    .catch((err) => {
+      settingsError = err instanceof Error ? err.message : "Failed to fetch settings";
+      isSettingsLoading = false;
+      notifySettingsListeners();
+      throw err;
+    })
+    .finally(() => {
+      settingsPromise = null;
+    });
+
+  return settingsPromise;
+}
+
 /**
- * Hook for managing settings state and API calls
+ * Hook for managing settings state and API calls with singleton shared state
  */
 export function useSettings() {
-  const [settings, setSettings] = React.useState<SettingsResponse>({
-    sitename: "",
-    description: "",
-    cors_origin_check_enabled: true,
-    geo_ip_enabled: false,
-    geo_ip_provider: "",
-    o_auth_provider: "",
-    o_auth_enabled: false,
-    custom_head: "",
-    CreatedAt: "",
-    UpdatedAt: "",
-  });
+  const [, setTick] = React.useState(0);
 
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-
-  // Fetch settings on mount
   React.useEffect(() => {
-    const fetchSettings = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await getSettings();
-        setSettings(data);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch settings"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
+    const listener = () => setTick((t) => t + 1);
+    settingsListeners.add(listener);
 
-    fetchSettings();
+    if (isSettingsLoading && !settingsPromise) {
+      void reloadGlobalSettings();
+    }
+
+    return () => {
+      settingsListeners.delete(listener);
+    };
   }, []);
 
-  // Update a single setting
   const updateSetting = async <K extends keyof SettingsResponse>(
     key: K,
     value: SettingsResponse[K]
   ) => {
     try {
-      const restart = await updateSingleSetting(key, value, settings);
-      if (!restart) {
-        setSettings((prev) => ({ ...prev, [key]: value }));
-      }
+      const restart = await updateSingleSetting(key, value, cachedSettings);
       return restart;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : `Failed to update ${String(key)}`
-      );
+      settingsError =
+        err instanceof Error ? err.message : `Failed to update ${String(key)}`;
+      notifySettingsListeners();
       throw err;
     }
   };
 
-  // Update multiple settings
   const updateMultipleSettings = async (
     newSettings: Partial<SettingsResponse>
   ) => {
     try {
-      const updatedSettings = { ...settings, ...newSettings };
+      const updatedSettings = { ...cachedSettings, ...newSettings };
       const restart = await updateSettings(updatedSettings);
-      if (!restart) {
-        setSettings(updatedSettings);
-      }
       return restart;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to update settings"
-      );
+      settingsError =
+        err instanceof Error ? err.message : "Failed to update settings";
+      notifySettingsListeners();
       throw err;
     }
   };
 
   return {
-    settings,
-    loading,
-    error,
+    settings: cachedSettings,
+    loading: isSettingsLoading,
+    error: settingsError,
     updateSetting,
     updateMultipleSettings,
-    refetch: async () => {
-      const data = await getSettings();
-      setSettings(data);
-    },
+    refetch: () => reloadGlobalSettings(true),
   };
 }

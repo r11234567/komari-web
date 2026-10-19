@@ -1,4 +1,5 @@
-import React from 'react';
+import React from "react";
+import { listAdminNodes } from "@/api/connect/admin";
 
 export type NodeDetail = {
   uuid: string;
@@ -30,33 +31,49 @@ export type NodeDetail = {
 };
 
 interface NodeDetailsContextType {
-  nodeDetail: NodeDetail[] | [];
+  nodeDetail: NodeDetail[];
   isLoading: boolean;
   error: string | null;
   refresh: () => void;
 }
 const NodeDetailsContext = React.createContext<NodeDetailsContextType | undefined>(undefined);
 export const NodeDetailsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [nodeDetail, setNodeDetail] = React.useState<NodeDetail[] | []>([]);
+  const [nodeDetail, setNodeDetail] = React.useState<NodeDetail[]>([]);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+  const abortRef = React.useRef<AbortController | null>(null);
 
-  const refresh = () => {
-    fetch("/api/admin/client/list")
-      .then((response) => response.json())
-      .then((data: NodeDetail[]) => {
-        setNodeDetail(data);
+  const refresh = React.useCallback(async () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const data = await listAdminNodes(controller.signal);
+      setNodeDetail(data as NodeDetail[]);
+    } catch (err: any) {
+      if (!controller.signal.aborted) {
+        setError(err instanceof Error ? err.message : "Failed to load node list");
+      }
+    } finally {
+      if (!controller.signal.aborted) {
         setIsLoading(false);
-      })
-      .catch((error) => {
-        setError(error.message);
-        setIsLoading(false);
-      });
-  };
-    React.useEffect(() => {
-        setIsLoading(true);
-        refresh();
-    }, []);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void refresh();
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, [refresh]);
   return (
     <NodeDetailsContext.Provider value={{ nodeDetail, isLoading, error, refresh }}>
       {children}
