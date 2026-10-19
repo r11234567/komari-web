@@ -2,9 +2,9 @@ import * as React from "react";
 import { durationFromMs, timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
   AgentRuntimeIdentity,
+  Platform,
   type ConfigDelivery,
   type DeploymentProfile,
-  Platform,
 } from "@komari/proto/komari/deployment/v1/deployment_pb";
 import {
   RuntimeConfigSchema,
@@ -12,6 +12,7 @@ import {
   type PrivilegedRevision,
 } from "@komari/proto/komari/config/v1/config_pb";
 import { DeliveryState, TwoFactorProofSchema } from "@komari/proto/komari/common/v1/common_pb";
+import { PrivilegeMode } from "@komari/proto/komari/report/v1/report_pb";
 import { create } from "@bufbuild/protobuf";
 import {
   Badge,
@@ -21,23 +22,23 @@ import {
   Dialog,
   Flex,
   IconButton,
-  SegmentedControl,
   Text,
-  TextArea,
   TextField,
 } from "@radix-ui/themes";
-import { AlertTriangle, CheckCircle2, Clock, Copy, Download, ShieldAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Copy,
+  Download,
+  Lock,
+  Server,
+  ShieldAlert,
+  SlidersHorizontal,
+} from "lucide-react";
 import { toast } from "sonner";
 import { connectUnary, connectClients } from "@/api/connect/client";
 import { useConnect } from "@/contexts/ConnectContext";
-
-type InstallPlatform = "linux" | "windows" | "macos";
-
-const platformValue: Record<InstallPlatform, Platform> = {
-  linux: Platform.LINUX_AMD64,
-  windows: Platform.WINDOWS_AMD64,
-  macos: Platform.DARWIN_AMD64,
-};
 
 const deliveryText: Record<DeliveryState, string> = {
   [DeliveryState.UNSPECIFIED]: "未知",
@@ -101,6 +102,8 @@ function InlineManualTaskCard({ task }: { task: NonNullable<NonNullable<Privileg
   }, [task.expiresAt]);
   const countdown = useCountdown(expiresDate);
   const isExpired = expiresDate && expiresDate.getTime() < Date.now();
+  const command = task.command || "sudo komari-agent upgrade";
+
   return (
     <Callout.Root color={isExpired ? "red" : "orange"} size="1">
       <Callout.Icon><ShieldAlert size={13} /></Callout.Icon>
@@ -116,19 +119,17 @@ function InlineManualTaskCard({ task }: { task: NonNullable<NonNullable<Privileg
               <Text size="1" color={isExpired ? "red" : "orange"}>{countdown}</Text>
             </Flex>
           )}
-          {task.command && (
-            <Flex direction="column" gap="1">
-              <Text size="1" weight="medium" color="gray">在机器上运行：</Text>
-              <Flex gap="2" align="start">
-                <code style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--gray-a3)", padding: "6px 10px", borderRadius: "4px", wordBreak: "break-all", flex: 1 }}>
-                  {task.command}
-                </code>
-                <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText(task.command!).then(() => toast.success("命令已复制"))} title="复制命令">
-                  <Copy size={12} />复制
-                </Button>
-              </Flex>
+          <Flex direction="column" gap="1">
+            <Text size="1" weight="medium" color="gray">在机器上运行（Windows 请在管理员终端运行 komari-agent upgrade）：</Text>
+            <Flex gap="2" align="start">
+              <code style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--gray-a3)", padding: "6px 10px", borderRadius: "4px", wordBreak: "break-all", flex: 1 }}>
+                {command}
+              </code>
+              <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText(command).then(() => toast.success("命令已复制"))} title="复制命令">
+                <Copy size={12} />复制
+              </Button>
             </Flex>
-          )}
+          </Flex>
           {task.taskId && (
             <Text size="1" color="gray" style={{ fontFamily: "monospace" }}>任务 ID：{task.taskId}</Text>
           )}
@@ -148,7 +149,7 @@ type AgentDeploymentDialogProps = {
 
 export function AgentDeploymentDialog({
   agentId,
-  title = "一键部署",
+  title = "一键部署与配置下发",
   iconClassName,
 }: AgentDeploymentDialogProps) {
   const { deployment } = useConnect();
@@ -157,8 +158,6 @@ export function AgentDeploymentDialog({
   const [saving, setSaving] = React.useState(false);
   const [profile, setProfile] = React.useState<DeploymentProfile>();
   const [delivery, setDelivery] = React.useState<ConfigDelivery>();
-  const [platform, setPlatform] = React.useState<InstallPlatform>("linux");
-  const [command, setCommand] = React.useState("");
 
   // privileged delivery state
   const [privRevision, setPrivRevision] = React.useState<PrivilegedRevision | undefined>();
@@ -169,7 +168,10 @@ export function AgentDeploymentDialog({
     websshEnabled: false,
     executionEnabled: false,
     rescueHelperEnabled: false,
+    enableGpu: false,
+    requiredPrivilegeMode: PrivilegeMode.UNSPECIFIED,
   });
+  const [installedMode, setInstalledMode] = React.useState<PrivilegeMode>(PrivilegeMode.UNSPECIFIED);
   const [twoFaCode, setTwoFaCode] = React.useState("");
   const [confirming, setConfirming] = React.useState(false);
   const [savingPrivileged, setSavingPrivileged] = React.useState(false);
@@ -199,13 +201,13 @@ export function AgentDeploymentDialog({
       if (!controller.signal.aborted) {
         setProfile(deployResp.profile);
         setDelivery(deployResp.delivery);
-        setPlatform(platformFromProfile(deployResp.profile?.install?.platform));
         const pending = privResp?.revisions?.find(
           (r) =>
             r.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION ||
             r.state === PrivilegedDeliveryState.NEEDS_MANUAL_AUTHORIZATION,
         );
         setPendingPriv(pending);
+        setInstalledMode(privResp?.installedPrivilegeMode ?? PrivilegeMode.UNSPECIFIED);
         setPrivAppliedRevision(privResp?.appliedRevision ?? 0n);
         const latest = privResp?.revisions?.[0];
         const settings = latest?.privileged;
@@ -214,6 +216,8 @@ export function AgentDeploymentDialog({
           websshEnabled: settings?.websshEnabled ?? false,
           executionEnabled: settings?.executionEnabled ?? false,
           rescueHelperEnabled: settings?.rescueHelperEnabled ?? false,
+          enableGpu: settings?.enableGpu ?? false,
+          requiredPrivilegeMode: settings?.requiredPrivilegeMode ?? PrivilegeMode.UNSPECIFIED,
         });
         setPrivRevision(privResp?.revisions?.[0]);
       }
@@ -260,8 +264,12 @@ export function AgentDeploymentDialog({
             expectedRevision: privRevision?.revision ?? 0n,
             reason: privReason.trim(),
             privileged: {
-              ...privDraft,
-              enableGpu: false,
+              remoteControlEnabled: privDraft.remoteControlEnabled,
+              websshEnabled: privDraft.websshEnabled,
+              executionEnabled: privDraft.executionEnabled,
+              rescueHelperEnabled: privDraft.rescueHelperEnabled,
+              enableGpu: privDraft.enableGpu,
+              requiredPrivilegeMode: privDraft.requiredPrivilegeMode,
             },
           },
           { signal, timeoutMs },
@@ -344,7 +352,7 @@ export function AgentDeploymentDialog({
       if (!controller.signal.aborted) {
         setProfile(response.profile);
         setDelivery(response.delivery);
-        toast.success("配置已保存并创建新的下发版本");
+        toast.success("普通配置已保存并创建新的下发版本");
       }
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -355,31 +363,26 @@ export function AgentDeploymentDialog({
     }
   };
 
-  const generateCommand = async () => {
-    stopActiveRequest();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    try {
-      const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
-        deployment.generateInstallCommand(
-          { agentId, platform: platformValue[platform] },
-          { signal, timeoutMs },
-        ),
-      );
-      if (!controller.signal.aborted) setCommand(response.command);
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        toast.error(error instanceof Error ? error.message : "生成安装指令失败");
-      }
-    }
-  };
-
   const install = profile?.install;
   const runtime = profile?.runtime;
   const nonPrivilegedRuntime =
     install?.runtimeIdentity === AgentRuntimeIdentity.SERVICE_ACCOUNT ||
     install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER;
-  const remoteControlEnabled = !nonPrivilegedRuntime && (install?.remoteControlEnabled ?? true);
+
+  const isWindows =
+    installedMode === PrivilegeMode.WINDOWS_ADMINISTRATOR ||
+    installedMode === PrivilegeMode.WINDOWS_STANDARD_USER ||
+    profile?.install?.platform === Platform.WINDOWS_AMD64 ||
+    profile?.install?.platform === Platform.WINDOWS_386;
+
+  const isCurrentlyPrivileged =
+    installedMode === PrivilegeMode.LINUX_ROOT ||
+    installedMode === PrivilegeMode.WINDOWS_ADMINISTRATOR;
+
+  const isPrivilegedAccount =
+    privDraft.requiredPrivilegeMode === PrivilegeMode.LINUX_ROOT ||
+    privDraft.requiredPrivilegeMode === PrivilegeMode.WINDOWS_ADMINISTRATOR ||
+    (privDraft.requiredPrivilegeMode === PrivilegeMode.UNSPECIFIED && isCurrentlyPrivileged);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -395,114 +398,139 @@ export function AgentDeploymentDialog({
         ) : (
           <Flex direction="column" gap="5" mt="4">
 
-            {/* ── 安装配置 ── */}
-            <Flex direction="column" gap="2">
-              <Text weight="bold">以下特权配置需要下发后确认</Text>
-              <Text size="2" color="gray">远程控制、WebSSH、执行权限、救援辅助程序等特权功能不能在线静默生效，每次变更需要面板二次确认，跨权限级变更还需在机器上执行。</Text>
-              <SegmentedControl.Root
-                value={platform}
-                onValueChange={(value) => {
-                  const selected = value as InstallPlatform;
-                  setPlatform(selected);
-                  updateInstall("platform", platformValue[selected]);
-                }}
-              >
-                <SegmentedControl.Item value="linux">Linux</SegmentedControl.Item>
-                <SegmentedControl.Item value="windows">Windows</SegmentedControl.Item>
-                <SegmentedControl.Item value="macos">macOS</SegmentedControl.Item>
-              </SegmentedControl.Root>
-              <Text size="2" color="gray">普通 Agent 的运行身份</Text>
-              <SegmentedControl.Root
-                value={nonPrivilegedRuntime ? "service-account" : "administrator"}
-                onValueChange={(value) => {
-                  const isServiceAccount = value === "service-account";
-                  updateInstall(
-                    "runtimeIdentity",
-                    isServiceAccount
-                      ? AgentRuntimeIdentity.SERVICE_ACCOUNT
-                      : AgentRuntimeIdentity.ROOT_OR_ADMINISTRATOR,
-                  );
-                  if (isServiceAccount) updateInstall("remoteControlEnabled", false);
-                }}
-              >
-                <SegmentedControl.Item value="administrator">root / 管理员</SegmentedControl.Item>
-                <SegmentedControl.Item value="service-account">专用非特权服务账号</SegmentedControl.Item>
-              </SegmentedControl.Root>
-              {nonPrivilegedRuntime && (
-                <Text size="2" color="gray">安装器以 root / 管理员权限创建或配置不可登录的专用普通服务账号，不使用当前交互用户。</Text>
-              )}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Toggle label="启用基础 GPU 采集" checked={install?.enableGpu ?? false} onChange={(value) => updateInstall("enableGpu", value)} />
-                <Toggle
-                  label="启用远程控制"
-                  checked={remoteControlEnabled}
-                  disabled={nonPrivilegedRuntime}
-                  onChange={(value) => updateInstall("remoteControlEnabled", value)}
-                />
-                <Toggle label="禁用自动更新" checked={install?.disableAutoUpdate ?? false} onChange={(value) => updateInstall("disableAutoUpdate", value)} />
-                <Toggle label="忽略不安全证书" checked={install?.ignoreUnsafeCertificate ?? false} onChange={(value) => updateInstall("ignoreUnsafeCertificate", value)} />
-                <Toggle label="从网卡获取 IP" checked={install?.getIpAddressFromNic ?? false} onChange={(value) => updateInstall("getIpAddressFromNic", value)} />
+            {/* ════════════════════════════════════════════════════════════════
+                模块一：以下请到机器改（本地宿主静态配置 / 不可改变配置）
+               ════════════════════════════════════════════════════════════════ */}
+            <Flex direction="column" gap="3" className="rounded-lg border p-4 bg-[var(--gray-a1)]">
+              <Flex align="center" gap="2">
+                <Server size={18} className="text-gray-500" />
+                <Text weight="bold" size="3">1. 以下请到机器改（本地宿主静态配置）</Text>
+              </Flex>
+              <Callout.Root color="gray" size="1">
+                <Callout.Icon><AlertTriangle size={13} /></Callout.Icon>
+                <Callout.Text>
+                  说明：以下项主控严禁远程在线篡改。如需调整，请登录机器在本地 CLI 或配置文件中修改。
+                </Callout.Text>
+              </Callout.Root>
+
+              <div className="grid gap-3 sm:grid-cols-2 text-sm bg-[var(--gray-a2)] p-3 rounded-md">
+                <div>
+                  <span className="text-gray-500">探针运行身份：</span>
+                  <Text weight="medium">
+                    {nonPrivilegedRuntime ? "专用非特权服务账号 (komari)" : "root / 管理员"}
+                  </Text>
+                </div>
+                <div>
+                  <span className="text-gray-500">安装目录：</span>
+                  <code>{install?.installDirectory || "/opt/komari-agent"}</code>
+                </div>
+                <div>
+                  <span className="text-gray-500">系统服务名称：</span>
+                  <code>{install?.serviceName || "komari-agent.service"}</code>
+                </div>
+                <div>
+                  <span className="text-gray-500">自动更新策略：</span>
+                  <Text weight="medium">
+                    {install?.disableAutoUpdate ? "已禁用自动更新" : "已启用自动更新"}
+                  </Text>
+                </div>
+                <div>
+                  <span className="text-gray-500">TLS 证书校验：</span>
+                  <Text weight="medium">
+                    {install?.ignoreUnsafeCertificate ? "允许自签名/不安全证书" : "严格校验 (TLS Validated)"}
+                  </Text>
+                </div>
+                <div>
+                  <span className="text-gray-500">连接协议：</span>
+                  <Text weight="medium">Connect-RPC over HTTP/2</Text>
+                </div>
               </div>
-              {nonPrivilegedRuntime && (
-                <Text size="2" color="gray">非特权 Agent 不能执行远程命令或终端；如需特权操作，请通过救援模式页面操作。</Text>
-              )}
-              <TextField.Root value={install?.installDirectory ?? ""} placeholder="安装目录" onChange={(event) => updateInstall("installDirectory", event.target.value)} />
-              <TextField.Root value={install?.serviceName ?? ""} placeholder="服务名称" onChange={(event) => updateInstall("serviceName", event.target.value)} />
-              <TextField.Root
-                value={install?.githubProxy ?? ""}
-                placeholder="GitHub 代理"
-                onChange={(event) => {
-                  updateInstall("githubProxy", event.target.value);
-                  updateInstall("enableGithubProxy", event.target.value.trim() !== "");
-                }}
-              />
+
+              <Flex direction="column" gap="1" mt="1">
+                <Text size="1" color="gray">宿主机本地修改命令指引：</Text>
+                <Flex gap="2" align="center">
+                  <code style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--gray-a3)", padding: "6px 10px", borderRadius: "4px", wordBreak: "break-all", flex: 1 }}>
+                    komari-agent config show
+                  </code>
+                  <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText("komari-agent config show").then(() => toast.success("命令已复制"))}>
+                    <Copy size={12} />复制
+                  </Button>
+                </Flex>
+              </Flex>
             </Flex>
 
-            {/* ── 特权配置下发状态 ── */}
-            <Flex direction="column" gap="2">
-              <Text weight="bold">特权配置下发状态</Text>
-
-              <Flex direction="column" gap="1" className="rounded border p-3">
-                <Text size="2">期望版本：{privRevision?.revision?.toString() ?? "0"}；已应用版本：{privAppliedRevision.toString()}</Text>
-                <Text size="2">状态：{privilegedDeliveryText[privRevision?.state ?? PrivilegedDeliveryState.UNSPECIFIED]}</Text>
-                <Text size="2">保存：{toLocalTime(privRevision?.savedAt)}；确认：{toLocalTime(privRevision?.confirmedAt)}；完成：{toLocalTime(privRevision?.finishedAt)}</Text>
-                {privRevision?.errors?.[0] && <Text size="2" color="red">{privRevision.errors[0].message}</Text>}
-                {pendingPriv?.plan?.manualTask && <InlineManualTaskCard task={pendingPriv.plan.manualTask} />}
+            {/* ════════════════════════════════════════════════════════════════
+                模块二：以下作为特权配置下发（高危特权配置 / Privileged Track）
+               ════════════════════════════════════════════════════════════════ */}
+            <Flex direction="column" gap="3" className="rounded-lg border p-4 bg-[var(--gray-a1)]">
+              <Flex align="center" gap="2">
+                <Lock size={18} className="text-orange-500" />
+                <Text weight="bold" size="3">2. 以下作为特权配置下发（高危特权配置）</Text>
               </Flex>
+              <Text size="2" color="gray">
+                远程控制、WebSSH、执行权限与应急救援等特权功能具有高危性。主控下发后需管理员 2FA 二次确认；跨权限级变更（如非特权服务升级为 root）需在目标机器终端执行提权命令核销。
+              </Text>
 
-              <Flex direction="column" gap="2" className="rounded border p-3">
-                <Text size="2" weight="medium">特权配置</Text>
+              {/* 特权配置编辑表单 */}
+              <Flex direction="column" gap="2" className="rounded border p-3 bg-[var(--gray-a2)]">
+                <Text size="2" weight="medium">特权功能开关</Text>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <Toggle label="远程控制" checked={privDraft.remoteControlEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, remoteControlEnabled: value }))} />
-                  <Toggle label="WebSSH" checked={privDraft.websshEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, websshEnabled: value }))} />
-                  <Toggle label="执行权限" checked={privDraft.executionEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, executionEnabled: value }))} />
-                  <Toggle label="救援辅助程序" checked={privDraft.rescueHelperEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, rescueHelperEnabled: value }))} />
+                  <Toggle label="远程控制总开关" checked={privDraft.remoteControlEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, remoteControlEnabled: value }))} />
+                  <Toggle label="WebSSH 交互终端" checked={privDraft.websshEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, websshEnabled: value }))} />
+                  <Toggle label="远程命令执行" checked={privDraft.executionEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, executionEnabled: value }))} />
+                  <Toggle label="应急救援辅助守护" checked={privDraft.rescueHelperEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, rescueHelperEnabled: value }))} />
+                  <Toggle label="基础 GPU 采集 (enable_gpu)" checked={privDraft.enableGpu} onChange={(value) => setPrivDraft((current) => ({ ...current, enableGpu: value }))} />
+                  <Toggle
+                    label="以特权账户运行 (root / 管理员)"
+                    checked={isPrivilegedAccount}
+                    onChange={(checked) => {
+                      setPrivDraft((curr) => ({
+                        ...curr,
+                        requiredPrivilegeMode: checked
+                          ? (isWindows ? PrivilegeMode.WINDOWS_ADMINISTRATOR : PrivilegeMode.LINUX_ROOT)
+                          : (isWindows ? PrivilegeMode.WINDOWS_STANDARD_USER : PrivilegeMode.LINUX_NON_ROOT),
+                      }));
+                    }}
+                  />
                 </div>
+                <Flex align="center" gap="3" wrap="wrap" className="text-xs text-gray-500 pt-1">
+                  <span>目标运行账户：</span>
+                  <Badge color={isPrivilegedAccount ? "orange" : "gray"} size="1">
+                    {isPrivilegedAccount ? `特权账户 (${isWindows ? "Windows Administrator" : "Linux root"})` : "专用普通服务账号 (komari)"}
+                  </Badge>
+                  <span>当前探针状态：</span>
+                  <Badge color={isCurrentlyPrivileged ? "green" : "gray"} size="1">
+                    {isCurrentlyPrivileged ? "已处于特权身份" : "处于非特权普通账号"}
+                  </Badge>
+                </Flex>
                 <TextField.Root value={privReason} onChange={(event) => setPrivReason(event.target.value)} placeholder="变更原因（可选）" />
                 <Flex justify="end">
-                  <Button variant="soft" disabled={savingPrivileged} onClick={() => void savePrivileged()}>
+                  <Button variant="soft" color="orange" disabled={savingPrivileged} onClick={() => void savePrivileged()}>
                     {savingPrivileged ? "正在保存..." : "保存特权配置"}
                   </Button>
                 </Flex>
               </Flex>
 
+              {/* 特权配置下发状态与审批流 */}
               <Flex direction="column" gap="2" className="rounded border p-3">
-                {privRevision?.privileged ? (
-                  <Flex direction="column" gap="1">
-                    <Text size="1" color="gray" weight="medium">最新特权配置（r{privRevision.revision.toString()}）</Text>
-                    <PrivSettingRow label="远程控制" value={privRevision.privileged.remoteControlEnabled} />
-                    <PrivSettingRow label="WebSSH" value={privRevision.privileged.websshEnabled} />
-                    <PrivSettingRow label="远程执行" value={privRevision.privileged.executionEnabled} />
-                    <PrivSettingRow label="救援辅助程序" value={privRevision.privileged.rescueHelperEnabled} />
-                  </Flex>
-                ) : (
-                  <Text size="1" color="gray">暂无特权配置记录。</Text>
-                )}
+                <Flex justify="between" align="center" wrap="wrap" gap="2">
+                  <Text size="2" weight="medium">特权配置下发状态</Text>
+                  <Badge color={privRevision?.state === PrivilegedDeliveryState.DELIVERED ? "green" : "orange"} size="1">
+                    {privilegedDeliveryText[privRevision?.state ?? PrivilegedDeliveryState.UNSPECIFIED]}
+                  </Badge>
+                </Flex>
+                <Text size="2">期望版本：{privRevision?.revision?.toString() ?? "0"}；已应用版本：{privAppliedRevision.toString()}</Text>
+                <Text size="2">保存：{toLocalTime(privRevision?.savedAt)}；确认：{toLocalTime(privRevision?.confirmedAt)}；完成：{toLocalTime(privRevision?.finishedAt)}</Text>
+                {privRevision?.errors?.[0] && <Text size="2" color="red">{privRevision.errors[0].message}</Text>}
 
+                {/* 待在宿主机执行升级的卡片 */}
+                {pendingPriv?.plan?.manualTask && <InlineManualTaskCard task={pendingPriv.plan.manualTask} />}
+
+                {/* 待面板二次确认的流程 */}
                 {pendingPriv && (
                   <>
                     <Flex align="center" gap="2" wrap="wrap" mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }}>
-                      <Text size="2" weight="medium">待处理特权变更</Text>
+                      <Text size="2" weight="medium">待处理特权变更 (r{pendingPriv.revision.toString()})</Text>
                       {pendingPriv.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION && (
                         <Badge color="orange" size="1">需要面板二次确认</Badge>
                       )}
@@ -517,19 +545,37 @@ export function AgentDeploymentDialog({
                         <PrivSettingRow label="WebSSH" value={pendingPriv.privileged.websshEnabled} />
                         <PrivSettingRow label="远程执行" value={pendingPriv.privileged.executionEnabled} />
                         <PrivSettingRow label="救援辅助程序" value={pendingPriv.privileged.rescueHelperEnabled} />
+                        <PrivSettingRow label="基础 GPU 采集" value={pendingPriv.privileged.enableGpu} />
+                        <Flex gap="2" align="center">
+                          <Text size="2" style={{ width: "120px" }} color="gray">特权账户运行</Text>
+                          <Badge
+                            color={
+                              pendingPriv.privileged.requiredPrivilegeMode === PrivilegeMode.LINUX_ROOT ||
+                              pendingPriv.privileged.requiredPrivilegeMode === PrivilegeMode.WINDOWS_ADMINISTRATOR
+                                ? "orange"
+                                : "gray"
+                            }
+                            size="1"
+                          >
+                            {pendingPriv.privileged.requiredPrivilegeMode === PrivilegeMode.LINUX_ROOT ||
+                            pendingPriv.privileged.requiredPrivilegeMode === PrivilegeMode.WINDOWS_ADMINISTRATOR
+                              ? "开启 (root / 管理员)"
+                              : "关闭 (普通账户)"}
+                          </Badge>
+                        </Flex>
                       </Flex>
                     )}
 
                     {pendingPriv.state === PrivilegedDeliveryState.NEEDS_CONFIRMATION && (
-                      <>
+                      <Flex direction="column" gap="2" mt="2">
                         <Callout.Root color="orange" size="1">
                           <Callout.Icon><AlertTriangle size={13} /></Callout.Icon>
-                          <Callout.Text>确认将授权机器应用此特权变更。</Callout.Text>
+                          <Callout.Text>确认将向机器派发此特权变更，请输入管理员 2FA 口令进行授权：</Callout.Text>
                         </Callout.Root>
                         <Flex gap="2" align="center" wrap="wrap">
                           <TextField.Root
                             type="password"
-                            placeholder="2FA 验证码"
+                            placeholder="6 位 2FA 动态口令"
                             value={twoFaCode}
                             onChange={(e) => setTwoFaCode(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Enter") void confirmPriv(); }}
@@ -538,72 +584,123 @@ export function AgentDeploymentDialog({
                             <CheckCircle2 size={14} />{confirming ? "确认中..." : "确认变更"}
                           </Button>
                         </Flex>
-                      </>
+                      </Flex>
                     )}
-
                   </>
+                )}
+
+                {/* 最新生效的特权配置快照 */}
+                {privRevision?.privileged && (
+                  <Flex direction="column" gap="1" mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }}>
+                    <Text size="1" color="gray" weight="medium">当前生效特权快照（r{privRevision.revision.toString()}）：</Text>
+                    <PrivSettingRow label="远程控制" value={privRevision.privileged.remoteControlEnabled} />
+                    <PrivSettingRow label="WebSSH" value={privRevision.privileged.websshEnabled} />
+                    <PrivSettingRow label="远程执行" value={privRevision.privileged.executionEnabled} />
+                    <PrivSettingRow label="救援辅助程序" value={privRevision.privileged.rescueHelperEnabled} />
+                    <PrivSettingRow label="基础 GPU 采集" value={privRevision.privileged.enableGpu} />
+                    <Flex gap="2" align="center">
+                      <Text size="2" style={{ width: "120px" }} color="gray">特权账户运行</Text>
+                      <Badge
+                        color={
+                          privRevision.privileged.requiredPrivilegeMode === PrivilegeMode.LINUX_ROOT ||
+                          privRevision.privileged.requiredPrivilegeMode === PrivilegeMode.WINDOWS_ADMINISTRATOR
+                            ? "green"
+                            : "gray"
+                        }
+                        size="1"
+                      >
+                        {privRevision.privileged.requiredPrivilegeMode === PrivilegeMode.LINUX_ROOT ||
+                        privRevision.privileged.requiredPrivilegeMode === PrivilegeMode.WINDOWS_ADMINISTRATOR
+                          ? "开启 (root / 管理员)"
+                          : "关闭 (普通账户)"}
+                      </Badge>
+                    </Flex>
+                  </Flex>
                 )}
               </Flex>
             </Flex>
 
-            {/* ── 以下配置将下发 ── */}
-            <Flex direction="column" gap="2">
-              <Text weight="bold">以下配置将下发</Text>
-              <Text size="2" color="gray">仅以下七项可在线生效。基础 GPU、远程控制和其它安装设置必须重新安装。</Text>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Toggle label="包含缓冲区内存" checked={runtime?.memoryIncludeCache ?? false} onChange={(value) => updateRuntime({ memoryIncludeCache: value })} />
-                <Toggle label="启用详细 GPU 监控" checked={runtime?.detailedGpu ?? false} onChange={(value) => updateRuntime({ detailedGpu: value })} />
-              </div>
-              <TextField.Root defaultValue={listToText(runtime?.includeNics)} placeholder="只监测特定网卡，逗号分隔" onBlur={(event) => updateRuntime({ includeNics: listFromText(event.target.value) })} />
-              <TextField.Root defaultValue={listToText(runtime?.excludeNics)} placeholder="排除特定网卡，逗号分隔" onBlur={(event) => updateRuntime({ excludeNics: listFromText(event.target.value) })} />
-              <TextField.Root defaultValue={listToText(runtime?.includeMountpoints)} placeholder="只监测特定挂载点，逗号分隔" onBlur={(event) => updateRuntime({ includeMountpoints: listFromText(event.target.value) })} />
-              <TextField.Root
-                defaultValue={runtime?.reportInterval ? String(Number(runtime.reportInterval.seconds) + runtime.reportInterval.nanos / 1_000_000_000) : ""}
-                placeholder="采集间隔（秒）"
-                onBlur={(event) => {
-                  const milliseconds = intervalSeconds(event.target.value);
-                  updateRuntime({ reportInterval: milliseconds ? durationFromMs(milliseconds) : undefined });
-                }}
-              />
-              <TextField.Root
-                defaultValue={runtime?.trafficResetDay ? String(runtime.trafficResetDay) : ""}
-                placeholder="流量重置日"
-                onBlur={(event) => {
-                  const day = Number(event.target.value);
-                  updateRuntime({ trafficResetDay: Number.isInteger(day) && day >= 1 && day <= 31 ? day : undefined });
-                }}
-              />
-            </Flex>
-
-            {/* ── 下发状态 ── */}
-            <Flex direction="column" gap="1" className="rounded border p-3">
-              <Text weight="bold">下发状态</Text>
-              <Text size="2">期望版本：{delivery?.desiredRevision?.toString() ?? "0"}；已应用版本：{delivery?.appliedRevision?.toString() ?? "0"}</Text>
-              <Text size="2">状态：{deliveryText[delivery?.state ?? DeliveryState.UNSPECIFIED]}</Text>
-              <Text size="2">保存：{toLocalTime(delivery?.savedAt)}；发送：{toLocalTime(delivery?.sentAt)}；完成：{toLocalTime(delivery?.finishedAt)}</Text>
-              {delivery?.error && <Text size="2" color="red">{delivery.error.message}</Text>}
-              <Flex mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }} gap="2" align="center" wrap="wrap">
-                <Text size="1" color="gray">救援模式与性能诊断在独立页面操作。</Text>
-                <a href={`/admin/rescue?agent=${agentId}`} target="_blank" rel="noreferrer">
-                  <Button variant="ghost" size="1">
-                    <ShieldAlert size={12} />救援 / 诊断 →
-                  </Button>
-                </a>
+            {/* ════════════════════════════════════════════════════════════════
+                模块三：以下为普通配置下发（在线运行时配置 / Ordinary Track）
+               ════════════════════════════════════════════════════════════════ */}
+            <Flex direction="column" gap="3" className="rounded-lg border p-4 bg-[var(--gray-a1)]">
+              <Flex align="center" gap="2">
+                <SlidersHorizontal size={18} className="text-green-600" />
+                <Text weight="bold" size="3">3. 以下为普通配置下发（在线运行时配置）</Text>
               </Flex>
-            </Flex>
+              <Text size="2" color="gray">
+                以下运行时参数支持热加载，主控下发后探针自动更新内存并持久化生效，无需人工审批或重启服务。
+              </Text>
 
-            <Flex gap="3" justify="end" wrap="wrap">
-              <Button variant="soft" onClick={() => void generateCommand()}>生成安装指令</Button>
-              <Button disabled={saving} onClick={() => void saveAndDispatch()}>{saving ? "正在保存..." : "保存并下发"}</Button>
-            </Flex>
-            {command && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Toggle label="包含缓冲区/缓存内存" checked={runtime?.memoryIncludeCache ?? false} onChange={(value) => updateRuntime({ memoryIncludeCache: value })} />
+                <Toggle label="启用详细 GPU 采集监控" checked={runtime?.detailedGpu ?? false} onChange={(value) => updateRuntime({ detailedGpu: value })} />
+                <Toggle
+                  label="从网卡获取 IP 地址"
+                  checked={install?.getIpAddressFromNic ?? false}
+                  onChange={(value) => updateInstall("getIpAddressFromNic", value)}
+                />
+              </div>
+
               <Flex direction="column" gap="2">
-                <TextArea readOnly value={command} style={{ minHeight: "88px" }} />
-                <Button variant="soft" onClick={() => void navigator.clipboard.writeText(command).then(() => toast.success("已复制安装指令"))}>
-                  <Copy size="16" />复制安装指令
+                <TextField.Root
+                  defaultValue={runtime?.reportInterval ? String(Number(runtime.reportInterval.seconds) + runtime.reportInterval.nanos / 1_000_000_000) : ""}
+                  placeholder="指标采集周期（秒，默认 1~3）"
+                  onBlur={(event) => {
+                    const milliseconds = intervalSeconds(event.target.value);
+                    updateRuntime({ reportInterval: milliseconds ? durationFromMs(milliseconds) : undefined });
+                  }}
+                />
+                <TextField.Root
+                  defaultValue={runtime?.trafficResetDay ? String(runtime.trafficResetDay) : ""}
+                  placeholder="流量重置日（1~31，0 为禁用）"
+                  onBlur={(event) => {
+                    const day = Number(event.target.value);
+                    updateRuntime({ trafficResetDay: Number.isInteger(day) && day >= 1 && day <= 31 ? day : undefined });
+                  }}
+                />
+                <TextField.Root
+                  value={install?.githubProxy ?? ""}
+                  placeholder="GitHub 代理镜像源（如 https://ghproxy.net/）"
+                  onChange={(event) => {
+                    updateInstall("githubProxy", event.target.value);
+                    updateInstall("enableGithubProxy", event.target.value.trim() !== "");
+                  }}
+                />
+                <TextField.Root defaultValue={listToText(runtime?.includeNics)} placeholder="监控网卡白名单（逗号分隔，留空监测所有网卡）" onBlur={(event) => updateRuntime({ includeNics: listFromText(event.target.value) })} />
+                <TextField.Root defaultValue={listToText(runtime?.excludeNics)} placeholder="排除网卡黑名单（逗号分隔，如 lo, docker0）" onBlur={(event) => updateRuntime({ excludeNics: listFromText(event.target.value) })} />
+                <TextField.Root defaultValue={listToText(runtime?.includeMountpoints)} placeholder="监控磁盘挂载点（逗号分隔，如 /, /data）" onBlur={(event) => updateRuntime({ includeMountpoints: listFromText(event.target.value) })} />
+              </Flex>
+
+              {/* 普通配置下发状态 */}
+              <Flex direction="column" gap="1" className="rounded border p-3">
+                <Flex justify="between" align="center" wrap="wrap" gap="2">
+                  <Text size="2" weight="medium">普通配置下发状态</Text>
+                  <Badge color={delivery?.state === DeliveryState.APPLIED ? "green" : "blue"} size="1">
+                    {deliveryText[delivery?.state ?? DeliveryState.UNSPECIFIED]}
+                  </Badge>
+                </Flex>
+                <Text size="2">期望版本：{delivery?.desiredRevision?.toString() ?? "0"}；已应用版本：{delivery?.appliedRevision?.toString() ?? "0"}</Text>
+                <Text size="2">保存：{toLocalTime(delivery?.savedAt)}；发送：{toLocalTime(delivery?.sentAt)}；完成：{toLocalTime(delivery?.finishedAt)}</Text>
+                {delivery?.error && <Text size="2" color="red">{delivery.error.message}</Text>}
+                <Flex mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }} gap="2" align="center" wrap="wrap">
+                  <Text size="1" color="gray">救援模式与性能诊断在独立页面操作。</Text>
+                  <a href={`/admin/rescue?agent=${agentId}`} target="_blank" rel="noreferrer">
+                    <Button variant="ghost" size="1">
+                      <ShieldAlert size={12} />救援 / 诊断 →
+                    </Button>
+                  </a>
+                </Flex>
+              </Flex>
+
+              <Flex justify="end">
+                <Button disabled={saving} onClick={() => void saveAndDispatch()}>
+                  <SlidersHorizontal size={14} />
+                  {saving ? "正在保存..." : "保存并下发普通配置"}
                 </Button>
               </Flex>
-            )}
+            </Flex>
+
           </Flex>
         )}
       </Dialog.Content>
@@ -611,16 +708,10 @@ export function AgentDeploymentDialog({
   );
 }
 
-function platformFromProfile(platform: Platform | undefined): InstallPlatform {
-  if (platform === Platform.WINDOWS_AMD64 || platform === Platform.WINDOWS_386) return "windows";
-  if (platform === Platform.DARWIN_AMD64 || platform === Platform.DARWIN_ARM64) return "macos";
-  return "linux";
-}
-
 function PrivSettingRow({ label, value }: { label: string; value: boolean | undefined }) {
   return (
     <Flex gap="2" align="center">
-      <Text size="2" style={{ width: "100px" }} color="gray">{label}</Text>
+      <Text size="2" style={{ width: "120px" }} color="gray">{label}</Text>
       <Badge color={value ? "green" : "gray"} size="1">{value ? "开启" : "关闭"}</Badge>
     </Flex>
   );
