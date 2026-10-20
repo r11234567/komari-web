@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Card, Flex, Heading, Text } from "@radix-ui/themes";
 import { Navigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -7,7 +6,6 @@ import { LoginForm } from "@/components/Login";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { safeLoginReturnTo } from "@/utils/loginRedirect";
-import { consumePasskeyLoginMarker } from "@/utils/passkeyLogin";
 
 const LoginPageContent = () => {
   const { account, loading } = useAccount();
@@ -17,12 +15,6 @@ const LoginPageContent = () => {
   const returnTo = safeLoginReturnTo(
     new URLSearchParams(location.search).get("returnTo"),
   );
-
-  useEffect(() => {
-    if (account?.logged_in === true && consumePasskeyLoginMarker()) {
-      window.location.replace(returnTo);
-    }
-  }, [account?.logged_in, returnTo]);
 
   if (loading) {
     return <Loading />;
