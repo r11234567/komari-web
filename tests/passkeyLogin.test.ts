@@ -24,16 +24,16 @@ Object.defineProperty(globalThis, "window", {
 
 const passkeyLogin = await import("../src/utils/passkeyLogin.ts");
 
-test("passkey marker is consumed once and survives an immediate reload", () => {
-  passkeyLogin.markPasskeyLogin();
-  assert.equal(passkeyLogin.consumePasskeyLoginMarker(), true);
-  assert.equal(passkeyLogin.consumePasskeyLoginMarker(), false);
-});
+test("passkey marker is one-shot and expires deterministically", () => {
+  const now = Date.now();
 
-test("expired passkey marker is rejected", () => {
-  passkeyLogin.markPasskeyLogin();
+  passkeyLogin.markPasskeyLogin(now);
+  assert.equal(passkeyLogin.consumePasskeyLoginMarker(now), true);
+  assert.equal(passkeyLogin.consumePasskeyLoginMarker(now), false);
+
+  passkeyLogin.markPasskeyLogin(now);
   assert.equal(
-    passkeyLogin.consumePasskeyLoginMarker(Date.now() + 60_001),
+    passkeyLogin.consumePasskeyLoginMarker(now + 60_001),
     false,
   );
 });

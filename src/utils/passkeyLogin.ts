@@ -1,9 +1,9 @@
 const PASSKEY_LOGIN_MARKER_KEY = "komari:passkey-login-redirect";
 const PASSKEY_LOGIN_MARKER_MAX_AGE_MS = 60_000;
 
-export function markPasskeyLogin(): void {
+export function markPasskeyLogin(nowMs: number = Date.now()): void {
   try {
-    sessionStorage.setItem(PASSKEY_LOGIN_MARKER_KEY, String(Date.now()));
+    sessionStorage.setItem(PASSKEY_LOGIN_MARKER_KEY, String(nowMs));
   } catch {
     // Passkey login can still complete when browser storage is unavailable.
   }
