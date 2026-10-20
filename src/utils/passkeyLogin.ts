@@ -9,14 +9,14 @@ export function markPasskeyLogin(): void {
   }
 }
 
-export function consumePasskeyLoginMarker(): boolean {
+export function consumePasskeyLoginMarker(nowMs: number = Date.now()): boolean {
   try {
     const markedAt = Number(sessionStorage.getItem(PASSKEY_LOGIN_MARKER_KEY));
     sessionStorage.removeItem(PASSKEY_LOGIN_MARKER_KEY);
     return (
       Number.isFinite(markedAt) &&
-      Date.now() - markedAt >= 0 &&
-      Date.now() - markedAt <= PASSKEY_LOGIN_MARKER_MAX_AGE_MS
+      nowMs - markedAt >= 0 &&
+      nowMs - markedAt <= PASSKEY_LOGIN_MARKER_MAX_AGE_MS
     );
   } catch {
     return false;

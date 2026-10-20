@@ -31,13 +31,9 @@ test("passkey marker is consumed once and survives an immediate reload", () => {
 });
 
 test("expired passkey marker is rejected", () => {
-  const originalNow = Date.now;
-  try {
-    Date.now = () => 1_000;
-    passkeyLogin.markPasskeyLogin();
-    Date.now = () => 1_000 + 60_001;
-    assert.equal(passkeyLogin.consumePasskeyLoginMarker(), false);
-  } finally {
-    Date.now = originalNow;
-  }
+  passkeyLogin.markPasskeyLogin();
+  assert.equal(
+    passkeyLogin.consumePasskeyLoginMarker(Date.now() + 60_001),
+    false,
+  );
 });
