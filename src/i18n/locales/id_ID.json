@@ -1488,7 +1488,8 @@
       "export_status_done": "Ready to download",
       "export_status_failed": "Failed",
       "export_status_cancelled": "Cancelled"
-    }
+    },
+    "secret_copy_prevented": "Informasi rahasia tidak dapat disalin"
   },
   "status_settings": "Pengaturan Status",
   "terminal": {

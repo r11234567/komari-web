@@ -603,7 +603,7 @@ const ActionButtons = ({ node }: { node: NodeDetail }) => {
   const { t } = useTranslation();
   return (
     <div className="flex items-center gap-4">
-      <AgentDeploymentDialog agentId={node.uuid} title="一键部署与配置下发" />
+      <AgentDeploymentDialog agentId={node.uuid} title="配置下发" />
       <IconButton
         title={t("terminal.title")}
         variant="ghost"

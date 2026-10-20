@@ -1488,7 +1488,8 @@
       "export_status_done": "Ready to download",
       "export_status_failed": "Failed",
       "export_status_cancelled": "Cancelled"
-    }
+    },
+    "secret_copy_prevented": "機密情報はコピーできません"
   },
   "status_settings": "ステータス表示設定",
   "terminal": {

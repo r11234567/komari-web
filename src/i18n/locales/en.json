@@ -1552,7 +1552,8 @@
       "export_status_done": "Ready to download",
       "export_status_failed": "Failed",
       "export_status_cancelled": "Cancelled"
-    }
+    },
+    "secret_copy_prevented": "Sensitive secret cannot be copied"
   },
   "status_settings": "Status Settings",
   "terminal": {

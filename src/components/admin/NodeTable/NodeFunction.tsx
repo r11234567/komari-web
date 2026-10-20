@@ -28,7 +28,7 @@ export function ActionsCell({ row }: { row: Row<z.infer<typeof schema>> }) {
     <div className="km-node-function flex gap-3 justify-center">
       <AgentDeploymentDialog
         agentId={row.original.uuid}
-        title="一键部署与配置下发"
+        title="配置下发"
         iconClassName="p-1"
       />
       <a href={`/terminal?uuid=${row.original.uuid}`} target="_blank">

@@ -164,6 +164,13 @@ export const renderProviderInputs = ({
 
         // 短文本和数字类型
         const isNumber = ["int", "int64", "float32", "float64"].includes(f.type);
+        const isSecret = Boolean(
+            f.secret ||
+            f.type === "password" ||
+            f.type === "secret" ||
+            ["password", "bot_token", "device_key", "secret", "client_secret"].includes(String(f.name).toLowerCase())
+        );
+
         return (
             <SettingCardShortTextInput
                 key={f.name}
@@ -173,6 +180,17 @@ export const renderProviderInputs = ({
                 defaultValue={String(fieldValue)}
                 type={isNumber ? "number" : "text"}
                 showSaveButton={false}
+                autoComplete={isSecret ? "new-password" : undefined}
+                className={isSecret ? "select-none font-mono" : undefined}
+                style={isSecret ? { userSelect: "none" } : undefined}
+                onCopy={isSecret ? (e: React.ClipboardEvent) => {
+                    e.preventDefault();
+                    toast.error(t("settings.secret_copy_prevented", "敏感信息禁止复制"));
+                } : undefined}
+                onCut={isSecret ? (e: React.ClipboardEvent) => {
+                    e.preventDefault();
+                    toast.error(t("settings.secret_copy_prevented", "敏感信息禁止复制"));
+                } : undefined}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     const value = isNumber ? (e.target.value === "" ? 0 : Number(e.target.value)) : e.target.value;
                     updateLocalValue(f.name, value);

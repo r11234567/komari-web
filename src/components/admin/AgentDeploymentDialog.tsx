@@ -149,7 +149,7 @@ type AgentDeploymentDialogProps = {
 
 export function AgentDeploymentDialog({
   agentId,
-  title = "一键部署与配置下发",
+  title = "配置下发",
   iconClassName,
 }: AgentDeploymentDialogProps) {
   const { deployment } = useConnect();
@@ -264,12 +264,16 @@ export function AgentDeploymentDialog({
             expectedRevision: privRevision?.revision ?? 0n,
             reason: privReason.trim(),
             privileged: {
-              remoteControlEnabled: privDraft.remoteControlEnabled,
-              websshEnabled: privDraft.websshEnabled,
-              executionEnabled: privDraft.executionEnabled,
+              remoteControlEnabled: isPrivilegedAccount && privDraft.remoteControlEnabled,
+              websshEnabled: isPrivilegedAccount && privDraft.remoteControlEnabled && privDraft.websshEnabled,
+              executionEnabled: isPrivilegedAccount && privDraft.remoteControlEnabled && privDraft.executionEnabled,
               rescueHelperEnabled: privDraft.rescueHelperEnabled,
               enableGpu: privDraft.enableGpu,
-              requiredPrivilegeMode: privDraft.requiredPrivilegeMode,
+              requiredPrivilegeMode: isPrivilegedAccount
+                ? (privDraft.requiredPrivilegeMode === PrivilegeMode.UNSPECIFIED
+                    ? (isWindows ? PrivilegeMode.WINDOWS_ADMINISTRATOR : PrivilegeMode.LINUX_ROOT)
+                    : privDraft.requiredPrivilegeMode)
+                : (isWindows ? PrivilegeMode.WINDOWS_STANDARD_USER : PrivilegeMode.LINUX_NON_ROOT),
             },
           },
           { signal, timeoutMs },
@@ -475,23 +479,65 @@ export function AgentDeploymentDialog({
               <Flex direction="column" gap="2" className="rounded border p-3 bg-[var(--gray-a2)]">
                 <Text size="2" weight="medium">特权功能开关</Text>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <Toggle label="远程控制总开关" checked={privDraft.remoteControlEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, remoteControlEnabled: value }))} />
-                  <Toggle label="WebSSH 交互终端" checked={privDraft.websshEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, websshEnabled: value }))} />
-                  <Toggle label="远程命令执行" checked={privDraft.executionEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, executionEnabled: value }))} />
-                  <Toggle label="应急救援辅助守护" checked={privDraft.rescueHelperEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, rescueHelperEnabled: value }))} />
-                  <Toggle label="基础 GPU 采集 (enable_gpu)" checked={privDraft.enableGpu} onChange={(value) => setPrivDraft((current) => ({ ...current, enableGpu: value }))} />
                   <Toggle
                     label="以特权账户运行 (root / 管理员)"
                     checked={isPrivilegedAccount}
                     onChange={(checked) => {
-                      setPrivDraft((curr) => ({
-                        ...curr,
-                        requiredPrivilegeMode: checked
+                      setPrivDraft((curr) => {
+                        const nextMode = checked
                           ? (isWindows ? PrivilegeMode.WINDOWS_ADMINISTRATOR : PrivilegeMode.LINUX_ROOT)
-                          : (isWindows ? PrivilegeMode.WINDOWS_STANDARD_USER : PrivilegeMode.LINUX_NON_ROOT),
-                      }));
+                          : (isWindows ? PrivilegeMode.WINDOWS_STANDARD_USER : PrivilegeMode.LINUX_NON_ROOT);
+                        if (!checked) {
+                          return {
+                            ...curr,
+                            requiredPrivilegeMode: nextMode,
+                            remoteControlEnabled: false,
+                            websshEnabled: false,
+                            executionEnabled: false,
+                          };
+                        }
+                        return {
+                          ...curr,
+                          requiredPrivilegeMode: nextMode,
+                        };
+                      });
                     }}
                   />
+                  <Toggle
+                    label="远程控制总开关"
+                    checked={privDraft.remoteControlEnabled && isPrivilegedAccount}
+                    disabled={!isPrivilegedAccount}
+                    onChange={(value) => {
+                      setPrivDraft((current) => {
+                        if (!value) {
+                          return {
+                            ...current,
+                            remoteControlEnabled: false,
+                            websshEnabled: false,
+                            executionEnabled: false,
+                          };
+                        }
+                        return {
+                          ...current,
+                          remoteControlEnabled: true,
+                        };
+                      });
+                    }}
+                  />
+                  <Toggle
+                    label="WebSSH 交互终端"
+                    checked={privDraft.websshEnabled && privDraft.remoteControlEnabled && isPrivilegedAccount}
+                    disabled={!privDraft.remoteControlEnabled || !isPrivilegedAccount}
+                    onChange={(value) => setPrivDraft((current) => ({ ...current, websshEnabled: value }))}
+                  />
+                  <Toggle
+                    label="远程命令执行"
+                    checked={privDraft.executionEnabled && privDraft.remoteControlEnabled && isPrivilegedAccount}
+                    disabled={!privDraft.remoteControlEnabled || !isPrivilegedAccount}
+                    onChange={(value) => setPrivDraft((current) => ({ ...current, executionEnabled: value }))}
+                  />
+                  <Toggle label="应急救援辅助守护" checked={privDraft.rescueHelperEnabled} onChange={(value) => setPrivDraft((current) => ({ ...current, rescueHelperEnabled: value }))} />
+                  <Toggle label="基础 GPU 采集 (enable_gpu)" checked={privDraft.enableGpu} onChange={(value) => setPrivDraft((current) => ({ ...current, enableGpu: value }))} />
                 </div>
                 <Flex align="center" gap="3" wrap="wrap" className="text-xs text-gray-500 pt-1">
                   <span>目标运行账户：</span>

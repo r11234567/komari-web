@@ -5,7 +5,7 @@ import test from "node:test";
 test("Audit P0 Bug 1: /bind page prevents input wipe, deadlock on abort, and works across routes", () => {
   const source = readFileSync(new URL("../src/pages/bind.tsx", import.meta.url), "utf8");
   // lookup should have empty deps [] and not depend on [newName]
-  assert.match(source, /lookup\s*=\s*React\.useCallback\([\s\S]*?\},\s*\[\s*\]\)/);
+  assert.match(source, /lookup\s*=\s*React\.useCallback\([\s\S]*?\},\s*\[\s*bindTicket\s*\]\)/);
   // setNewName should preserve user typed value if present
   assert.match(source, /setNewName\(\(prev\)\s*=>\s*prev\s*\|\|\s*response\.enrollment\?\.device\?\.hostname\s*\|\|\s*""\)/);
   // finally block should reset loading without being blocked by signal.aborted
@@ -78,4 +78,55 @@ test("Audit Bonus: PerformanceDiagnostics renders structured DiagnosticsReport",
   assert.match(source, /stealPercent/);
   assert.match(source, /availableBytes/);
   assert.match(source, /swapUsedBytes/);
+});
+
+test("Audit Feature 1: /bind enforces 2-minute single-use ticket and X-Bind-Ticket header", () => {
+  const bindSource = readFileSync(new URL("../src/pages/bind.tsx", import.meta.url), "utf8");
+  // Acquires ticket from /api/bind/ticket
+  assert.match(bindSource, /\/api\/bind\/ticket/);
+  // Passes X-Bind-Ticket in headers
+  assert.match(bindSource, /"X-Bind-Ticket":\s*(?:ticketToUse|bindTicket)/);
+  // Has live countdown timer
+  assert.match(bindSource, /formatTicketTime/);
+  assert.match(bindSource, /ticketTimeLeft/);
+  // Clears single-use ticket on approve
+  assert.match(bindSource, /setBindTicket\(null\)/);
+});
+
+test("Audit Feature 2: Rename 一键部署与配置下发 to 配置下发", () => {
+  const dialogSource = readFileSync(new URL("../src/components/admin/AgentDeploymentDialog.tsx", import.meta.url), "utf8");
+  const nodeFuncSource = readFileSync(new URL("../src/components/admin/NodeTable/NodeFunction.tsx", import.meta.url), "utf8");
+  const adminSource = readFileSync(new URL("../src/pages/admin/index.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(dialogSource, /一键部署与配置下发/);
+  assert.match(dialogSource, /title\s*=\s*"配置下发"/);
+
+  assert.doesNotMatch(nodeFuncSource, /一键部署与配置下发/);
+  assert.match(nodeFuncSource, /title="配置下发"/);
+
+  assert.doesNotMatch(adminSource, /一键部署与配置下发/);
+  assert.match(adminSource, /title="配置下发"/);
+});
+
+test("Audit Feature 3: Cascading switch dependencies in AgentDeploymentDialog", () => {
+  const dialogSource = readFileSync(new URL("../src/components/admin/AgentDeploymentDialog.tsx", import.meta.url), "utf8");
+  // 远程控制总开关 disabled when not in root mode
+  assert.match(dialogSource, /label="远程控制总开关"[\s\S]*?disabled=\{!isPrivilegedAccount\}/);
+  // WebSSH disabled when remoteControlEnabled is off
+  assert.match(dialogSource, /label="WebSSH 交互终端"[\s\S]*?disabled=\{!privDraft\.remoteControlEnabled/);
+  // 远程命令执行 disabled when remoteControlEnabled is off
+  assert.match(dialogSource, /label="远程命令执行"[\s\S]*?disabled=\{!privDraft\.remoteControlEnabled/);
+});
+
+test("Audit Feature 4: Secret masking and anti-copy in renderProviders", () => {
+  const renderSource = readFileSync(new URL("../src/utils/renderProviders.tsx", import.meta.url), "utf8");
+  // Detects secret fields
+  assert.match(renderSource, /isSecret/);
+  assert.match(renderSource, /bot_token/);
+  assert.match(renderSource, /device_key/);
+  // Prohibits copy and cut with toast
+  assert.match(renderSource, /onCopy=\{isSecret/);
+  assert.match(renderSource, /onCut=\{isSecret/);
+  assert.match(renderSource, /secret_copy_prevented/);
+  assert.match(renderSource, /userSelect:\s*"none"/);
 });

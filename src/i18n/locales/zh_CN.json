@@ -1552,7 +1552,8 @@
       "export_status_done": "可下载",
       "export_status_failed": "失败",
       "export_status_cancelled": "已取消"
-    }
+    },
+    "secret_copy_prevented": "敏感信息禁止复制"
   },
   "status_settings": "状态显示设置",
   "terminal": {
