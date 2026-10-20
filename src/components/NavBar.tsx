@@ -53,7 +53,7 @@ const NavBar = () => {
             }
             info={t("common.private_site")}
             onLoginSuccess={() => {
-              window.location.reload();
+              window.location.assign("/admin/dashboard");
             }}
           />
         ) : (

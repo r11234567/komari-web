@@ -89,6 +89,7 @@ test("Audit Feature 1: /bind-login completes a full login then obtains a reusabl
   const bindSource = readFileSync(new URL("../src/pages/bind.tsx", import.meta.url), "utf8");
   const loginSource = readFileSync(new URL("../src/components/Login.tsx", import.meta.url), "utf8");
   const bindLoginSource = readFileSync(new URL("../src/pages/bind-login.tsx", import.meta.url), "utf8");
+  const navBarSource = readFileSync(new URL("../src/components/NavBar.tsx", import.meta.url), "utf8");
 
   // /bind uses route interception to bind-login
   assert.match(bindSource, /BindAuthGate/);
@@ -101,6 +102,10 @@ test("Audit Feature 1: /bind-login completes a full login then obtains a reusabl
   assert.match(bindLoginSource, /\/api\/public\/bind\/ticket/);
   assert.match(bindLoginSource, /setStoredBindTicket/);
   assert.match(bindLoginSource, /<LoginForm/);
+  assert.match(bindLoginSource, /consumeBindLoginIntent/);
+  assert.doesNotMatch(bindLoginSource, /requestedRef/);
+  assert.match(navBarSource, /window\.location\.assign\("\/admin\/dashboard"\)/);
+  assert.doesNotMatch(loginSource, /href="\/admin\/dashboard" target="_blank"/);
   // Passes X-Bind-Ticket in headers
   assert.match(bindSource, /"X-Bind-Ticket":\s*(?:ticketToUse|bindTicket)/);
   // Has live countdown timer

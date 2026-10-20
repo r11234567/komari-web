@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Button, Callout, Card, Flex, Heading, Text } from "@radix-ui/themes";
+import { Callout, Card, Flex, Heading, Text } from "@radix-ui/themes";
 import { Navigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
@@ -8,6 +8,31 @@ import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { safeBindReturnTo } from "@/utils/loginRedirect";
 import { getStoredBindTicket, setStoredBindTicket } from "@/utils/bindTicket";
+
+const BIND_LOGIN_INTENT_KEY = "komari:bind-login-intent";
+const BIND_LOGIN_INTENT_MAX_AGE_MS = 120_000;
+
+function markBindLoginIntent() {
+  try {
+    sessionStorage.setItem(BIND_LOGIN_INTENT_KEY, String(Date.now()));
+  } catch {
+    // The password path can continue without an intent marker.
+  }
+}
+
+function consumeBindLoginIntent(): boolean {
+  try {
+    const startedAt = Number(sessionStorage.getItem(BIND_LOGIN_INTENT_KEY));
+    sessionStorage.removeItem(BIND_LOGIN_INTENT_KEY);
+    return (
+      Number.isFinite(startedAt) &&
+      Date.now() - startedAt >= 0 &&
+      Date.now() - startedAt <= BIND_LOGIN_INTENT_MAX_AGE_MS
+    );
+  } catch {
+    return false;
+  }
+}
 
 type TicketResponse = {
   status?: string;
@@ -30,7 +55,6 @@ const BindLoginPageContent = () => {
 
   const [issuing, setIssuing] = React.useState(false);
   const [ticketError, setTicketError] = React.useState<string | null>(null);
-  const requestedRef = React.useRef(false);
   const issuingRef = React.useRef(false);
 
   const issueTicket = React.useCallback(async () => {
@@ -75,12 +99,11 @@ const BindLoginPageContent = () => {
       !loading &&
       account?.logged_in === true &&
       !getStoredBindTicket() &&
-      !requestedRef.current
+      consumeBindLoginIntent()
     ) {
-      requestedRef.current = true;
       void issueTicket();
     }
-  }, [account?.logged_in, issueTicket, loading]);
+  }, [account, issueTicket, loading]);
 
   if (loading) {
     return <Loading />;
@@ -110,29 +133,35 @@ const BindLoginPageContent = () => {
             </Text>
           </Flex>
 
-          {account?.logged_in ? (
+          {issuing ? (
             <Flex direction="column" gap="3">
-              <Text size="2">
-                {issuing ? t("loading") : t("login.bind_ticket_required", "需要重新获取绑定授权")}
-              </Text>
+              <Text size="2">{t("loading")}</Text>
+            </Flex>
+          ) : (
+            <>
+              {account?.logged_in && (
+                <Callout.Root color="orange" size="1">
+                  <Callout.Text>
+                    {t(
+                      "login.bind_fresh_login_required",
+                      "现有控制台会话不能续签绑定授权，请重新完成登录。",
+                    )}
+                  </Callout.Text>
+                </Callout.Root>
+              )}
               {ticketError && (
                 <Callout.Root color="red" size="1">
                   <Callout.Text>{ticketError}</Callout.Text>
                 </Callout.Root>
               )}
-              <Button
-                onClick={() => void issueTicket()}
-                disabled={issuing}
-              >
-                {issuing ? t("loading") : t("login.bind_retry", "重新获取授权")}
-              </Button>
-            </Flex>
-          ) : (
-            <LoginForm
-              oauthReturnTo={currentLocation}
-              suppressPasskeyRedirect
-              onLoginSuccess={() => void issueTicket()}
-            />
+              <LoginForm
+                oauthReturnTo={currentLocation}
+                suppressPasskeyRedirect
+                onOAuthLoginStart={markBindLoginIntent}
+                onPasskeyLoginStart={markBindLoginIntent}
+                onLoginSuccess={() => void issueTicket()}
+              />
+            </>
           )}
         </Flex>
       </Card>

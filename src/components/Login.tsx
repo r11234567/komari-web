@@ -27,6 +27,8 @@ type LoginFormProps = {
   onLoginSuccess?: () => void;
   oauthReturnTo?: string;
   suppressPasskeyRedirect?: boolean;
+  onOAuthLoginStart?: () => void;
+  onPasskeyLoginStart?: () => void;
 };
 
 function oauthLoginURL(returnTo: string = "/admin/dashboard"): string {
@@ -37,6 +39,8 @@ export const LoginForm = ({
   onLoginSuccess,
   oauthReturnTo,
   suppressPasskeyRedirect = false,
+  onOAuthLoginStart,
+  onPasskeyLoginStart,
 }: LoginFormProps) => {
   const { account, refresh } = useAccount();
   const { publicInfo } = usePublicInfo();
@@ -58,6 +62,7 @@ export const LoginForm = ({
       if (!(target instanceof Element) || !target.closest(".km-passkey-login")) {
         return;
       }
+      onPasskeyLoginStart?.();
       try {
         sessionStorage.setItem(PASSKEY_REDIRECT_KEY, String(Date.now()));
       } catch {
@@ -66,7 +71,7 @@ export const LoginForm = ({
     };
     document.addEventListener("click", markPasskeyLogin, true);
     return () => document.removeEventListener("click", markPasskeyLogin, true);
-  }, []);
+  }, [onPasskeyLoginStart]);
 
   React.useEffect(() => {
     if (account?.logged_in !== true) {
@@ -225,6 +230,7 @@ export const LoginForm = ({
         {publicInfo?.oauth_enable && (
           <Button
             onClick={() => {
+              onOAuthLoginStart?.();
               window.location.href = oauthLoginURL(oauthReturnTo);
             }}
             variant={passwordLoginEnabled ? "soft" : "solid"}
@@ -282,7 +288,7 @@ const LoginDialogContent = ({
       return null;
     }
     return (
-      <a href="/admin/dashboard" target="_blank">
+      <a href="/admin/dashboard">
         <IconButton
           title={t("settings.title", "Settings")}
           aria-label={t("settings.title", "Settings")}
