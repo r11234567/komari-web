@@ -532,7 +532,8 @@
     "password_placeholder": "パスワードを入力してください",
     "title": "ログイン",
     "two_factor": "二要素認証",
-    "username": "ユーザー名"
+    "username": "ユーザー名",
+    "bind_desc": "認証パネルにログイン"
   },
   "logs": {
     "title": "ログ"

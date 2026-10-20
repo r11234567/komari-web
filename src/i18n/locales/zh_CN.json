@@ -532,7 +532,8 @@
     "password_placeholder": "请输入您的密码",
     "title": "登录",
     "two_factor": "双因素认证",
-    "username": "用户名"
+    "username": "用户名",
+    "bind_desc": "登录到授权面板"
   },
   "logs": {
     "title": "日志"

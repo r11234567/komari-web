@@ -16,15 +16,17 @@ test("Audit P0 Bug 1: /bind page prevents input wipe, deadlock on abort, and wor
   assert.match(source, /lookupError/);
 });
 
-test("Audit P0 Bug 2: routes and public-routes include /enroll and /bind, privileged-config is removed", () => {
+test("Audit P0 Bug 2: routes and public-routes include /enroll, /bind, and /bind-login, privileged-config is removed", () => {
   const routesSource = readFileSync(new URL("../src/routes.ts", import.meta.url), "utf8");
   const publicRoutesSource = readFileSync(new URL("../src/public-routes.ts", import.meta.url), "utf8");
 
-  // /enroll and /bind exist in both bundles
+  // /enroll, /bind, and /bind-login exist in both bundles
   assert.match(routesSource, /path:\s*["']\/enroll["']/);
   assert.match(routesSource, /path:\s*["']\/bind["']/);
+  assert.match(routesSource, /path:\s*["']\/bind-login["']/);
   assert.match(publicRoutesSource, /path:\s*["']\/enroll["']/);
   assert.match(publicRoutesSource, /path:\s*["']\/bind["']/);
+  assert.match(publicRoutesSource, /path:\s*["']\/bind-login["']/);
 
   // privileged-config route is removed per user requirement
   assert.doesNotMatch(routesSource, /path:\s*["']privileged-config["']/);
@@ -80,10 +82,18 @@ test("Audit Bonus: PerformanceDiagnostics renders structured DiagnosticsReport",
   assert.match(source, /swapUsedBytes/);
 });
 
-test("Audit Feature 1: /bind enforces 2-minute single-use ticket and X-Bind-Ticket header", () => {
+test("Audit Feature 1: /bind enforces 2-minute single-use ticket, route gate, and X-Bind-Ticket header", () => {
   const bindSource = readFileSync(new URL("../src/pages/bind.tsx", import.meta.url), "utf8");
-  // Acquires ticket from /api/bind/ticket
-  assert.match(bindSource, /\/api\/bind\/ticket/);
+  const loginSource = readFileSync(new URL("../src/components/Login.tsx", import.meta.url), "utf8");
+  const bindLoginSource = readFileSync(new URL("../src/pages/bind-login.tsx", import.meta.url), "utf8");
+
+  // /bind uses route interception to bind-login
+  assert.match(bindSource, /BindAuthGate/);
+  assert.match(bindSource, /bindLoginPath/);
+  // Acquires ticket from /api/bind/ticket via LoginForm mode="bind"
+  assert.match(loginSource, /\/api\/bind\/ticket/);
+  assert.match(loginSource, /setStoredBindTicket/);
+  assert.match(bindLoginSource, /mode="bind"/);
   // Passes X-Bind-Ticket in headers
   assert.match(bindSource, /"X-Bind-Ticket":\s*(?:ticketToUse|bindTicket)/);
   // Has live countdown timer

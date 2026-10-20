@@ -4,6 +4,7 @@ import type { RouteObject } from "react-router-dom";
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/404"));
 const BindPage = lazy(() => import("./pages/bind"));
+const BindLoginPage = lazy(() => import("./pages/bind-login"));
 const LoginPage = lazy(() => import("./pages/login"));
 
 export const publicRoutes: RouteObject[] = [
@@ -25,6 +26,10 @@ export const publicRoutes: RouteObject[] = [
   {
     path: "/enroll",
     element: React.createElement(BindPage),
+  },
+  {
+    path: "/bind-login",
+    element: React.createElement(BindLoginPage),
   },
   {
     path: "/login",

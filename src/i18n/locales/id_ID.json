@@ -532,7 +532,8 @@
     "password_placeholder": "Masukkan kata sandi",
     "title": "Masuk",
     "two_factor": "Autentikasi Dua Faktor",
-    "username": "Nama Pengguna"
+    "username": "Nama Pengguna",
+    "bind_desc": "Masuk ke Panel Otorisasi"
   },
   "logs": {
     "title": "Log"

@@ -532,7 +532,8 @@
     "password_placeholder": "Enter your password",
     "title": "Login",
     "two_factor": "Two-Factor Authentication",
-    "username": "Username"
+    "username": "Username",
+    "bind_desc": "Log in to the Authorization Panel"
   },
   "logs": {
     "title": "Logs"
