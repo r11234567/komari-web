@@ -1,5 +1,5 @@
 import { Card, Flex, Heading, Text } from "@radix-ui/themes";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
 import { LoginForm } from "@/components/Login";
@@ -13,7 +13,6 @@ const BindLoginPageContent = () => {
   const { publicInfo } = usePublicInfo();
   const { t } = useTranslation();
   const location = useLocation();
-  const navigate = useNavigate();
   const returnTo = safeBindReturnTo(
     new URLSearchParams(location.search).get("returnTo"),
   );
@@ -48,7 +47,12 @@ const BindLoginPageContent = () => {
           <LoginForm
             mode="bind"
             onLoginSuccess={() => {
-              navigate(returnTo, { replace: true });
+              const destination = new URL(returnTo, window.location.origin);
+              if (destination.origin === window.location.origin) {
+                window.location.replace(destination.href);
+              } else {
+                window.location.replace("/bind");
+              }
             }}
           />
         </Flex>

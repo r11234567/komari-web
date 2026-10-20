@@ -228,7 +228,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
       clearStoredBindTicket();
       setBindTicket(null);
       toast.success(`机器已成功注册：${response.agentId}`);
-      navigate("/admin/servers");
+      window.location.assign("/admin/servers");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "注册失败";
       toast.error(msg);
@@ -267,7 +267,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
       clearStoredBindTicket();
       setBindTicket(null);
       toast.success("已成功绑定到已有机器");
-      navigate("/admin/servers");
+      window.location.assign("/admin/servers");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "绑定失败，请核对 2FA 验证码";
       toast.error(msg);
