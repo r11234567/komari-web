@@ -11,9 +11,11 @@ import { useTranslation } from "react-i18next";
 import { TablerSettings } from "./Icones/Tabler";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
-
-const PASSKEY_REDIRECT_KEY = "komari:passkey-login-redirect";
-const PASSKEY_REDIRECT_MAX_AGE_MS = 60_000;
+import {
+  clearPasskeyLoginMarker,
+  consumePasskeyLoginMarker,
+  markPasskeyLogin,
+} from "@/utils/passkeyLogin";
 
 type LoginDialogProps = {
   trigger?: React.ReactNode | string;
@@ -57,20 +59,16 @@ export const LoginForm = ({
     passwordLoginEnabled && username.trim() !== "" && password.trim() !== "";
 
   React.useEffect(() => {
-    const markPasskeyLogin = (event: MouseEvent) => {
+    const handlePasskeyClick = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Element) || !target.closest(".km-passkey-login")) {
         return;
       }
       onPasskeyLoginStart?.();
-      try {
-        sessionStorage.setItem(PASSKEY_REDIRECT_KEY, String(Date.now()));
-      } catch {
-        // Storage may be unavailable in privacy-restricted browser contexts.
-      }
+      markPasskeyLogin();
     };
-    document.addEventListener("click", markPasskeyLogin, true);
-    return () => document.removeEventListener("click", markPasskeyLogin, true);
+    document.addEventListener("click", handlePasskeyClick, true);
+    return () => document.removeEventListener("click", handlePasskeyClick, true);
   }, [onPasskeyLoginStart]);
 
   React.useEffect(() => {
@@ -78,26 +76,13 @@ export const LoginForm = ({
       return;
     }
     if (suppressPasskeyRedirect) {
-      try {
-        sessionStorage.removeItem(PASSKEY_REDIRECT_KEY);
-      } catch {
-        // Storage is unavailable.
-      }
+      clearPasskeyLoginMarker();
       return;
     }
-    let shouldRedirect = false;
-    try {
-      const markedAt = Number(sessionStorage.getItem(PASSKEY_REDIRECT_KEY));
-      if (Number.isFinite(markedAt) && Date.now() - markedAt <= PASSKEY_REDIRECT_MAX_AGE_MS) {
-        shouldRedirect = true;
-      }
-      if (shouldRedirect) {
-        sessionStorage.removeItem(PASSKEY_REDIRECT_KEY);
-      }
-    } catch {
-      return;
-    }
-    if (shouldRedirect && !window.location.pathname.startsWith("/admin")) {
+    if (
+      consumePasskeyLoginMarker() &&
+      !window.location.pathname.startsWith("/admin")
+    ) {
       window.location.assign("/admin/dashboard");
     }
   }, [account?.logged_in, suppressPasskeyRedirect]);
@@ -272,6 +257,18 @@ const LoginDialogContent = ({
       setOpen(true);
     }
   }, [autoOpen]);
+
+  React.useEffect(() => {
+    if (account?.logged_in !== true) {
+      return;
+    }
+    if (
+      consumePasskeyLoginMarker() &&
+      !window.location.pathname.startsWith("/admin")
+    ) {
+      window.location.assign("/admin/dashboard");
+    }
+  }, [account?.logged_in]);
 
   if (loading) {
     return <Button disabled>{t("loading")}</Button>;
