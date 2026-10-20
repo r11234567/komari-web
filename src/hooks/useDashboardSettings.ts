@@ -6,6 +6,7 @@ import {
   type DashboardSettings,
 } from "@/utils/dashboardSettings";
 import { readDashboardSession, writeDashboardSession } from "@/utils/dashboardSession";
+import { isAbortError } from "@/api/connect/client";
 
 const dashboardSettingsSnapshots = new Map<string, DashboardSettings>();
 const pendingDashboardSettingsRequests = new Map<string, Promise<DashboardSettings>>();
@@ -122,9 +123,11 @@ export function useDashboardSettings(accountKeyInput?: string) {
       setError(null);
       return next;
     } catch (reason) {
-      const nextError = reason instanceof Error ? reason : new Error(String(reason));
-      setError(nextError);
-      throw nextError;
+      if (!isAbortError(reason)) {
+        const nextError = reason instanceof Error ? reason : new Error(String(reason));
+        setError(nextError);
+      }
+      throw reason;
     } finally {
       setLoading(false);
     }
@@ -143,7 +146,11 @@ export function useDashboardSettings(accountKeyInput?: string) {
         setSettings(next);
         setError(null);
       })
-      .catch((reason) => setError(reason instanceof Error ? reason : new Error(String(reason))));
+      .catch((reason) => {
+        if (!isAbortError(reason)) {
+          setError(reason instanceof Error ? reason : new Error(String(reason)));
+        }
+      });
   }, [accountKey, refetch]);
 
   return { settings, loading, error, refetch };

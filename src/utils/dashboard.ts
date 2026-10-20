@@ -252,4 +252,22 @@ export function dashboardTrafficAxisWidth(values: readonly number[]): number {
   }, 0);
   return Math.min(104, Math.max(68, longestLabel * 8 + 16));
 }
+
+export function isAbortError(error: unknown): boolean {
+  if (!error) return false;
+  if (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError") {
+    return true;
+  }
+  if (error instanceof Error) {
+    if (error.name === "AbortError") return true;
+    const lower = error.message.toLowerCase();
+    if (lower.includes("[canceled]") || lower.includes("aborted")) return true;
+  }
+  if (typeof error === "object" && error !== null) {
+    const code = (error as { code?: unknown }).code;
+    if (code === 1 || code === "canceled") return true;
+  }
+  return false;
+}
+
 import { formatBytes } from "./unitHelper.ts";

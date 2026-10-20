@@ -50,6 +50,7 @@ import {
   serverAlertKinds,
 } from "@/utils/adminAlertFilters";
 import { formatBytes } from "@/utils/unitHelper";
+import { isAbortError } from "@/api/connect/client";
 import { readDashboardSession, writeDashboardSession } from "@/utils/dashboardSession";
 
 let dashboardSnapshot: { accountKey: string; key: string; data: DashboardData } | null = null;
@@ -77,14 +78,17 @@ export async function requestDashboard(
         },
         (err) => {
           signal.removeEventListener("abort", onAbort);
-          reject(err);
+          if (isAbortError(err) && !signal.aborted) {
+            resolve(requestDashboard(sections, rankingLimit, accountKey, signal));
+          } else {
+            reject(err);
+          }
         },
       );
     });
   }
   const controller = new AbortController();
-  const activeSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
-  const request = requestDashboardSummary(sections, rankingLimit, activeSignal)
+  const request = requestDashboardSummary(sections, rankingLimit, controller.signal)
     .then((data) => {
       dashboardSnapshot = { accountKey, key, data };
       writeDashboardSession("summary", accountKey, key, data);
@@ -96,7 +100,22 @@ export async function requestDashboard(
       }
     });
   pendingDashboardRequest = { accountKey, key, request };
-  return request;
+
+  if (!signal) return request;
+  return new Promise<DashboardData>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    request.then(
+      (data) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(data);
+      },
+      (err) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(err);
+      },
+    );
+  });
 }
 
 export async function requestDashboardCharts(
@@ -119,14 +138,17 @@ export async function requestDashboardCharts(
         },
         (err) => {
           signal.removeEventListener("abort", onAbort);
-          reject(err);
+          if (isAbortError(err) && !signal.aborted) {
+            resolve(requestDashboardCharts(sections, rankingLimit, accountKey, signal));
+          } else {
+            reject(err);
+          }
         },
       );
     });
   }
   const controller = new AbortController();
-  const activeSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
-  const request = requestDashboardChartSeries(sections, rankingLimit, activeSignal)
+  const request = requestDashboardChartSeries(sections, rankingLimit, controller.signal)
     .then((data) => {
       dashboardChartsSnapshot = { accountKey, key, data };
       writeDashboardSession("charts", accountKey, key, data);
@@ -138,7 +160,22 @@ export async function requestDashboardCharts(
       }
     });
   pendingDashboardChartsRequest = { accountKey, key, request };
-  return request;
+
+  if (!signal) return request;
+  return new Promise<DashboardChartsData>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    request.then(
+      (data) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(data);
+      },
+      (err) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(err);
+      },
+    );
+  });
 }
 
 export function getDashboardSnapshot(key: string, accountKey = "authenticated"): DashboardData | null {

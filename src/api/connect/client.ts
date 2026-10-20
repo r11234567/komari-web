@@ -19,6 +19,7 @@ import {
 import { DEFAULT_UNARY_DEADLINE_MS, withRequestBudget } from "./deadline";
 
 export { ConnectCompatibilityError, isCompatibilityFailure } from "./compatibility";
+export { isAbortError } from "@/utils/dashboard";
 
 export interface ConnectCallOptions {
   signal: AbortSignal;

@@ -7,6 +7,7 @@ import {
   dashboardRuntimeStorageTotal,
   dashboardTrafficAxisWidth,
   shortDashboardDay,
+  isAbortError,
   type DashboardData,
 } from "../src/utils/dashboard.ts";
 import {
@@ -124,4 +125,14 @@ test("billing alert labels distinguish overdue and upcoming states", () => {
   const now = Date.parse("2026-08-08T00:00:00Z");
   assert.equal(formatBillingAlertStatus("2026-08-11T00:00:00Z", "zh-CN", now), "3 天后到期");
   assert.equal(formatBillingAlertStatus("2026-08-07T12:00:00Z", "zh-CN", now), "已到期 1 天");
+});
+
+test("isAbortError correctly identifies Connect and DOM abort errors", () => {
+  assert.equal(isAbortError(new DOMException("The operation was aborted", "AbortError")), true);
+  assert.equal(isAbortError(new Error("[canceled] signal is aborted without reason")), true);
+  assert.equal(isAbortError(new Error("Network request aborted")), true);
+  assert.equal(isAbortError({ code: 1, message: "signal is aborted" }), true);
+  assert.equal(isAbortError(new Error("Database connection failed")), false);
+  assert.equal(isAbortError(null), false);
+  assert.equal(isAbortError(undefined), false);
 });

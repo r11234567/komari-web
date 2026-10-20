@@ -36,6 +36,7 @@ import {
 } from "@/components/admin/DashboardPanels";
 import { useDashboardSettings } from "@/hooks/useDashboardSettings";
 import { requestTrafficTrend } from "@/api/connect/dashboard";
+import { isAbortError } from "@/api/connect/client";
 import {
   dashboardLocalStorageTotal,
   dashboardRuntimeStorageTotal,
@@ -79,7 +80,7 @@ const moduleGridClass: Record<number, string> = {
 
 export default function AdminDashboard() {
   const { t, i18n } = useTranslation();
-  const { account } = useAccount();
+  const { account, loading: accountLoading } = useAccount();
   const accountKey = account?.uuid || account?.username || "authenticated";
   const {
     settings,
@@ -139,7 +140,7 @@ export default function AdminDashboard() {
       setData(next);
       setError(null);
     } catch (reason) {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && !isAbortError(reason)) {
         setError(reason instanceof Error ? reason.message : String(reason));
       }
     } finally {
@@ -162,7 +163,7 @@ export default function AdminDashboard() {
       setCharts(next);
       setChartsError(null);
     } catch (reason) {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && !isAbortError(reason)) {
         setChartsError(reason instanceof Error ? reason.message : String(reason));
       }
     }
@@ -183,7 +184,7 @@ export default function AdminDashboard() {
       setTrafficTrend(next);
       setTrafficTrendError(null);
     } catch (reason) {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && !isAbortError(reason)) {
         setTrafficTrendError(reason instanceof Error ? reason.message : String(reason));
       }
     }
@@ -243,7 +244,7 @@ export default function AdminDashboard() {
   }, [billingURL, costCenterVisible, loadBilling, settings.refresh_seconds, settingsLoading]);
 
   React.useEffect(() => {
-    if (settingsLoading) return;
+    if (accountLoading || settingsLoading) return;
 
     const cachedSummary = getDashboardSnapshot(summaryKey, accountKey);
     const cachedCharts = getDashboardChartsSnapshot(chartKey, accountKey);
@@ -286,6 +287,7 @@ export default function AdminDashboard() {
     settings.refresh_seconds,
     settingsLoading,
     accountKey,
+    accountLoading,
     summaryKey,
     summarySections.length,
   ]);
@@ -578,7 +580,7 @@ export default function AdminDashboard() {
         ) : null}
       </div>
 
-      {settingsError || error ? (
+      {(!isAbortError(settingsError) && settingsError) || (!isAbortError(error) && error) ? (
         <Callout.Root color="red" role="alert">
           <Callout.Icon><AlertCircle size={16} /></Callout.Icon>
           <Callout.Text className="flex flex-wrap items-center gap-2">
