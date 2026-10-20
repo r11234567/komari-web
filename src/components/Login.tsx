@@ -11,9 +11,11 @@ import { useTranslation } from "react-i18next";
 import { TablerSettings } from "./Icones/Tabler";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
-
-const PASSKEY_REDIRECT_KEY = "komari:passkey-login-redirect";
-const PASSKEY_REDIRECT_MAX_AGE_MS = 60_000;
+import {
+  clearConsolePasskeyIntent,
+  consumeConsolePasskeyIntent,
+  markConsolePasskeyIntent,
+} from "@/utils/consolePasskeyIntent";
 
 type LoginDialogProps = {
   trigger?: React.ReactNode | string;
@@ -26,7 +28,7 @@ type LoginDialogProps = {
 type LoginFormProps = {
   onLoginSuccess?: () => void;
   oauthReturnTo?: string;
-  suppressPasskeyRedirect?: boolean;
+  onPasswordLoginStart?: () => void;
   onOAuthLoginStart?: () => void;
   onPasskeyLoginStart?: () => void;
 };
@@ -38,7 +40,7 @@ function oauthLoginURL(returnTo: string = "/admin/dashboard"): string {
 export const LoginForm = ({
   onLoginSuccess,
   oauthReturnTo,
-  suppressPasskeyRedirect = false,
+  onPasswordLoginStart,
   onOAuthLoginStart,
   onPasskeyLoginStart,
 }: LoginFormProps) => {
@@ -56,58 +58,13 @@ export const LoginForm = ({
   const isFormValid =
     passwordLoginEnabled && username.trim() !== "" && password.trim() !== "";
 
-  React.useEffect(() => {
-    const markPasskeyLogin = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element) || !target.closest(".km-passkey-login")) {
-        return;
-      }
-      onPasskeyLoginStart?.();
-      try {
-        sessionStorage.setItem(PASSKEY_REDIRECT_KEY, String(Date.now()));
-      } catch {
-        // Storage may be unavailable in privacy-restricted browser contexts.
-      }
-    };
-    document.addEventListener("click", markPasskeyLogin, true);
-    return () => document.removeEventListener("click", markPasskeyLogin, true);
-  }, [onPasskeyLoginStart]);
-
-  React.useEffect(() => {
-    if (account?.logged_in !== true) {
-      return;
-    }
-    if (suppressPasskeyRedirect) {
-      try {
-        sessionStorage.removeItem(PASSKEY_REDIRECT_KEY);
-      } catch {
-        // Storage is unavailable.
-      }
-      return;
-    }
-    let shouldRedirect = false;
-    try {
-      const markedAt = Number(sessionStorage.getItem(PASSKEY_REDIRECT_KEY));
-      if (Number.isFinite(markedAt) && Date.now() - markedAt <= PASSKEY_REDIRECT_MAX_AGE_MS) {
-        shouldRedirect = true;
-      }
-      if (shouldRedirect) {
-        sessionStorage.removeItem(PASSKEY_REDIRECT_KEY);
-      }
-    } catch {
-      return;
-    }
-    if (shouldRedirect && !window.location.pathname.startsWith("/admin")) {
-      window.location.assign("/admin/dashboard");
-    }
-  }, [account?.logged_in, suppressPasskeyRedirect]);
-
   const handleLogin = async () => {
     if (!isFormValid) {
       setErrorMsg("Username and password are required");
       return;
     }
 
+    onPasswordLoginStart?.();
     setErrorMsg("");
     setIsLoading(true);
 
@@ -149,6 +106,12 @@ export const LoginForm = ({
   return (
     <form
       className="km-login-form"
+      onClickCapture={(event) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest(".km-passkey-login")) {
+          onPasskeyLoginStart?.();
+        }
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         if (isFormValid && !isLoading) {
@@ -273,6 +236,25 @@ const LoginDialogContent = ({
     }
   }, [autoOpen]);
 
+  const finishLogin = React.useCallback(() => {
+    clearConsolePasskeyIntent();
+    setOpen(false);
+    if (onLoginSuccess) {
+      onLoginSuccess();
+    } else {
+      window.location.assign("/admin/dashboard");
+    }
+  }, [onLoginSuccess]);
+
+  React.useEffect(() => {
+    if (loading || error || account?.logged_in !== true) return;
+    // The plugin reloads after login. LoginForm is no longer mounted at that
+    // point, so the dialog must restore this page's pending navigation itself.
+    if (consumeConsolePasskeyIntent(window.location.pathname + window.location.search)) {
+      finishLogin();
+    }
+  }, [account?.logged_in, loading, error, finishLogin]);
+
   if (loading) {
     return <Button disabled>{t("loading")}</Button>;
   }
@@ -301,6 +283,7 @@ const LoginDialogContent = ({
 
   if (onlyOAuthLogin && !autoOpen) {
     const redirect = () => {
+      clearConsolePasskeyIntent();
       window.location.href = oauthLoginURL();
     };
     if (typeof trigger === "string") {
@@ -325,7 +308,13 @@ const LoginDialogContent = ({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) clearConsolePasskeyIntent();
+      }}
+    >
       <Dialog.Trigger>
         {trigger ? trigger : <Button>{t("login.title")}</Button>}
       </Dialog.Trigger>
@@ -338,14 +327,12 @@ const LoginDialogContent = ({
           </Flex>
         </Dialog.Description>
         <LoginForm
-          onLoginSuccess={() => {
-            setOpen(false);
-            if (onLoginSuccess) {
-              onLoginSuccess();
-            } else {
-              window.location.assign("/admin/dashboard");
-            }
+          onPasskeyLoginStart={() => {
+            markConsolePasskeyIntent(window.location.pathname + window.location.search);
           }}
+          onOAuthLoginStart={() => clearConsolePasskeyIntent()}
+          onPasswordLoginStart={() => clearConsolePasskeyIntent()}
+          onLoginSuccess={finishLogin}
         />
       </Dialog.Content>
     </Dialog.Root>

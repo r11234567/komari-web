@@ -156,7 +156,6 @@ const BindLoginPageContent = () => {
               )}
               <LoginForm
                 oauthReturnTo={currentLocation}
-                suppressPasskeyRedirect
                 onOAuthLoginStart={markBindLoginIntent}
                 onPasskeyLoginStart={markBindLoginIntent}
                 onLoginSuccess={() => void issueTicket()}
