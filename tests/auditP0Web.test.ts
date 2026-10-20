@@ -4,8 +4,11 @@ import test from "node:test";
 
 test("Audit P0 Bug 1: /bind page prevents input wipe, deadlock on abort, and works across routes", () => {
   const source = readFileSync(new URL("../src/pages/bind.tsx", import.meta.url), "utf8");
-  // lookup should have empty deps [] and not depend on [newName]
-  assert.match(source, /lookup\s*=\s*React\.useCallback\([\s\S]*?\},\s*\[\s*bindTicket\s*\]\)/);
+  // lookup must not depend on newName; route navigation dependencies are expected.
+  assert.match(
+    source,
+    /lookup\s*=\s*React\.useCallback\([\s\S]*?\},\s*\[bindTicket,\s*location\.hash,\s*location\.pathname,\s*location\.search,\s*navigate\]\)/,
+  );
   // setNewName should preserve user typed value if present
   assert.match(source, /setNewName\(\(prev\)\s*=>\s*prev\s*\|\|\s*response\.enrollment\?\.device\?\.hostname\s*\|\|\s*""\)/);
   // finally block should reset loading without being blocked by signal.aborted
@@ -82,7 +85,7 @@ test("Audit Bonus: PerformanceDiagnostics renders structured DiagnosticsReport",
   assert.match(source, /swapUsedBytes/);
 });
 
-test("Audit Feature 1: /bind enforces 2-minute single-use ticket, route gate, and X-Bind-Ticket header", () => {
+test("Audit Feature 1: /bind-login completes a full login then obtains a reusable 2-minute ticket", () => {
   const bindSource = readFileSync(new URL("../src/pages/bind.tsx", import.meta.url), "utf8");
   const loginSource = readFileSync(new URL("../src/components/Login.tsx", import.meta.url), "utf8");
   const bindLoginSource = readFileSync(new URL("../src/pages/bind-login.tsx", import.meta.url), "utf8");
@@ -90,17 +93,22 @@ test("Audit Feature 1: /bind enforces 2-minute single-use ticket, route gate, an
   // /bind uses route interception to bind-login
   assert.match(bindSource, /BindAuthGate/);
   assert.match(bindSource, /bindLoginPath/);
-  // Acquires ticket from /api/bind/ticket via LoginForm mode="bind"
-  assert.match(loginSource, /\/api\/bind\/ticket/);
-  assert.match(loginSource, /setStoredBindTicket/);
-  assert.match(bindLoginSource, /mode="bind"/);
+  // The login form stays a normal full-login form for password, OAuth, and passkey plugins.
+  assert.match(loginSource, /\.km-passkey-login/);
+  assert.match(loginSource, /oauthLoginURL/);
+  assert.doesNotMatch(loginSource, /\/api\/bind\/ticket/);
+  // The session is exchanged for a ticket only after the login page observes a completed login.
+  assert.match(bindLoginSource, /\/api\/public\/bind\/ticket/);
+  assert.match(bindLoginSource, /setStoredBindTicket/);
+  assert.match(bindLoginSource, /<LoginForm/);
   // Passes X-Bind-Ticket in headers
   assert.match(bindSource, /"X-Bind-Ticket":\s*(?:ticketToUse|bindTicket)/);
   // Has live countdown timer
   assert.match(bindSource, /formatTicketTime/);
   assert.match(bindSource, /ticketTimeLeft/);
-  // Clears single-use ticket on approve
-  assert.match(bindSource, /setBindTicket\(null\)/);
+  // The two-minute ticket is reusable and must not be consumed by one operation.
+  assert.doesNotMatch(bindSource, /Consumed single-use ticket/);
+  assert.doesNotMatch(bindSource, /twoFactor:\s*create\(/);
 });
 
 test("Audit Feature 2: Rename 一键部署与配置下发 to 配置下发", () => {

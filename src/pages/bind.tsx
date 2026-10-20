@@ -25,9 +25,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { connectUnary, connectClients } from "@/api/connect/client";
-import { create } from "@bufbuild/protobuf";
-import { TwoFactorProofSchema } from "@komari/proto/komari/common/v1/common_pb";
 import {
   EnrollmentState,
   type PendingEnrollment,
@@ -41,6 +40,28 @@ import {
   formatTicketTime,
 } from "@/utils/bindTicket";
 import { bindLoginPath } from "@/utils/loginRedirect";
+
+const TICKET_FAILURE_REASONS = new Set([
+  "bind_ticket_missing",
+  "bind_ticket_expired",
+  "bind_ticket_invalid",
+  "bind_ticket_subject_mismatch",
+  "console_session_required",
+]);
+
+function describeBindError(error: unknown, fallback: string) {
+  const connectError = ConnectError.from(error);
+  const reason = connectError.metadata.get("bind-ticket-reason") ?? "";
+  return {
+    message: connectError.rawMessage || fallback,
+    reason,
+    invalidatesTicket:
+      TICKET_FAILURE_REASONS.has(reason) ||
+      (reason === "" &&
+        (connectError.code === Code.PermissionDenied ||
+          connectError.code === Code.Unauthenticated)),
+  };
+}
 
 function stateLabel(state: EnrollmentState) {
   switch (state) {
@@ -81,7 +102,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
   const [loading, setLoading] = React.useState(false);
   const [approving, setApproving] = React.useState(false);
 
-  // Bind Ticket (2-minute single-use ticket protection)
+  // Reusable two-minute authorization window created after a completed login.
   const [bindTicket, setBindTicket] = React.useState<string | null>(initialTicket);
   const [ticketTimeLeft, setTicketTimeLeft] = React.useState<number>(getBindTicketRemainingSeconds());
 
@@ -92,7 +113,6 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
 
   // existing-machine binding
   const [bindTarget, setBindTarget] = React.useState("");
-  const [twoFaCode, setTwoFaCode] = React.useState("");
   const [confirmBindOpen, setConfirmBindOpen] = React.useState(false);
 
   const [lookupError, setLookupError] = React.useState<string | null>(null);
@@ -148,12 +168,15 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
       }
     } catch (err) {
       if (!controller.signal.aborted) {
-        const msg = err instanceof Error ? err.message : "验证码不存在或已过期";
-        setLookupError(msg);
-        toast.error(msg);
-        if (msg.toLowerCase().includes("ticket") || msg.includes("小票") || msg.toLowerCase().includes("unauthenticated")) {
+        const failure = describeBindError(err, "验证码不存在或已过期");
+        setLookupError(failure.message);
+        toast.error(failure.message);
+        if (failure.invalidatesTicket) {
           clearStoredBindTicket();
           setBindTicket(null);
+          navigate(bindLoginPath(location.pathname, location.search, location.hash), {
+            replace: true,
+          });
         }
       }
     } finally {
@@ -161,7 +184,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
         setLoading(false);
       }
     }
-  }, [bindTicket]);
+  }, [bindTicket, location.hash, location.pathname, location.search, navigate]);
 
   // Load all server nodes for manual bind selection
   const loadServers = React.useCallback(async () => {
@@ -224,15 +247,12 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
           { signal, timeoutMs, headers: { "X-Bind-Ticket": bindTicket } },
         ),
       );
-      // Consumed single-use ticket
-      clearStoredBindTicket();
-      setBindTicket(null);
       toast.success(`机器已成功注册：${response.agentId}`);
       window.location.assign("/admin/servers");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "注册失败";
-      toast.error(msg);
-      if (msg.toLowerCase().includes("ticket") || msg.includes("小票") || msg.toLowerCase().includes("unauthenticated")) {
+      const failure = describeBindError(err, "注册失败");
+      toast.error(failure.message);
+      if (failure.invalidatesTicket) {
         clearStoredBindTicket();
         setBindTicket(null);
         navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
@@ -243,7 +263,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
   };
 
   const approveBind = async () => {
-    if (!enrollment || !bindTarget || !twoFaCode.trim()) return;
+    if (!enrollment || !bindTarget) return;
     if (!bindTicket) {
       toast.error("绑定小票已过期，请重新登录");
       navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
@@ -258,20 +278,16 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
           {
             userCode: code,
             target: { case: "existingAgentId", value: bindTarget },
-            twoFactor: create(TwoFactorProofSchema, { code: twoFaCode.trim() }),
           },
           { signal, timeoutMs, headers: { "X-Bind-Ticket": bindTicket } },
         ),
       );
-      // Consumed single-use ticket
-      clearStoredBindTicket();
-      setBindTicket(null);
       toast.success("已成功绑定到已有机器");
       window.location.assign("/admin/servers");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "绑定失败，请核对 2FA 验证码";
-      toast.error(msg);
-      if (msg.toLowerCase().includes("ticket") || msg.includes("小票") || msg.toLowerCase().includes("unauthenticated")) {
+      const failure = describeBindError(err, "绑定失败");
+      toast.error(failure.message);
+      if (failure.invalidatesTicket) {
         clearStoredBindTicket();
         setBindTicket(null);
         navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
@@ -296,14 +312,12 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
           { signal, timeoutMs, headers: { "X-Bind-Ticket": bindTicket } },
         ),
       );
-      clearStoredBindTicket();
-      setBindTicket(null);
       toast.success("申请已拒绝");
       setEnrollment(null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "拒绝失败";
-      toast.error(msg);
-      if (msg.toLowerCase().includes("ticket") || msg.includes("小票") || msg.toLowerCase().includes("unauthenticated")) {
+      const failure = describeBindError(err, "拒绝失败");
+      toast.error(failure.message);
+      if (failure.invalidatesTicket) {
         clearStoredBindTicket();
         setBindTicket(null);
         navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
@@ -492,7 +506,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
               <Text size="3" weight="bold">选项 B：绑定到已有机器</Text>
             </Flex>
             <Text size="2" color="gray">
-              将申请客户端绑定到系统中已存在的节点（保留原有监控历史与数据），该操作会替换目标节点的认证凭据，需要提供管理员 2FA 双因素口令确认。
+              将申请客户端绑定到系统中已存在的节点（保留原有监控历史与数据）。当前两分钟授权已覆盖此操作，请核对目标机器后确认。
             </Text>
             <Separator size="4" />
 
@@ -554,41 +568,24 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
         </Card>
       )}
 
-      {/* ── bind confirm dialog with 2FA ── */}
+      {/* ── bind confirm dialog ── */}
       <Dialog.Root open={confirmBindOpen} onOpenChange={setConfirmBindOpen}>
         <Dialog.Content maxWidth="420px">
           <Dialog.Title>确认绑定到已有机器</Dialog.Title>
           <Dialog.Description size="2" color="gray">
-            绑定操作将目标机器的历史记录及权限授予当前申请设备。为确保安全，请输入管理员 2FA 动态口令完成授权。
+            绑定操作会将目标机器的历史记录及权限授予当前申请设备。请确认设备信息和目标机器无误。
           </Dialog.Description>
-          <Flex direction="column" gap="3" mt="4">
-            <Flex direction="column" gap="1">
-              <Text size="2" weight="medium">2FA 动态口令 (TOTP)</Text>
-              <TextField.Root
-                type="text"
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                placeholder="6 位动态验证码"
-                value={twoFaCode}
-                onChange={(e) => setTwoFaCode(e.target.value.trim())}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && twoFaCode.trim()) void approveBind();
-                }}
-                autoFocus
-              />
-            </Flex>
-            <Flex gap="2" justify="end" mt="2">
-              <Dialog.Close>
-                <Button variant="soft" color="gray">取消</Button>
-              </Dialog.Close>
-              <Button
-                color="red"
-                onClick={() => void approveBind()}
-                disabled={!twoFaCode.trim() || approving}
-              >
-                {approving ? <RefreshCw size={14} className="animate-spin" /> : "确认并绑定"}
-              </Button>
-            </Flex>
+          <Flex gap="2" justify="end" mt="4">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">取消</Button>
+            </Dialog.Close>
+            <Button
+              color="red"
+              onClick={() => void approveBind()}
+              disabled={approving}
+            >
+              {approving ? <RefreshCw size={14} className="animate-spin" /> : "确认并绑定"}
+            </Button>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
@@ -597,9 +594,9 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
 };
 
 const BindAuthGate = () => {
-  const { loading: accountLoading } = useAccount();
+  const { account, loading: accountLoading } = useAccount();
   const location = useLocation();
-  const ticket = getStoredBindTicket();
+  const storedTicket = getStoredBindTicket();
 
   if (accountLoading) {
     return (
@@ -609,7 +606,7 @@ const BindAuthGate = () => {
     );
   }
 
-  if (!ticket) {
+  if (!account?.logged_in || !storedTicket) {
     return (
       <Navigate
         to={bindLoginPath(location.pathname, location.search, location.hash)}
@@ -618,7 +615,7 @@ const BindAuthGate = () => {
     );
   }
 
-  return <BindPageContent initialTicket={ticket} />;
+  return <BindPageContent initialTicket={storedTicket.ticket} />;
 };
 
 export default function BindPage() {

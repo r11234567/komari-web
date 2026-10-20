@@ -11,7 +11,6 @@ import { useTranslation } from "react-i18next";
 import { TablerSettings } from "./Icones/Tabler";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
-import { setStoredBindTicket } from "@/utils/bindTicket";
 
 const PASSKEY_REDIRECT_KEY = "komari:passkey-login-redirect";
 const PASSKEY_REDIRECT_MAX_AGE_MS = 60_000;
@@ -26,19 +25,23 @@ type LoginDialogProps = {
 
 type LoginFormProps = {
   onLoginSuccess?: () => void;
-  mode?: "console" | "bind";
+  oauthReturnTo?: string;
+  suppressPasskeyRedirect?: boolean;
 };
 
-export const LoginForm = ({ onLoginSuccess, mode = "console" }: LoginFormProps) => {
+function oauthLoginURL(returnTo: string = "/admin/dashboard"): string {
+  return `/api/oauth?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export const LoginForm = ({
+  onLoginSuccess,
+  oauthReturnTo,
+  suppressPasskeyRedirect = false,
+}: LoginFormProps) => {
   const { account, refresh } = useAccount();
   const { publicInfo } = usePublicInfo();
   const [t] = useTranslation();
-  const [username, setUsername] = React.useState(() => {
-    if (mode === "bind" && account?.username) {
-      return account.username;
-    }
-    return "";
-  });
+  const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [twoFac, setTwoFac] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState("");
@@ -50,13 +53,6 @@ export const LoginForm = ({ onLoginSuccess, mode = "console" }: LoginFormProps) 
     passwordLoginEnabled && username.trim() !== "" && password.trim() !== "";
 
   React.useEffect(() => {
-    if (mode === "bind" && account?.username && !username) {
-      setUsername(account.username);
-    }
-  }, [mode, account?.username, username]);
-
-  React.useEffect(() => {
-    if (mode === "bind") return;
     const markPasskeyLogin = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Element) || !target.closest(".km-passkey-login")) {
@@ -70,10 +66,18 @@ export const LoginForm = ({ onLoginSuccess, mode = "console" }: LoginFormProps) 
     };
     document.addEventListener("click", markPasskeyLogin, true);
     return () => document.removeEventListener("click", markPasskeyLogin, true);
-  }, [mode]);
+  }, []);
 
   React.useEffect(() => {
-    if (mode === "bind" || account?.logged_in !== true) {
+    if (account?.logged_in !== true) {
+      return;
+    }
+    if (suppressPasskeyRedirect) {
+      try {
+        sessionStorage.removeItem(PASSKEY_REDIRECT_KEY);
+      } catch {
+        // Storage is unavailable.
+      }
       return;
     }
     let shouldRedirect = false;
@@ -91,7 +95,7 @@ export const LoginForm = ({ onLoginSuccess, mode = "console" }: LoginFormProps) 
     if (shouldRedirect && !window.location.pathname.startsWith("/admin")) {
       window.location.assign("/admin/dashboard");
     }
-  }, [account?.logged_in, mode]);
+  }, [account?.logged_in, suppressPasskeyRedirect]);
 
   const handleLogin = async () => {
     if (!isFormValid) {
@@ -101,48 +105,6 @@ export const LoginForm = ({ onLoginSuccess, mode = "console" }: LoginFormProps) 
 
     setErrorMsg("");
     setIsLoading(true);
-
-    if (mode === "bind") {
-      try {
-        const response = await fetch("/api/bind/ticket", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: username.trim(),
-            password,
-            ...(twoFac ? { "2fa_code": twoFac.trim() } : {}),
-          }),
-        });
-        const data = (await response.json()) as {
-          status?: string;
-          message?: string;
-          data?: { ticket?: string; expires_in?: number };
-        };
-        if (response.ok && data.status === "success" && data.data?.ticket) {
-          setStoredBindTicket(data.data.ticket, data.data.expires_in ?? 120);
-          if (onLoginSuccess) {
-            onLoginSuccess();
-          } else {
-            window.location.assign("/bind");
-          }
-          return;
-        }
-        if (
-          data.message === "2FA code is required" ||
-          (response.status === 401 && data.message?.includes("2FA"))
-        ) {
-          setRequire2FA(true);
-          return;
-        }
-        setErrorMsg(data.message || "Authentication failed");
-      } catch (error) {
-        setErrorMsg("Network error");
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
-      return;
-    }
 
     try {
       const response = await fetch("/api/login", {
@@ -260,10 +222,10 @@ export const LoginForm = ({ onLoginSuccess, mode = "console" }: LoginFormProps) 
             </Button>
           </>
         )}
-        {mode !== "bind" && publicInfo?.oauth_enable && (
+        {publicInfo?.oauth_enable && (
           <Button
             onClick={() => {
-              window.location.href = "/api/oauth";
+              window.location.href = oauthLoginURL(oauthReturnTo);
             }}
             variant={passwordLoginEnabled ? "soft" : "solid"}
             disabled={isLoading}
@@ -333,7 +295,7 @@ const LoginDialogContent = ({
 
   if (onlyOAuthLogin && !autoOpen) {
     const redirect = () => {
-      window.location.href = "/api/oauth";
+      window.location.href = oauthLoginURL();
     };
     if (typeof trigger === "string") {
       return <Button onClick={redirect}>{trigger}</Button>;

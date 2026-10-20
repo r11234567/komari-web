@@ -15,7 +15,7 @@ interface AccountContextType{
     account: Account | null;
     loading: boolean;
     error: Error | null;
-    refresh: () => void;
+    refresh: () => Promise<void>;
 }
 
 // 创建Context

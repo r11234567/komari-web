@@ -43,6 +43,7 @@ const LoginPageContent = () => {
             </Text>
           </Flex>
           <LoginForm
+            oauthReturnTo={`${location.pathname}${location.search}`}
             onLoginSuccess={() => {
               // A full navigation guarantees the newly issued session cookie is
               // observed by the admin route's fresh AccountProvider.
