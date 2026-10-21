@@ -10,7 +10,7 @@ import {
 import { TwoFactorProofSchema } from "@komari/proto/komari/common/v1/common_pb";
 import { PrivilegeMode } from "@komari/proto/komari/report/v1/report_pb";
 import { connectClients, connectUnary } from "@/api/connect/client";
-import { acceptState, appliedSnapshot, confirmationStillCurrent } from "@/utils/privilegedDelivery";
+import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings } from "@/utils/privilegedDelivery";
 
 const labels: Record<State, string> = {
   [State.UNSPECIFIED]: "初始化中",
@@ -31,6 +31,7 @@ const settingLabels = [
 ] as const;
 const modeLabels: Record<PrivilegeMode, string> = {
   [PrivilegeMode.UNSPECIFIED]: "未知",
+  [PrivilegeMode.OTHER]: "其他系统身份",
   [PrivilegeMode.LINUX_ROOT]: "Linux root",
   [PrivilegeMode.LINUX_NON_ROOT]: "Linux 普通账号",
   [PrivilegeMode.WINDOWS_ADMINISTRATOR]: "Windows 管理员",
@@ -117,7 +118,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
     const controller = new AbortController();
     try {
       await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
-        connectClients.privilegedDelivery.updatePrivilegedDelivery({ agentId, privileged: draft,
+        connectClients.privilegedDelivery.updatePrivilegedDelivery({ agentId, privileged: boundedRemoteSettings(draft),
           expectedRevision: state.desired?.revision ?? 0n, reason: reason.trim(), protocolVersion: 2 }, { signal, timeoutMs }));
       setEditing(false); setReason(""); toast.success("已保存，等待 2FA 确认");
     } catch (err) { toast.error(err instanceof Error ? err.message : "保存失败"); }
@@ -155,7 +156,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
       }}>编辑新版本</Button>
       {editing && <Flex direction="column" gap="2">
         {settingLabels.map(([key, label]) => <Flex key={key} gap="2">
-          <Checkbox checked={draft[key]} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
+          <Checkbox disabled={(key === "websshEnabled" || key === "executionEnabled") && !draft.remoteControlEnabled} checked={draft[key]} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
           <Text>{label}</Text>
         </Flex>)}
         <Select.Root value={String(draft.requiredPrivilegeMode)} onValueChange={(value) => setDraft((s) => ({ ...s, requiredPrivilegeMode: Number(value) }))}>

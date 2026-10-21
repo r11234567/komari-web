@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptState, appliedSnapshot, confirmationStillCurrent } from "../src/utils/privilegedDelivery.ts";
+import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings } from "../src/utils/privilegedDelivery.ts";
 
 test("pending desired never becomes the applied snapshot, even when history is truncated", () => {
   const desired = { revision: 22n } as any;
@@ -19,4 +19,11 @@ test("confirmation is bound to the current approval target and state", () => {
 test("out-of-order polls cannot replace a newer summary", () => {
   assert.equal(acceptState({ updateSequence: 10n } as any, { updateSequence: 9n } as any), false);
   assert.equal(acceptState({ updateSequence: 10n } as any, { updateSequence: 11n } as any), true);
+});
+
+test("master bounds child grants independently of root identity", () => {
+  const draft = { remoteControlEnabled: false, websshEnabled: true, executionEnabled: true };
+  assert.deepEqual(boundedRemoteSettings(draft), { remoteControlEnabled: false, websshEnabled: false, executionEnabled: false });
+  assert.deepEqual(boundedRemoteSettings({ ...draft, remoteControlEnabled: true, executionEnabled: false }),
+    { remoteControlEnabled: true, websshEnabled: true, executionEnabled: false });
 });
