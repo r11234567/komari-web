@@ -15,7 +15,7 @@ export function acceptState(current: GetNodeConfigStateResponse | undefined, nex
   return !current || next.updateSequence >= current.updateSequence;
 }
 
-export function boundedRemoteSettings<T extends { remoteControlEnabled: boolean; websshEnabled: boolean; executionEnabled: boolean }>(settings: T): T {
-  return { ...settings, websshEnabled: settings.remoteControlEnabled && settings.websshEnabled,
-    executionEnabled: settings.remoteControlEnabled && settings.executionEnabled };
+export function boundedRemoteSettings<T extends { remoteControlEnabled?: boolean; websshEnabled?: boolean; executionEnabled?: boolean }>(settings: T): T {
+  return { ...settings, websshEnabled: !!settings.remoteControlEnabled && !!settings.websshEnabled,
+    executionEnabled: !!settings.remoteControlEnabled && !!settings.executionEnabled };
 }
