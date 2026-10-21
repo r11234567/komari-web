@@ -9,6 +9,7 @@ import {
 } from "@komari/proto/komari/config/v1/config_pb";
 import { TwoFactorProofSchema } from "@komari/proto/komari/common/v1/common_pb";
 import { PrivilegeMode } from "@komari/proto/komari/report/v1/report_pb";
+import { HostAction, HostOperationPhase } from "@komari/proto/komari/host/v1/host_pb";
 import { connectClients, connectUnary } from "@/api/connect/client";
 import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings } from "@/utils/privilegedDelivery";
 
@@ -93,6 +94,16 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
   const expired = expiresAt !== undefined && expiresAt <= now;
   const countdown = expiresAt === undefined ? undefined : Math.max(0, Math.ceil((expiresAt - now) / 1000));
   const ready = state?.protocolVersion === 2;
+  const serviceId = desired?.authorization?.serviceId ?? state?.observation?.serviceId;
+  const trustedServiceId = serviceId && /^[A-Za-z0-9_.-]{1,128}$/.test(serviceId) && !serviceId.startsWith("-");
+  const actions = desired?.authorization?.actions ?? [];
+  const hostSupported = actions.length > 0 && actions.every((action) => state?.supportedHostActions.includes(action));
+  const hostCommand = trustedServiceId && desired ? `sudo komari-host apply --manifest /etc/komari/services/${serviceId}.json --revision ${desired.revision}` : undefined;
+  const hostPhases: Record<HostOperationPhase, string> = {
+    [HostOperationPhase.UNSPECIFIED]: "尚未领取", [HostOperationPhase.PREPARED]: "已领取执行租约",
+    [HostOperationPhase.APPLYING]: "正在修改本机服务", [HostOperationPhase.LOCAL_APPLIED]: "本机已验证，等待 daemon 确认",
+    [HostOperationPhase.RESTORED]: "失败后已恢复原服务", [HostOperationPhase.FAILED]: "主机操作失败",
+  };
 
   const confirm = async () => {
     if (!desired || !code.trim() || busy) return;
@@ -132,6 +143,11 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
       <Badge color={desired?.state === State.DELIVERED ? "green" : "orange"}>{desired?.installationBaseline && state.appliedRevision === 0n ? "基线初始化中，等待 Agent 确认" : labels[desired?.state ?? State.UNSPECIFIED]}</Badge>
       <Text size="2">期望版本：{desired?.revision.toString() ?? "0"}；已应用版本：{state.appliedRevision.toString()}</Text>
       {state.observation && <Text size="2">运行中的 Agent：{modeLabels[state.observation.privilegeMode]}；服务：{state.observation.serviceId}</Text>}
+      {state.hostOperation && <Flex direction="column" gap="1">
+        <Text size="2">主机操作：{hostPhases[state.hostOperation.phase]}；操作 ID：{state.hostOperation.operationId}</Text>
+        {state.hostOperation.error && <Text size="2" color="red">{state.hostOperation.error}</Text>}
+      </Flex>}
+      {state.observation?.helperInstalled && <Text size="2">最近一次 daemon 确认的救援组件：已安装；运行 {state.observation.helperRunning ? "是" : "否"}；授权 {state.observation.helperAuthorized ? "是" : "否"}；租约就绪 {state.observation.helperLeaseReady ? "是" : "否"}</Text>}
       <Text size="2" weight="medium">当前生效特权快照{applied ? `（r${applied.revision}）` : "：尚无 Agent 应用确认"}</Text>
       {applied && <Snapshot revision={applied} />}
       {desired && desired.revision !== state.appliedRevision && <>
@@ -147,7 +163,10 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
           <Flex direction="column" gap="2">
             <Text>需要本机管理员操作。密码仅在本机系统认证中输入。</Text>
             {countdown !== undefined && <Text>{expired ? "授权已过期，请保存新版本后重新确认" : `${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, "0")} 后过期`}</Text>}
-            <Text>主机身份转换和救援组件安装尚未开放，不能通过旧版 upgrade 命令完成。</Text>
+            {hostSupported && hostCommand ? <>
+              <Text>在目标节点的本机管理员终端执行：</Text><code className="break-all select-all">{hostCommand}</code>
+              {actions.includes(HostAction.INSTALL_RESCUE_HELPER) && <Text>先用 komari-host fetch-helper --version 指定发布版本，预取并验证救援组件；本机 apply 会再次独立验签。</Text>}
+            </> : <Text>此节点尚未准备好所需主机操作。Linux systemd 需安装新版 host 工具、固定主机信任密钥和 PAM 依赖后重启 agent；Windows/macOS 暂不支持身份转换与救援安装。</Text>}
           </Flex>
         </Callout.Text></Callout.Root>}
       </>}
