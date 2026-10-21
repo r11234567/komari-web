@@ -131,14 +131,11 @@ test("Audit Feature 2: Rename 一键部署与配置下发 to 配置下发", () =
   assert.match(adminSource, /title="配置下发"/);
 });
 
-test("Audit Feature 3: Cascading switch dependencies in AgentDeploymentDialog", () => {
-  const dialogSource = readFileSync(new URL("../src/components/admin/AgentDeploymentDialog.tsx", import.meta.url), "utf8");
-  // 远程控制总开关 disabled when not in root mode
-  assert.match(dialogSource, /label="远程控制总开关"[\s\S]*?disabled=\{!isPrivilegedAccount\}/);
-  // WebSSH disabled when remoteControlEnabled is off
-  assert.match(dialogSource, /label="WebSSH 交互终端"[\s\S]*?disabled=\{!privDraft\.remoteControlEnabled/);
-  // 远程命令执行 disabled when remoteControlEnabled is off
-  assert.match(dialogSource, /label="远程命令执行"[\s\S]*?disabled=\{!privDraft\.remoteControlEnabled/);
+test("Audit Feature 3: both privileged surfaces use one authoritative state panel", () => {
+  const dialog = readFileSync(new URL("../src/components/admin/AgentDeploymentDialog.tsx", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../src/pages/admin/privileged-config.tsx", import.meta.url), "utf8");
+  assert.match(dialog, /<PrivilegedDeliveryPanel/);
+  assert.match(page, /<PrivilegedDeliveryPanel/);
 });
 
 test("Audit Feature 4: Secret masking and anti-copy in renderProviders", () => {

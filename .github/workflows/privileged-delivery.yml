@@ -1,0 +1,40 @@
+name: Privileged delivery UI
+on:
+  pull_request:
+  push:
+    branches: ['fix/privileged-delivery-v2']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test and build both user interfaces with full logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts
+          trap 'echo "$?" > ci-artifacts/exit-code.txt' EXIT
+          npm ci 2>&1 | tee ci-artifacts/install.log
+          npm test 2>&1 | tee ci-artifacts/tests.log
+          npx eslint src/components/admin/PrivilegedDeliveryPanel.tsx src/components/admin/AgentDeploymentDialog.tsx src/pages/admin/privileged-config.tsx src/utils/privilegedDelivery.ts tests/privilegedDelivery.test.ts 2>&1 | tee ci-artifacts/lint.log
+          npm run build 2>&1 | tee ci-artifacts/build.log
+          mv dist dist-theme
+          npm run build:system 2>&1 | tee ci-artifacts/system-build.log
+          git rev-parse HEAD > ci-artifacts/source-commit.txt
+          sha256sum package-lock.json > ci-artifacts/dependencies.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: privileged-web-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-artifacts/
+            dist/
+            dist-theme/
+          retention-days: 30
