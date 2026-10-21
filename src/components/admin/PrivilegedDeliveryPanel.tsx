@@ -129,7 +129,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
     {error && <Callout.Root color="red"><Callout.Text>{error}</Callout.Text></Callout.Root>}
     {!state ? <Text>正在读取配置状态…</Text> : <>
       {!ready && <Text color="orange">此节点尚未协商新版协议。请先升级并迁移安装，再下发特权配置。</Text>}
-      <Badge color={desired?.state === State.DELIVERED ? "green" : "orange"}>{labels[desired?.state ?? State.UNSPECIFIED]}</Badge>
+      <Badge color={desired?.state === State.DELIVERED ? "green" : "orange"}>{desired?.installationBaseline && state.appliedRevision === 0n ? "基线初始化中，等待 Agent 确认" : labels[desired?.state ?? State.UNSPECIFIED]}</Badge>
       <Text size="2">期望版本：{desired?.revision.toString() ?? "0"}；已应用版本：{state.appliedRevision.toString()}</Text>
       {state.observation && <Text size="2">运行中的 Agent：{modeLabels[state.observation.privilegeMode]}；服务：{state.observation.serviceId}</Text>}
       <Text size="2" weight="medium">当前生效特权快照{applied ? `（r${applied.revision}）` : "：尚无 Agent 应用确认"}</Text>

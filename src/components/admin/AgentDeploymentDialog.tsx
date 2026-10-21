@@ -254,9 +254,9 @@ export function AgentDeploymentDialog({
                 <Text size="1" color="gray">宿主机本地修改命令指引：</Text>
                 <Flex gap="2" align="center">
                   <code style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--gray-a3)", padding: "6px 10px", borderRadius: "4px", wordBreak: "break-all", flex: 1 }}>
-                    komari-agent recover show-config
+                    komari-agent config show
                   </code>
-                  <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText("komari-agent recover show-config").then(() => toast.success("命令已复制"))}>
+                  <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText("komari-agent config show").then(() => toast.success("命令已复制"))}>
                     <Copy size={12} />复制
                   </Button>
                 </Flex>
