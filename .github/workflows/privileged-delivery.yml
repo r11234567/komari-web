@@ -2,7 +2,7 @@ name: Privileged delivery UI
 on:
   pull_request:
   push:
-    branches: ['fix/privileged-delivery-v2']
+    branches: [main, 'fix/privileged-delivery-v2']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,8 +22,9 @@ jobs:
           mkdir -p ci-artifacts
           trap 'echo "$?" > ci-artifacts/exit-code.txt' EXIT
           npm ci 2>&1 | tee ci-artifacts/install.log
+          npm run audit:security 2>&1 | tee ci-artifacts/dependency-audit.log
           npm test 2>&1 | tee ci-artifacts/tests.log
-          npx eslint src/components/admin/PrivilegedDeliveryPanel.tsx src/components/admin/AgentDeploymentDialog.tsx src/pages/admin/privileged-config.tsx src/utils/privilegedDelivery.ts tests/privilegedDelivery.test.ts 2>&1 | tee ci-artifacts/lint.log
+          npx eslint src/components/admin/PrivilegedDeliveryPanel.tsx src/components/admin/AgentDeploymentDialog.tsx src/pages/admin/privileged-config.tsx src/pages/admin/about.tsx src/utils/privilegedDelivery.ts tests/privilegedDelivery.test.ts 2>&1 | tee ci-artifacts/lint.log
           npm run build 2>&1 | tee ci-artifacts/build.log
           mv dist dist-theme
           npm run build:system 2>&1 | tee ci-artifacts/system-build.log
