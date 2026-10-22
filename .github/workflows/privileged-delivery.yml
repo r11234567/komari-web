@@ -12,6 +12,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -21,6 +23,8 @@ jobs:
           set -euo pipefail
           mkdir -p ci-artifacts
           trap 'echo "$?" > ci-artifacts/exit-code.txt' EXIT
+          npm run test:proto 2>&1 | tee ci-artifacts/protocol-tests.log
+          node scripts/ci/check-protocol.cjs 2>&1 | tee ci-artifacts/protocol-source.log
           npm ci 2>&1 | tee ci-artifacts/install.log
           npm run audit:security 2>&1 | tee ci-artifacts/dependency-audit.log
           npm test 2>&1 | tee ci-artifacts/tests.log

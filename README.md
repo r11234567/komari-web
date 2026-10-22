@@ -29,7 +29,8 @@ How to contribute to Komari translations?
 ### 安装依赖
 
 ```bash
-npm install
+git submodule update --init --recursive
+npm ci
 ```
 
 > 所有指令均在项目根目录下执行
@@ -83,3 +84,5 @@ npm run build
 7. 将 `my-theme` 文件夹打包为 ZIP 文件。
 
 8. 在 Komari 的主题管理页面上传并应用你的自定义主题。
+
+协议引用及升级步骤见 [Proto 子模块依赖](docs/proto-dependency.md)。
