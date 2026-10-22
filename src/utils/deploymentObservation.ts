@@ -45,7 +45,7 @@ export function configQueryCommand(observation?: InstallationObservation) {
   if (!observation?.executable || !observation.operatingSystem) return undefined;
   // Reject control characters, then quote every path for its actual shell.
   const paths = [observation.executable, observation.serviceManifest];
-  if (paths.some((path) => /[\x00-\x1f\x7f]/.test(path))) return undefined;
+  if (paths.some((path) => Array.from(path).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))) return undefined;
   const windows = unsupportedHostPlatform(observation.operatingSystem) === "Windows";
   const quote = (value: string) => windows
     ? `'${value.replace(/'/g, "''")}'`
