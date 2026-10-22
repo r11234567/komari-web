@@ -326,7 +326,8 @@ export function AgentDeploymentDialog({
                   </Badge>
                 </Flex>
                 <Text size="2">期望版本：{delivery?.desiredRevision?.toString() ?? "0"}；已应用版本：{delivery?.appliedRevision?.toString() ?? "0"}</Text>
-                <Text size="2">保存：{toLocalTime(delivery?.savedAt)}；发送：{toLocalTime(delivery?.sentAt)}；完成：{toLocalTime(delivery?.finishedAt)}</Text>
+                <Text size="2">保存：{toLocalTime(delivery?.savedAt)}；发送：{toLocalTime(delivery?.sentAt)}；最近处理完成：{toLocalTime(delivery?.finishedAt)}</Text>
+                <Text size="1" color="gray">时间为面板记录的配置处理回执；升级安装不会清除已有配置和历史时间。</Text>
                 {delivery?.error && <Text size="2" color="red">{delivery.error.message}</Text>}
                 <Flex mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }} gap="2" align="center" wrap="wrap">
                   <Text size="1" color="gray">救援模式与性能诊断在独立页面操作。</Text>

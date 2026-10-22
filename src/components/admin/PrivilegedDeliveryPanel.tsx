@@ -14,7 +14,7 @@ import { connectClients, connectUnary } from "@/api/connect/client";
 import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings, needsRescueInstall } from "@/utils/privilegedDelivery";
 
 const labels: Record<State, string> = {
-  [State.UNSPECIFIED]: "初始化中",
+  [State.UNSPECIFIED]: "尚未建立特权配置基线",
   [State.NEEDS_CONFIRMATION]: "等待面板 2FA 确认",
   [State.NEEDS_MANUAL_AUTHORIZATION]: "等待本机管理员操作",
   [State.DELIVERED]: "已应用",
@@ -142,6 +142,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
     {error && <Callout.Root color="red"><Callout.Text>{error}</Callout.Text></Callout.Root>}
     {!state ? <Text>正在读取配置状态…</Text> : <>
       {!ready && <Text color="orange">此节点尚未协商新版协议。请先升级并迁移安装，再下发特权配置。</Text>}
+      {ready && !desired && <Text size="2" color="orange">Agent 已协商新版协议，但尚未提交特权基线。请检查 Agent 的初始化日志；普通配置通过独立通道加载，此状态不能代表普通配置的下发结果。</Text>}
       <Badge color={desired?.state === State.DELIVERED ? "green" : "orange"}>{desired?.installationBaseline && state.appliedRevision === 0n ? "基线初始化中，等待 Agent 确认" : labels[desired?.state ?? State.UNSPECIFIED]}</Badge>
       <Text size="2">期望版本：{desired?.revision.toString() ?? "0"}；已应用版本：{state.appliedRevision.toString()}</Text>
       {state.observation && <Text size="2">运行中的 Agent：{modeLabels[state.observation.privilegeMode]}；服务：{state.observation.serviceId}</Text>}
