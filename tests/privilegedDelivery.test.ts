@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings } from "../src/utils/privilegedDelivery.ts";
+import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings, needsRescueInstall } from "../src/utils/privilegedDelivery.ts";
 
 test("pending desired never becomes the applied snapshot, even when history is truncated", () => {
   const desired = { revision: 22n } as any;
@@ -26,4 +26,14 @@ test("master bounds child grants independently of root identity", () => {
   assert.deepEqual(boundedRemoteSettings(draft), { remoteControlEnabled: false, websshEnabled: false, executionEnabled: false });
   assert.deepEqual(boundedRemoteSettings({ ...draft, remoteControlEnabled: true, executionEnabled: false }),
     { remoteControlEnabled: true, websshEnabled: true, executionEnabled: false });
+});
+
+test("rescue installation is pending until independently observed, without changing Agent identity", () => {
+  const state = { desired: { privileged: { rescueHelperEnabled: true, requiredPrivilegeMode: 2 } },
+    observation: { helperInstalled: false } } as any;
+  assert.equal(needsRescueInstall(state), true);
+  assert.equal(state.desired.privileged.requiredPrivilegeMode, 2);
+  assert.equal(needsRescueInstall({ ...state, observation: undefined }), true);
+  assert.equal(needsRescueInstall({ ...state, observation: { helperInstalled: true } } as any), false);
+  assert.equal(needsRescueInstall({ desired: { privileged: { rescueHelperEnabled: false } } } as any), false);
 });

@@ -11,7 +11,7 @@ import { TwoFactorProofSchema } from "@komari/proto/komari/common/v1/common_pb";
 import { PrivilegeMode } from "@komari/proto/komari/report/v1/report_pb";
 import { HostAction, HostOperationPhase } from "@komari/proto/komari/host/v1/host_pb";
 import { connectClients, connectUnary } from "@/api/connect/client";
-import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings } from "@/utils/privilegedDelivery";
+import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings, needsRescueInstall } from "@/utils/privilegedDelivery";
 
 const labels: Record<State, string> = {
   [State.UNSPECIFIED]: "初始化中",
@@ -44,7 +44,7 @@ function Snapshot({ revision }: { revision: PrivilegedRevision }) {
   if (!settings) return null;
   return <Flex direction="column" gap="1">
     {settingLabels.map(([key, label]) => <Text size="2" key={key}>{label}：{settings[key] ? "开启" : "关闭"}</Text>)}
-    <Text size="2">目标身份：{modeLabels[settings.requiredPrivilegeMode]}</Text>
+    <Text size="2">Agent 目标身份：{modeLabels[settings.requiredPrivilegeMode]}</Text>
   </Flex>;
 }
 
@@ -94,6 +94,8 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
   const expired = expiresAt !== undefined && expiresAt <= now;
   const countdown = expiresAt === undefined ? undefined : Math.max(0, Math.ceil((expiresAt - now) / 1000));
   const ready = state?.protocolVersion === 2;
+  const rescueInstallNeeded = state && needsRescueInstall(state);
+  const rescueInstallSupported = state?.supportedHostActions.includes(HostAction.INSTALL_RESCUE_HELPER);
   const serviceId = desired?.authorization?.serviceId ?? state?.observation?.serviceId;
   const trustedServiceId = serviceId && /^[A-Za-z0-9_.-]{1,128}$/.test(serviceId) && !serviceId.startsWith("-");
   const actions = desired?.authorization?.actions ?? [];
@@ -153,11 +155,19 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
       {desired && desired.revision !== state.appliedRevision && <>
         <Text size="2" weight="medium">期望配置（r{desired.revision.toString()}）</Text>
         <Snapshot revision={desired} />
+        {rescueInstallNeeded && <Callout.Root color="orange"><Callout.Text>
+          <Flex direction="column" gap="1">
+            <Text>此配置需要安装救援组件。救援作为独立的 root 服务运行，安装救援不会把 Agent 改成 root；Agent 按上方目标身份运行。</Text>
+            <Text>{rescueInstallSupported
+              ? "面板 2FA 确认后，页面会显示本机命令；执行该命令并完成 PAM 认证，Host 会自动下载同版本组件、验证发布者签名并安装，无需提前运行安装脚本或 fetch-helper。"
+              : "此节点尚未声明救援安装能力。请先更新 Agent 和 Host，并准备发布者信任密钥及 PAM；本机明确禁止救援时需先由管理员调整策略。"}</Text>
+          </Flex>
+        </Callout.Text></Callout.Root>}
         {desired.errors.map((e, i) => <Text key={i} color="red">{e.message}</Text>)}
         {desired.state === State.NEEDS_CONFIRMATION && ready && <Flex gap="2" wrap="wrap">
           <TextField.Root type="password" autoComplete="one-time-code" placeholder="面板 2FA 验证码"
             value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void confirm(); }} />
-          <Button disabled={busy || !code.trim()} onClick={() => void confirm()}>确认此版本</Button>
+          <Button disabled={busy || !code.trim() || !!rescueInstallNeeded && !rescueInstallSupported} onClick={() => void confirm()}>确认此版本</Button>
         </Flex>}
         {desired.state === State.NEEDS_MANUAL_AUTHORIZATION && <Callout.Root color="orange"><Callout.Text>
           <Flex direction="column" gap="2">
@@ -165,7 +175,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
             {countdown !== undefined && <Text>{expired ? "授权已过期，请保存新版本后重新确认" : `${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, "0")} 后过期`}</Text>}
             {hostSupported && hostCommand ? <>
               <Text>在目标节点的本机管理员终端执行：</Text><code className="break-all select-all">{hostCommand}</code>
-              {actions.includes(HostAction.INSTALL_RESCUE_HELPER) && <Text>先用 komari-host fetch-helper --version 指定发布版本，预取并验证救援组件；本机 apply 会再次独立验签。</Text>}
+              {actions.includes(HostAction.INSTALL_RESCUE_HELPER) && <Text>此命令包含救援安装：本机认证后自动下载并验签，再安装独立的 root 救援服务。下载或验签失败不会停止原 Agent。</Text>}
             </> : <Text>此节点尚未准备好所需主机操作。Linux systemd 需安装新版 host 工具、固定主机信任密钥和 PAM 依赖后重启 agent；Windows/macOS 暂不支持身份转换与救援安装。</Text>}
           </Flex>
         </Callout.Text></Callout.Root>}
@@ -174,6 +184,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
         setDraft(create(PrivilegedConfigSchema, desired?.privileged ?? applied?.privileged)); setEditing(true);
       }}>编辑新版本</Button>
       {editing && <Flex direction="column" gap="2">
+        <Text size="2" color="gray">救援组件以独立 root 服务运行。开启救援不会修改下方的 Agent 目标身份；救援与普通远程控制需互斥。</Text>
         {settingLabels.map(([key, label]) => <Flex key={key} gap="2">
           <Checkbox disabled={(key === "websshEnabled" || key === "executionEnabled") && !draft.remoteControlEnabled} checked={draft[key]} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
           <Text>{label}</Text>
