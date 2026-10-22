@@ -9,7 +9,7 @@
     "build:system": "tsc -b && node ./script/build-system-ui.mjs",
     "lint": "eslint .",
     "audit:security": "npm audit --include=dev --audit-level=low --json",
-    "test": "node --test tests/auditP0Web.test.ts tests/bindTicket.test.ts tests/connectMigration.test.ts tests/consolePasskeyIntent.test.ts tests/dashboard.test.ts tests/dashboardSession.test.ts tests/dashboardSettings.test.ts tests/loginRedirect.test.ts tests/returnRouteLines.test.ts tests/reverseProxy.test.ts tests/privilegedDelivery.test.ts",
+    "test": "node --test tests/auditP0Web.test.ts tests/bindTicket.test.ts tests/connectMigration.test.ts tests/consolePasskeyIntent.test.ts tests/dashboard.test.ts tests/dashboardSession.test.ts tests/dashboardSettings.test.ts tests/loginRedirect.test.ts tests/returnRouteLines.test.ts tests/reverseProxy.test.ts tests/privilegedDelivery.test.ts tests/deploymentObservation.test.ts",
     "preview": "vite preview",
     "i18n:sync": "node ./script/i18n-sync.mjs",
     "i18n:sync:dry": "node ./script/i18n-sync.mjs --dry-run",

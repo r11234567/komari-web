@@ -1,7 +1,6 @@
 import * as React from "react";
 import { durationFromMs, timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import {
-  AgentRuntimeIdentity,
   type ConfigDelivery,
   type DeploymentProfile,
 } from "@komari/proto/komari/deployment/v1/deployment_pb";
@@ -9,11 +8,11 @@ import {
   RuntimeConfigSchema,
 } from "@komari/proto/komari/config/v1/config_pb";
 import { DeliveryState } from "@komari/proto/komari/common/v1/common_pb";
+import type { InstallationObservation } from "@komari/proto/komari/report/v1/report_pb";
 import { create } from "@bufbuild/protobuf";
 import {
   Badge,
   Button,
-  Callout,
   Checkbox,
   Dialog,
   Flex,
@@ -22,16 +21,15 @@ import {
   TextField,
 } from "@radix-ui/themes";
 import {
-  AlertTriangle,
-  Copy,
   Download,
-  Server,
   ShieldAlert,
   SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { connectUnary } from "@/api/connect/client";
 import { PrivilegedDeliveryPanel } from "./PrivilegedDeliveryPanel";
+import { InstallationObservationPanel } from "./InstallationObservationPanel";
+import { acceptDelivery, runtimeDraft } from "@/utils/deploymentObservation";
 import { useConnect } from "@/contexts/ConnectContext";
 
 const deliveryText: Record<DeliveryState, string> = {
@@ -57,7 +55,7 @@ const listToText = (value: string[] | undefined) => (value ?? []).join(", ");
 
 const intervalSeconds = (seconds: string) => {
   const parsed = Number(seconds);
-  return Number.isFinite(parsed) && parsed >= 1 ? Math.round(parsed * 1000) : undefined;
+  return Number.isFinite(parsed) && parsed >= 1 && parsed <= 300 ? Math.round(parsed * 1000) : undefined;
 };
 
 // ─── main component ───────────────────────────────────────────────────────────
@@ -73,12 +71,19 @@ export function AgentDeploymentDialog({
   title = "配置下发",
   iconClassName,
 }: AgentDeploymentDialogProps) {
-  const { deployment } = useConnect();
+  const { deployment, browser } = useConnect();
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [profile, setProfile] = React.useState<DeploymentProfile>();
   const [delivery, setDelivery] = React.useState<ConfigDelivery>();
+  const [installation, setInstallation] = React.useState<InstallationObservation>();
+  const [receivedAt, setReceivedAt] = React.useState<Timestamp>();
+  const [reportedOS, setReportedOS] = React.useState("");
+  const [nodeInfoError, setNodeInfoError] = React.useState("");
+  const [loadedRevision, setLoadedRevision] = React.useState(0n);
+  const [refreshError, setRefreshError] = React.useState("");
+  const [loadError, setLoadError] = React.useState("");
 
   const controllerRef = React.useRef<AbortController | null>(null);
 
@@ -89,54 +94,66 @@ export function AgentDeploymentDialog({
     const controller = new AbortController();
     controllerRef.current = controller;
     setLoading(true);
+    setLoadError("");
     try {
-      const deployResp = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
-        deployment.getDeployment({ agentId }, { signal, timeoutMs }),
-      );
+      const [deployResult, nodeResult] = await Promise.allSettled([
+        connectUnary({ signal: controller.signal }, (signal, timeoutMs) => deployment.getDeployment({ agentId }, { signal, timeoutMs })),
+        connectUnary({ signal: controller.signal }, (signal, timeoutMs) => browser.getAgent({ agentId }, { signal, timeoutMs })),
+      ]);
+      if (deployResult.status === "rejected") throw deployResult.reason;
+      const deployResp = deployResult.value;
       if (!controller.signal.aborted) {
         setProfile(deployResp.profile);
         setDelivery(deployResp.delivery);
+        setLoadedRevision(deployResp.delivery?.desiredRevision ?? 0n);
+        setInstallation(deployResp.installation);
+        setReceivedAt(deployResp.installationReceivedAt);
+        setReportedOS(deployResp.installation?.operatingSystem || (nodeResult.status === "fulfilled" ? nodeResult.value.agent?.basicInfo?.os : "") || "");
+        setNodeInfoError(nodeResult.status === "rejected" ? String(nodeResult.reason) : "");
       }
     } catch (error) {
       if (!controller.signal.aborted) {
-        toast.error(error instanceof Error ? error.message : "读取部署配置失败");
+        setLoadError(error instanceof Error ? error.message : "读取部署配置失败");
       }
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [agentId, deployment]);
+  }, [agentId, deployment, browser]);
 
   React.useEffect(() => {
+    setLoadError(""); setRefreshError(""); setProfile(undefined); setDelivery(undefined); setInstallation(undefined); setReceivedAt(undefined); setReportedOS(""); setNodeInfoError("");
     if (open) void load();
     else stopActiveRequest();
     return stopActiveRequest;
   }, [open, load]);
 
-  const updateInstall = <K extends keyof NonNullable<DeploymentProfile["install"]>>(
-    key: K,
-    value: NonNullable<DeploymentProfile["install"]>[K],
-  ) => {
-    setProfile((current) => {
-      if (!current?.install) return current;
-      return { ...current, install: { ...current.install, [key]: value } };
-    });
-  };
+  React.useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    let pending = false;
+    const timer = window.setInterval(() => {
+      if (pending) return;
+      pending = true;
+      void connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
+        deployment.getDeployment({ agentId }, { signal, timeoutMs })).then((response) => {
+        if (controller.signal.aborted) return;
+        // Refresh observations/status without replacing unsaved runtime edits.
+        setInstallation(response.installation); setReceivedAt(response.installationReceivedAt);
+        if (response.installation?.operatingSystem) setReportedOS(response.installation.operatingSystem);
+        setDelivery((current) => acceptDelivery(current, response.delivery) ? response.delivery : current); setRefreshError("");
+      }).catch((error: unknown) => {
+        if (!controller.signal.aborted) setRefreshError(error instanceof Error ? error.message : "状态刷新失败");
+      }).finally(() => { pending = false; });
+    }, 5_000);
+    return () => { controller.abort(); window.clearInterval(timer); };
+  }, [open, agentId, deployment]);
 
   const updateRuntime = (changes: Partial<NonNullable<DeploymentProfile["runtime"]>>) => {
     setProfile((current) => {
       if (!current) return current;
-      const previous = current.runtime;
       return {
         ...current,
-        runtime: create(RuntimeConfigSchema, {
-          memoryIncludeCache: changes.memoryIncludeCache ?? previous?.memoryIncludeCache,
-          detailedGpu: changes.detailedGpu ?? previous?.detailedGpu,
-          includeNics: changes.includeNics ?? previous?.includeNics ?? [],
-          excludeNics: changes.excludeNics ?? previous?.excludeNics ?? [],
-          includeMountpoints: changes.includeMountpoints ?? previous?.includeMountpoints ?? [],
-          reportInterval: "reportInterval" in changes ? changes.reportInterval : previous?.reportInterval,
-          trafficResetDay: "trafficResetDay" in changes ? changes.trafficResetDay : previous?.trafficResetDay,
-        }),
+        runtime: create(RuntimeConfigSchema, runtimeDraft(current.runtime, changes)),
       };
     });
   };
@@ -148,21 +165,13 @@ export function AgentDeploymentDialog({
     controllerRef.current = controller;
     setSaving(true);
     try {
-      const runtime = create(RuntimeConfigSchema, {
-        memoryIncludeCache: profile.runtime?.memoryIncludeCache ?? false,
-        detailedGpu: profile.runtime?.detailedGpu ?? false,
-        includeNics: profile.runtime?.includeNics ?? [],
-        excludeNics: profile.runtime?.excludeNics ?? [],
-        includeMountpoints: profile.runtime?.includeMountpoints ?? [],
-        reportInterval: profile.runtime?.reportInterval,
-        trafficResetDay: profile.runtime?.trafficResetDay,
-      });
+      const runtime = create(RuntimeConfigSchema, runtimeDraft(profile.runtime));
       const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
         deployment.saveDeploymentProfile(
           {
             agentId,
-            profile: { ...profile, runtime },
-            expectedRevision: delivery?.desiredRevision ?? 0n,
+            profile: { agentId, runtime },
+            expectedRevision: loadedRevision,
             forceDispatch: true,
           },
           { signal, timeoutMs },
@@ -171,6 +180,7 @@ export function AgentDeploymentDialog({
       if (!controller.signal.aborted) {
         setProfile(response.profile);
         setDelivery(response.delivery);
+        setLoadedRevision(response.delivery?.desiredRevision ?? 0n);
         toast.success("普通配置已保存并创建新的下发版本");
       }
     } catch (error) {
@@ -182,11 +192,7 @@ export function AgentDeploymentDialog({
     }
   };
 
-  const install = profile?.install;
   const runtime = profile?.runtime;
-  const nonPrivilegedRuntime =
-    install?.runtimeIdentity === AgentRuntimeIdentity.SERVICE_ACCOUNT ||
-    install?.runtimeIdentity === AgentRuntimeIdentity.CURRENT_USER;
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -197,73 +203,16 @@ export function AgentDeploymentDialog({
       </Dialog.Trigger>
       <Dialog.Content style={{ maxWidth: "760px", maxHeight: "90vh", overflowY: "auto" }}>
         <Dialog.Title>{title}</Dialog.Title>
-        {loading || !profile ? (
+        {loadError ? (
+          <Flex direction="column" gap="2"><Text color="red">读取配置失败：{loadError}</Text><Button onClick={() => void load()}>重试</Button></Flex>
+        ) : loading || !profile ? (
           <Text color="gray">正在读取部署配置...</Text>
         ) : (
           <Flex direction="column" gap="5" mt="4">
 
-            {/* ════════════════════════════════════════════════════════════════
-                模块一：以下请到机器改（本地宿主静态配置 / 不可改变配置）
-               ════════════════════════════════════════════════════════════════ */}
-            <Flex direction="column" gap="3" className="rounded-lg border p-4 bg-[var(--gray-a1)]">
-              <Flex align="center" gap="2">
-                <Server size={18} className="text-gray-500" />
-                <Text weight="bold" size="3">1. 以下请到机器改（本地宿主静态配置）</Text>
-              </Flex>
-              <Callout.Root color="gray" size="1">
-                <Callout.Icon><AlertTriangle size={13} /></Callout.Icon>
-                <Callout.Text>
-                  说明：以下项主控严禁远程在线篡改。如需调整，请登录机器在本地 CLI 或配置文件中修改。
-                </Callout.Text>
-              </Callout.Root>
+            <InstallationObservationPanel observation={installation} receivedAt={receivedAt} error={nodeInfoError} />
 
-              <div className="grid gap-3 sm:grid-cols-2 text-sm bg-[var(--gray-a2)] p-3 rounded-md">
-                <div>
-                  <span className="text-gray-500">探针运行身份：</span>
-                  <Text weight="medium">
-                    {nonPrivilegedRuntime ? "专用非特权服务账号 (komari)" : "root / 管理员"}
-                  </Text>
-                </div>
-                <div>
-                  <span className="text-gray-500">安装目录：</span>
-                  <code>{install?.installDirectory || "/opt/komari-agent"}</code>
-                </div>
-                <div>
-                  <span className="text-gray-500">系统服务名称：</span>
-                  <code>{install?.serviceName || "komari-agent.service"}</code>
-                </div>
-                <div>
-                  <span className="text-gray-500">自动更新策略：</span>
-                  <Text weight="medium">
-                    {install?.disableAutoUpdate ? "已禁用自动更新" : "已启用自动更新"}
-                  </Text>
-                </div>
-                <div>
-                  <span className="text-gray-500">TLS 证书校验：</span>
-                  <Text weight="medium">
-                    {install?.ignoreUnsafeCertificate ? "允许自签名/不安全证书" : "严格校验 (TLS Validated)"}
-                  </Text>
-                </div>
-                <div>
-                  <span className="text-gray-500">连接协议：</span>
-                  <Text weight="medium">Connect-RPC over HTTP/2</Text>
-                </div>
-              </div>
-
-              <Flex direction="column" gap="1" mt="1">
-                <Text size="1" color="gray">宿主机本地修改命令指引：</Text>
-                <Flex gap="2" align="center">
-                  <code style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--gray-a3)", padding: "6px 10px", borderRadius: "4px", wordBreak: "break-all", flex: 1 }}>
-                    komari-agent config show
-                  </code>
-                  <Button variant="soft" size="1" onClick={() => navigator.clipboard.writeText("komari-agent config show").then(() => toast.success("命令已复制"))}>
-                    <Copy size={12} />复制
-                  </Button>
-                </Flex>
-              </Flex>
-            </Flex>
-
-            <PrivilegedDeliveryPanel agentId={agentId} />
+            <PrivilegedDeliveryPanel agentId={agentId} operatingSystem={reportedOS} />
 
             {/* ════════════════════════════════════════════════════════════════
                 模块三：以下为普通配置下发（在线运行时配置 / Ordinary Track）
@@ -282,34 +231,26 @@ export function AgentDeploymentDialog({
                 <Toggle label="启用详细 GPU 采集监控" checked={runtime?.detailedGpu ?? false} onChange={(value) => updateRuntime({ detailedGpu: value })} />
                 <Toggle
                   label="从网卡获取 IP 地址"
-                  checked={install?.getIpAddressFromNic ?? false}
-                  onChange={(value) => updateInstall("getIpAddressFromNic", value)}
+                  checked={runtime?.getIpAddrFromNic ?? false}
+                  onChange={(value) => updateRuntime({ getIpAddrFromNic: value })}
                 />
               </div>
 
               <Flex direction="column" gap="2">
                 <TextField.Root
                   defaultValue={runtime?.reportInterval ? String(Number(runtime.reportInterval.seconds) + runtime.reportInterval.nanos / 1_000_000_000) : ""}
-                  placeholder="指标采集周期（秒，默认 1~3）"
+                  placeholder="指标采集周期（1~300 秒）"
                   onBlur={(event) => {
                     const milliseconds = intervalSeconds(event.target.value);
                     updateRuntime({ reportInterval: milliseconds ? durationFromMs(milliseconds) : undefined });
                   }}
                 />
                 <TextField.Root
-                  defaultValue={runtime?.trafficResetDay ? String(runtime.trafficResetDay) : ""}
+                  defaultValue={runtime?.trafficResetDay !== undefined ? String(runtime.trafficResetDay) : ""}
                   placeholder="流量重置日（1~31，0 为禁用）"
                   onBlur={(event) => {
                     const day = Number(event.target.value);
-                    updateRuntime({ trafficResetDay: Number.isInteger(day) && day >= 1 && day <= 31 ? day : undefined });
-                  }}
-                />
-                <TextField.Root
-                  value={install?.githubProxy ?? ""}
-                  placeholder="GitHub 代理镜像源（如 https://ghproxy.net/）"
-                  onChange={(event) => {
-                    updateInstall("githubProxy", event.target.value);
-                    updateInstall("enableGithubProxy", event.target.value.trim() !== "");
+                    updateRuntime({ trafficResetDay: event.target.value.trim() !== "" && Number.isInteger(day) && day >= 0 && day <= 31 ? day : undefined });
                   }}
                 />
                 <TextField.Root defaultValue={listToText(runtime?.includeNics)} placeholder="监控网卡白名单（逗号分隔，留空监测所有网卡）" onBlur={(event) => updateRuntime({ includeNics: listFromText(event.target.value) })} />
@@ -326,9 +267,12 @@ export function AgentDeploymentDialog({
                   </Badge>
                 </Flex>
                 <Text size="2">期望版本：{delivery?.desiredRevision?.toString() ?? "0"}；已应用版本：{delivery?.appliedRevision?.toString() ?? "0"}</Text>
+                {refreshError && <Text size="2" color="orange">状态刷新失败，当前显示最近一次结果：{refreshError}</Text>}
+                {delivery && delivery.desiredRevision !== loadedRevision && <Text size="2" color="orange">面板配置版本已变化，请重新打开此窗口后再编辑，避免覆盖其他修改。</Text>}
                 <Text size="2">保存：{toLocalTime(delivery?.savedAt)}；发送：{toLocalTime(delivery?.sentAt)}；最近处理完成：{toLocalTime(delivery?.finishedAt)}</Text>
                 <Text size="1" color="gray">时间为面板记录的配置处理回执；升级安装不会清除已有配置和历史时间。</Text>
                 {delivery?.error && <Text size="2" color="red">{delivery.error.message}</Text>}
+                {delivery?.error?.message.includes("same runtime revision has different content") && <Text size="2" color="orange">本地快照与面板同版本内容不一致，继续保留本地配置。请核对表单后点击“保存并下发普通配置”创建新版本，无需重装或重新绑定。</Text>}
                 <Flex mt="2" pt="2" style={{ borderTop: "1px solid var(--gray-a4)" }} gap="2" align="center" wrap="wrap">
                   <Text size="1" color="gray">救援模式与性能诊断在独立页面操作。</Text>
                   <a href={`/admin/rescue?agent=${agentId}`} target="_blank" rel="noreferrer">
@@ -340,7 +284,7 @@ export function AgentDeploymentDialog({
               </Flex>
 
               <Flex justify="end">
-                <Button disabled={saving} onClick={() => void saveAndDispatch()}>
+                <Button disabled={saving || !!delivery && delivery.desiredRevision !== loadedRevision} onClick={() => void saveAndDispatch()}>
                   <SlidersHorizontal size={14} />
                   {saving ? "正在保存..." : "保存并下发普通配置"}
                 </Button>
