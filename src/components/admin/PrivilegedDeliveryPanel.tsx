@@ -201,7 +201,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
         setDraft(create(PrivilegedConfigSchema, desired?.privileged ?? applied?.privileged)); setEditing(true);
       }}>编辑新版本</Button>
       {editing && <Flex direction="column" gap="2">
-        <Text size="2" color="gray">救援组件以独立 root 服务运行。开启救援不会修改下方的 Agent 目标身份；救援与普通远程控制需互斥。</Text>
+        <Text size="2" color="gray">救援组件以独立 root 服务运行。开启救援不会修改下方的 Agent 目标身份，可与普通远程控制同时启用。</Text>
         {settingLabels.map(([key, label]) => <Flex key={key} gap="2">
           <Checkbox disabled={(key === "websshEnabled" || key === "executionEnabled") && !draft.remoteControlEnabled} checked={draft[key]} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
           <Text>{label}</Text>
