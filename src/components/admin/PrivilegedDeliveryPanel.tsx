@@ -12,6 +12,7 @@ import { PrivilegeMode } from "@komari/proto/komari/report/v1/report_pb";
 import { HostAction, HostOperationPhase } from "@komari/proto/komari/host/v1/host_pb";
 import { connectClients, connectUnary } from "@/api/connect/client";
 import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings, needsRescueInstall } from "@/utils/privilegedDelivery";
+import { unsupportedHostPlatform } from "@/utils/deploymentObservation";
 
 const labels: Record<State, string> = {
   [State.UNSPECIFIED]: "尚未建立特权配置基线",
@@ -48,7 +49,7 @@ function Snapshot({ revision }: { revision: PrivilegedRevision }) {
   </Flex>;
 }
 
-export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId: string; history?: boolean }) {
+export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSystem }: { agentId: string; history?: boolean; operatingSystem?: string }) {
   const [state, setState] = React.useState<GetNodeConfigStateResponse>();
   const [revisions, setRevisions] = React.useState<PrivilegedRevision[]>([]);
   const [error, setError] = React.useState("");
@@ -58,6 +59,18 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
   const [code, setCode] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [now, setNow] = React.useState(Date.now());
+  const [reportedOS, setReportedOS] = React.useState("");
+  React.useEffect(() => {
+    const controller = new AbortController();
+    setReportedOS(operatingSystem ?? "");
+    if (!operatingSystem) {
+      void connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
+        connectClients.browser.getAgent({ agentId }, { signal, timeoutMs })).then((response) => {
+        if (!controller.signal.aborted) setReportedOS(response.agent?.basicInfo?.os ?? "");
+      }).catch(() => { /* Unknown OS stays unknown; never use the install template. */ });
+    }
+    return () => controller.abort();
+  }, [agentId, operatingSystem]);
   const currentAgent = React.useRef(agentId);
   currentAgent.current = agentId;
   const read = React.useCallback((signal: AbortSignal) => connectUnary({ signal }, (signal, timeoutMs) =>
@@ -93,7 +106,8 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
   const expiresAt = expiry ? timestampDate(expiry).getTime() : undefined;
   const expired = expiresAt !== undefined && expiresAt <= now;
   const countdown = expiresAt === undefined ? undefined : Math.max(0, Math.ceil((expiresAt - now) / 1000));
-  const ready = state?.protocolVersion === 2;
+  const unsupportedPlatform = unsupportedHostPlatform(reportedOS);
+  const ready = state?.protocolVersion === 2 && !unsupportedPlatform;
   const rescueInstallNeeded = state && needsRescueInstall(state);
   const rescueInstallSupported = state?.supportedHostActions.includes(HostAction.INSTALL_RESCUE_HELPER);
   const serviceId = desired?.authorization?.serviceId ?? state?.observation?.serviceId;
@@ -141,7 +155,9 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
     <Text size="3" weight="bold">特权配置下发状态</Text>
     {error && <Callout.Root color="red"><Callout.Text>{error}</Callout.Text></Callout.Root>}
     {!state ? <Text>正在读取配置状态…</Text> : <>
-      {!ready && <Text color="orange">此节点尚未协商新版协议。请先升级并迁移安装，再下发特权配置。</Text>}
+      {!ready && <Text color="orange">{unsupportedPlatform
+        ? `${unsupportedPlatform} 当前不支持特权配置协议及主机操作；仅监控节点无需建立特权基线，普通配置通过独立通道下发。`
+        : "尚未收到此节点的特权协议协商。普通配置通过独立通道下发；Linux systemd 节点如需特权配置，请核对本机安装清单、Host 工具与初始化日志。"}</Text>}
       {ready && !desired && <Text size="2" color="orange">Agent 已协商新版协议，但尚未提交特权基线。请检查 Agent 的初始化日志；普通配置通过独立通道加载，此状态不能代表普通配置的下发结果。</Text>}
       <Badge color={desired?.state === State.DELIVERED ? "green" : "orange"}>{desired?.installationBaseline && state.appliedRevision === 0n ? "基线初始化中，等待 Agent 确认" : labels[desired?.state ?? State.UNSPECIFIED]}</Badge>
       <Text size="2">期望版本：{desired?.revision.toString() ?? "0"}；已应用版本：{state.appliedRevision.toString()}</Text>
@@ -174,7 +190,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false }: { agentId:
           <Flex direction="column" gap="2">
             <Text>需要本机管理员操作。密码仅在本机系统认证中输入。</Text>
             {countdown !== undefined && <Text>{expired ? "授权已过期，请保存新版本后重新确认" : `${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, "0")} 后过期`}</Text>}
-            {hostSupported && hostCommand ? <>
+            {ready && hostSupported && hostCommand ? <>
               <Text>在目标节点的本机管理员终端执行：</Text><code className="break-all select-all">{hostCommand}</code>
               {actions.includes(HostAction.INSTALL_RESCUE_HELPER) && <Text>此命令包含救援安装：本机认证后自动下载并验签，再安装独立的 root 救援服务。下载或验签失败不会停止原 Agent。</Text>}
             </> : <Text>此节点尚未准备好所需主机操作。Linux systemd 需安装新版 host 工具、固定主机信任密钥和 PAM 依赖后重启 agent；Windows/macOS 暂不支持身份转换与救援安装。</Text>}

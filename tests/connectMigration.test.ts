@@ -88,13 +88,13 @@ test("remote pages use typed Connect adapters instead of legacy transports", asy
   assert.match(adapter, /AbortSignal\.any/);
 });
 
-test("new deployment profiles use a dedicated service account identity", async () => {
+test("deployment status reads daemon observations instead of guessing a template account", async () => {
   const deploymentDialog = await readFile(
     new URL("../src/components/admin/AgentDeploymentDialog.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(deploymentDialog, /AgentRuntimeIdentity\.SERVICE_ACCOUNT/);
-  assert.match(deploymentDialog, /专用非特权服务账号/);
+  assert.match(deploymentDialog, /InstallationObservationPanel/);
+  assert.doesNotMatch(deploymentDialog, /专用非特权服务账号|\/opt\/komari-agent|TLS Validated|Connect-RPC over HTTP\/2/);
 });
 
 test("admin console reads go through typed Connect adapters, not REST bridges", async () => {
