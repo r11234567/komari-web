@@ -19,3 +19,8 @@ export function boundedRemoteSettings<T extends { remoteControlEnabled?: boolean
   return { ...settings, websshEnabled: !!settings.remoteControlEnabled && !!settings.websshEnabled,
     executionEnabled: !!settings.remoteControlEnabled && !!settings.executionEnabled };
 }
+
+// An absent observation is unknown, never evidence that installation succeeded.
+export function needsRescueInstall(state: GetNodeConfigStateResponse) {
+  return !!state.desired?.privileged?.rescueHelperEnabled && state.observation?.helperInstalled !== true;
+}

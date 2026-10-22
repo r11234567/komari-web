@@ -256,7 +256,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
             <Text size="2" color="red">{statusError}</Text>
           ) : (
             <Text size="2" color="orange">
-              此节点当前不可进入救援模式。需要禁用普通远程控制，并确保救援辅助程序已安装且正在运行。
+              此节点当前不可进入救援模式。请在特权配置中关闭普通远程控制、开启救援，完成面板 2FA 和本机授权后，Host 会自动安装独立的 root 救援服务；Agent 无需改为 root。
             </Text>
           )}
           {statusLoaded && !statusError && (
