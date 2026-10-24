@@ -14,7 +14,6 @@ import {
   Dialog,
   Flex,
   IconButton,
-  Tabs,
   Text,
   TextField,
   Theme,
@@ -25,7 +24,6 @@ import { useTranslation } from "react-i18next";
 import { Cross1Icon } from "@radix-ui/react-icons";
 import { Copy, Download, FilePlus2, FolderPlus, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { TablerAlertTriangleFilled } from "../../components/Icones/Tabler";
-import CommandClipboardPanel from "@/pages/terminal/CommandClipboard";
 import { Toaster } from "@/components/ui/sonner";
 import { TerminalContext } from "@/contexts/TerminalContext";
 import {
@@ -98,8 +96,8 @@ const TerminalArea: React.FC<TerminalAreaProps> = ({
         onClick={toggleClipboard}
         role="button"
         tabIndex={0}
-        aria-label={isOpen ? t("common.close", "Close") : t("command_clipboard.title", "Command Clipboard")}
-        title={isOpen ? t("common.close", "Close") : t("command_clipboard.title", "Command Clipboard")}
+        aria-label={isOpen ? t("common.close", "Close") : t("terminal.files", "Files")}
+        title={isOpen ? t("common.close", "Close") : t("terminal.files", "Files")}
       >
         {isOpen ? ">" : "<"}
       </div>
@@ -293,22 +291,6 @@ const FileManagerPanel: React.FC<{
     </Flex>
   );
 };
-
-const SidePanel: React.FC<{
-  connected: boolean;
-  requestFile: (input: FileCommandInput) => Promise<FileEvent[]>;
-}> = ({ connected, requestFile }) => (
-  <div className="km-terminal-clipboard h-screen p-2 min-w-64" style={{ flex: 1 }}>
-    <Tabs.Root defaultValue="commands" className="flex h-full flex-col">
-      <Tabs.List>
-        <Tabs.Trigger value="commands">Commands</Tabs.Trigger>
-        <Tabs.Trigger value="files">Files</Tabs.Trigger>
-      </Tabs.List>
-      <Tabs.Content value="commands" className="min-h-0 flex-1"><CommandClipboardPanel className="h-full w-full" /></Tabs.Content>
-      <Tabs.Content value="files" className="min-h-0 flex-1"><FileManagerPanel connected={connected} request={requestFile} /></Tabs.Content>
-    </Tabs.Root>
-  </div>
-);
 
 const TerminalPage = () => {
   const {
@@ -872,7 +854,11 @@ const TerminalPage = () => {
             appearance={appearance}
           />
           {isClipboardOpen && <Divider onMouseDown={startDragging} />}
-          {isClipboardOpen && <SidePanel connected={sessionConnected} requestFile={requestFile} />}
+          {isClipboardOpen && (
+            <div className="km-terminal-clipboard h-screen p-2 min-w-64" style={{ flex: 1 }}>
+              <FileManagerPanel connected={sessionConnected} request={requestFile} />
+            </div>
+          )}
         </Flex>
         <Dialog.Root
           open={otpDialogOpen}

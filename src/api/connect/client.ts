@@ -1,6 +1,7 @@
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { DashboardService } from "@komari/proto/komari/admin/v1/dashboard_pb";
+import { TerminalSettingsService } from "@komari/proto/komari/admin/v1/terminal_pb";
 import { MaintenanceService } from "@komari/proto/komari/admin/v1/maintenance_pb";
 import { PingTaskService } from "@komari/proto/komari/admin/v1/ping_pb";
 import { BrowserService } from "@komari/proto/komari/browser/v1/browser_pb";
@@ -36,6 +37,7 @@ const transport = createConnectTransport({
 
 const browser = createClient(BrowserService, transport);
 const dashboard = createClient(DashboardService, transport);
+const terminalSettings = createClient(TerminalSettingsService, transport);
 const maintenance = createClient(MaintenanceService, transport);
 const pingTask = createClient(PingTaskService, transport);
 const deployment = createClient(DeploymentService, transport);
@@ -52,6 +54,7 @@ export const connectClients = {
   browser,
   agentLifecycleClient: browser,
   dashboard,
+  terminalSettings,
   maintenance,
   pingTask,
   deployment,

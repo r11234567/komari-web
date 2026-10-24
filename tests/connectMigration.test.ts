@@ -99,13 +99,13 @@ test("deployment status reads daemon observations instead of guessing a template
 
 test("admin console reads go through typed Connect adapters, not REST bridges", async () => {
   const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
-  const [panels, alertFilters, sessions, logs, clipboard, database, pingContext, nodeDetailsContext] =
+  const [panels, alertFilters, sessions, logs, terminalSettings, database, pingContext, nodeDetailsContext] =
     await Promise.all([
       read("../src/components/admin/DashboardPanels.tsx"),
       read("../src/utils/adminAlertFilters.ts"),
       read("../src/pages/admin/sessions.tsx"),
       read("../src/pages/admin/log.tsx"),
-      read("../src/contexts/CommandClipboardContext.tsx"),
+      read("../src/hooks/useXtermjsSettings.ts"),
       read("../src/components/admin/DatabaseMaintenanceCard.tsx"),
       read("../src/contexts/PingTaskContext.tsx"),
       read("../src/contexts/NodeDetailsContext.tsx"),
@@ -114,7 +114,8 @@ test("admin console reads go through typed Connect adapters, not REST bridges", 
   assert.doesNotMatch(alertFilters, /\/api\/admin\//);
   assert.doesNotMatch(sessions, /\/api\/admin\/session/);
   assert.doesNotMatch(logs, /\/api\/admin\/logs/);
-  assert.doesNotMatch(clipboard, /\/api\/admin\/clipboard/);
+  assert.match(terminalSettings, /terminalSettings\.getTerminalSettings/);
+  assert.doesNotMatch(terminalSettings, /\/api\/admin\/settings\/xtermjs/);
   assert.doesNotMatch(database, /\/api\/admin\/database\//);
   assert.doesNotMatch(pingContext, /\/api\/admin\/ping/);
   assert.doesNotMatch(nodeDetailsContext, /\/api\/admin\/client\/list/);
