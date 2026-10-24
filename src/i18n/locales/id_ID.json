@@ -26,7 +26,8 @@
     "password_strength_error": "Kata sandi harus mengandung huruf besar, huruf kecil, dan angka",
     "password_too_short_error": "Kata sandi minimal 8 karakter",
     "qr_fetch_error": "Tidak dapat memuat kode QR",
-    "title": "Akun"
+    "title": "Akun",
+    "menu": "Akun"
   },
   "account_settings": {
     "bind_sso": "Hubungkan Akun Eksternal",
@@ -1490,7 +1491,10 @@
       "export_status_failed": "Failed",
       "export_status_cancelled": "Cancelled"
     },
-    "secret_copy_prevented": "Informasi rahasia tidak dapat disalin"
+    "secret_copy_prevented": "Informasi rahasia tidak dapat disalin",
+    "dashboard": {
+      "title": "Pengaturan Dasbor"
+    }
   },
   "status_settings": "Pengaturan Status",
   "terminal": {
@@ -1669,5 +1673,12 @@
   },
   "rescue": {
     "title": "Mode Penyelamatan"
+  },
+  "operations": {
+    "title": "Operasional",
+    "workbench": "Area Kerja"
+  },
+  "system": {
+    "title": "Sistem"
   }
 }

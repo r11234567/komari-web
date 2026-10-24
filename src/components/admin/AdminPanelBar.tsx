@@ -376,6 +376,10 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     );
   }, [pluginMenuItems]);
 
+  const bottomStartPath = mergedBaseMenuItems.find(
+    (item) => item.bottom,
+  )?.path;
+
   // 根据路径自动展开子菜单（包含动态扩展项；plugin-page 用 query 定位文件，
   // 因此子菜单匹配基于 pathname 部分）
   useEffect(() => {
@@ -770,20 +774,28 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
                         </div>
                       );
                     }
+                    const isBottomStart =
+                      item.bottom && item.path === bottomStartPath;
                     return (
-                      <SidebarItem
+                      <div
                         key={item.path}
-                        to={item.path}
-                        icon={renderIcon(
-                          item.icon,
-                          item.labelKey,
-                          "flex w-4 h-5 items-center justify-center",
-                        )}
-                        children={item.rawLabel || t(item.labelKey)}
-                        onClick={() => isMobile && setSidebarOpen(false)}
-                        newTab={item.newTab}
-                        reloadDocument={item.reloadDocument}
-                      />
+                        style={
+                          isBottomStart ? { marginTop: "auto" } : undefined
+                        }
+                      >
+                        <SidebarItem
+                          to={item.path}
+                          icon={renderIcon(
+                            item.icon,
+                            item.labelKey,
+                            "flex w-4 h-5 items-center justify-center",
+                          )}
+                          children={item.rawLabel || t(item.labelKey)}
+                          onClick={() => isMobile && setSidebarOpen(false)}
+                          newTab={item.newTab}
+                          reloadDocument={item.reloadDocument}
+                        />
+                      </div>
                     );
                   },
                 )}

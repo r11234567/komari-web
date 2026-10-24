@@ -26,7 +26,8 @@
     "password_strength_error": "パスワードには大文字、小文字、数字を含める必要があります",
     "password_too_short_error": "パスワードの長さは最低8文字でなければなりません",
     "qr_fetch_error": "QRコードを読み込めません",
-    "title": "アカウント"
+    "title": "アカウント",
+    "menu": "アカウント"
   },
   "account_settings": {
     "bind_sso": "外部アカウントをバインド",
@@ -1490,7 +1491,10 @@
       "export_status_failed": "Failed",
       "export_status_cancelled": "Cancelled"
     },
-    "secret_copy_prevented": "機密情報はコピーできません"
+    "secret_copy_prevented": "機密情報はコピーできません",
+    "dashboard": {
+      "title": "ダッシュボード設定"
+    }
   },
   "status_settings": "ステータス表示設定",
   "terminal": {
@@ -1669,5 +1673,12 @@
   },
   "rescue": {
     "title": "レスキュー"
+  },
+  "operations": {
+    "title": "運用",
+    "workbench": "ワークベンチ"
+  },
+  "system": {
+    "title": "システム"
   }
 }

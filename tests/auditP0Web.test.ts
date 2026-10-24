@@ -150,3 +150,36 @@ test("Audit Feature 4: Secret masking and anti-copy in renderProviders", () => {
   assert.match(renderSource, /secret_copy_prevented/);
   assert.match(renderSource, /userSelect:\s*"none"/);
 });
+
+test("Sidebar 1.5.0 layout: top-level items and categorized groups", () => {
+  const menuConfig = JSON.parse(readFileSync(new URL("../src/config/menuConfig.json", import.meta.url), "utf8"));
+  const topFour = menuConfig.menu.slice(0, 4).map((item: { labelKey: string; children?: unknown[] }) => ({
+    labelKey: item.labelKey,
+    hasChildren: Array.isArray(item.children),
+  }));
+  assert.deepEqual(topFour, [
+    { labelKey: "common.dashboard", hasChildren: false },
+    { labelKey: "common.serverList", hasChildren: false },
+    { labelKey: "operations.workbench", hasChildren: false },
+    { labelKey: "billing.title", hasChildren: false },
+  ]);
+
+  const groupKeys = menuConfig.menu
+    .filter((item: { children?: unknown[] }) => Array.isArray(item.children) && item.children.length > 0)
+    .map((item: { labelKey: string }) => item.labelKey);
+  assert.deepEqual(groupKeys, [
+    "operations.title",
+    "notification.title",
+    "theme.menu",
+    "plugin.title",
+    "system.title",
+    "account.menu",
+  ]);
+});
+
+test("Account page requires 2FA verification before entry when 2FA is enabled", () => {
+  const accountSource = readFileSync(new URL("../src/pages/admin/account.tsx", import.meta.url), "utf8");
+  assert.match(accountSource, /AccountTwoFactorGate/);
+  assert.match(accountSource, /account\?\.\["2fa_enabled"\]\s*&&\s*!twoFaVerified/);
+  assert.match(accountSource, /\/api\/admin\/2fa\/verify/);
+});

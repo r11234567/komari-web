@@ -26,7 +26,8 @@
     "password_strength_error": "密碼必須包含大寫，小寫字母和數字",
     "password_too_short_error": "密碼長度必須至少8位",
     "qr_fetch_error": "無法載入二維碼",
-    "title": "帳戶"
+    "title": "帳戶",
+    "menu": "帳戶"
   },
   "account_settings": {
     "bind_sso": "繫結外部帳戶",
@@ -1490,7 +1491,10 @@
       "export_status_failed": "失败",
       "export_status_cancelled": "已取消"
     },
-    "secret_copy_prevented": "敏感資訊禁止複製"
+    "secret_copy_prevented": "敏感資訊禁止複製",
+    "dashboard": {
+      "title": "儀表板設定"
+    }
   },
   "status_settings": "狀態顯示設定",
   "terminal": {
@@ -1669,5 +1673,12 @@
   },
   "rescue": {
     "title": "救援模式"
+  },
+  "operations": {
+    "title": "維運",
+    "workbench": "工作臺"
+  },
+  "system": {
+    "title": "系統"
   }
 }
