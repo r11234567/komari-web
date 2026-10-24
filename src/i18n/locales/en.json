@@ -26,7 +26,8 @@
     "password_strength_error": "Password must contain uppercase, lowercase letters, and numbers",
     "password_too_short_error": "Password must be at least 8 characters long",
     "qr_fetch_error": "Unable to load qrcode",
-    "title": "Account"
+    "title": "Account",
+    "menu": "Account"
   },
   "account_settings": {
     "bind_sso": "Bind External Account",
@@ -1760,5 +1761,12 @@
   },
   "rescue": {
     "title": "Rescue"
+  },
+  "operations": {
+    "title": "Operations",
+    "workbench": "Workbench"
+  },
+  "system": {
+    "title": "System"
   }
 }

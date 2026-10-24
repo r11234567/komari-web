@@ -6,9 +6,15 @@
       "icon": "LayoutDashboard"
     },
     {
-      "labelKey": "common.server",
+      "labelKey": "common.serverList",
       "path": "/admin/servers",
       "icon": "Server"
+    },
+    {
+      "labelKey": "operations.workbench",
+      "path": "/terminal",
+      "icon": "SquareTerminal",
+      "newTab": true
     },
     {
       "labelKey": "billing.title",
@@ -16,50 +22,72 @@
       "icon": "CircleDollarSign"
     },
     {
-      "labelKey": "settings.title",
-      "path": "/admin/settings",
+      "labelKey": "operations.title",
+      "path": "/admin/ping",
       "icon": "Bolt",
       "children": [
         {
-          "labelKey": "settings.site.title",
-          "path": "/admin/settings/site",
-          "icon": "Home"
+          "labelKey": "ping.title",
+          "path": "/admin/ping",
+          "icon": "Activity"
         },
         {
-          "labelKey": "settings.dashboard.title",
-          "path": "/admin/settings/dashboard",
-          "icon": "LayoutDashboard"
+          "labelKey": "exec.title",
+          "path": "/admin/exec",
+          "icon": "Code"
         },
         {
-          "labelKey": "settings.sign_on.title",
-          "path": "/admin/settings/sign-on",
-          "icon": "CircleArrowRight"
+          "labelKey": "sessions.title",
+          "path": "/admin/sessions",
+          "icon": "Users"
         },
         {
-          "labelKey": "settings.notification.title",
-          "path": "/admin/settings/notification",
-          "icon": "MessageCircleMore"
+          "labelKey": "rescue.title",
+          "path": "/admin/rescue",
+          "icon": "ShieldAlert"
+        },
+        {
+          "labelKey": "return_route.title",
+          "path": "/admin/return-route",
+          "icon": "Route"
+        }
+      ]
+    },
+    {
+      "labelKey": "notification.title",
+      "path": "/admin/notification/offline",
+      "icon": "Bell",
+      "children": [
+        {
+          "labelKey": "notification.offline.title",
+          "path": "/admin/notification/offline",
+          "icon": "Unplug"
+        },
+        {
+          "labelKey": "notification.load.title",
+          "path": "/admin/notification/load",
+          "icon": "TrendingUp"
+        },
+        {
+          "labelKey": "notification.traffic_report.title",
+          "path": "/admin/notification/traffic-report",
+          "icon": "BarChart2"
+        },
+        {
+          "labelKey": "notification.ping_loss.title",
+          "path": "/admin/notification/ping-loss",
+          "icon": "WifiOff"
         },
         {
           "labelKey": "settings.general.title",
-          "path": "/admin/settings/general",
+          "path": "/admin/notification/general",
           "icon": "Ellipsis"
-        },
-        {
-          "labelKey": "settings.xtermjs.title",
-          "path": "/admin/settings/xtermjs",
-          "icon": "Terminal"
-        },
-        {
-          "labelKey": "settings.metrics.title",
-          "path": "/admin/settings/metrics",
-          "icon": "Database"
         }
       ]
     },
     {
       "labelKey": "theme.menu",
-      "path": "/admin/theme",
+      "path": "/admin/settings/theme",
       "icon": "Palette",
       "children": [
         {
@@ -97,76 +125,82 @@
       ]
     },
     {
-      "labelKey": "notification.title",
-      "path": "/admin/notification",
-      "icon": "Bell",
+      "labelKey": "system.title",
+      "path": "/admin/settings/site",
+      "icon": "Bolt",
       "children": [
         {
-          "labelKey": "notification.offline.title",
-          "path": "/admin/notification/offline",
-          "icon": "Unplug"
+          "labelKey": "settings.site.title",
+          "path": "/admin/settings/site",
+          "icon": "Home"
         },
         {
-          "labelKey": "notification.load.title",
-          "path": "/admin/notification/load",
-          "icon": "TrendingUp"
-        },
-        {
-          "labelKey": "notification.traffic_report.title",
-          "path": "/admin/notification/traffic-report",
-          "icon": "BarChart2"
-        },
-        {
-          "labelKey": "notification.ping_loss.title",
-          "path": "/admin/notification/ping-loss",
-          "icon": "WifiOff"
+          "labelKey": "settings.dashboard.title",
+          "path": "/admin/settings/dashboard",
+          "icon": "LayoutDashboard"
         },
         {
           "labelKey": "settings.general.title",
-          "path": "/admin/notification/general",
+          "path": "/admin/settings/general",
           "icon": "Ellipsis"
+        },
+        {
+          "labelKey": "settings.sign_on.title",
+          "path": "/admin/settings/sign-on",
+          "icon": "CircleArrowRight"
+        },
+        {
+          "labelKey": "settings.xtermjs.title",
+          "path": "/admin/settings/xtermjs",
+          "icon": "Terminal"
+        },
+        {
+          "labelKey": "settings.metrics.title",
+          "path": "/admin/settings/metrics",
+          "icon": "Database"
+        },
+        {
+          "labelKey": "logs.title",
+          "path": "/admin/logs",
+          "icon": "FileText"
+        },
+        {
+          "labelKey": "pprof.title",
+          "path": "/admin/pprof",
+          "icon": "ChartNoAxesCombined"
         }
       ]
     },
     {
-      "labelKey": "rescue.title",
-      "path": "/admin/rescue",
-      "icon": "ShieldAlert"
-    },
-    {
-      "labelKey": "exec.title",
-      "path": "/admin/exec",
-      "icon": "Code"
-    },
-    {
-      "labelKey": "ping.title",
-      "path": "/admin/ping",
-      "icon": "Activity"
-    },
-    {
-      "labelKey": "return_route.title",
-      "path": "/admin/return-route",
-      "icon": "Route"
-    },
-    {
-      "labelKey": "sessions.title",
-      "path": "/admin/sessions",
-      "icon": "Users"
-    },
-    {
-      "labelKey": "account.title",
+      "labelKey": "account.menu",
       "path": "/admin/account",
-      "icon": "UserCircle"
+      "icon": "UserCircle",
+      "children": [
+        {
+          "labelKey": "account.title",
+          "path": "/admin/account",
+          "icon": "UserCircle"
+        },
+        {
+          "labelKey": "common.about",
+          "path": "/admin/about",
+          "icon": "AtSign"
+        }
+      ]
     },
     {
-      "labelKey": "logs.title",
-      "path": "/admin/logs",
-      "icon": "FileText"
+      "labelKey": "common.documentation",
+      "path": "https://komari-document.pages.dev/",
+      "icon": "Book",
+      "newTab": true,
+      "bottom": true
     },
     {
-      "labelKey": "pprof.title",
-      "path": "/admin/pprof",
-      "icon": "ChartNoAxesCombined"
+      "labelKey": "common.home",
+      "path": "/",
+      "icon": "Home",
+      "newTab": true,
+      "bottom": true
     }
   ]
 }

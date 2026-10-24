@@ -11,7 +11,7 @@ import {
   Skeleton,
   TextField,
 } from "@radix-ui/themes";
-import { Github, Globe, User } from "lucide-react";
+import { Github, Globe, ShieldCheck, User } from "lucide-react";
 import Loading from "@/components/loading";
 
 const Account = () => {
@@ -28,11 +28,22 @@ const InnerLayout = () => {
   const [usernameSaving, setUsernameSaving] = React.useState(false);
   const [passwordSaving, setPasswordSaving] = React.useState(false);
   const [passwordTwoFa, setPasswordTwoFa] = React.useState("");
+  const [twoFaVerified, setTwoFaVerified] = React.useState(false);
   if (loading) {
     return <Loading />;
   }
   if (error) {
     return <div>{error.message}</div>;
+  }
+  if (account?.["2fa_enabled"] && !twoFaVerified) {
+    return (
+      <AccountTwoFactorGate
+        onVerified={(verifiedCode) => {
+          setTwoFaVerified(true);
+          setPasswordTwoFa(verifiedCode);
+        }}
+      />
+    );
   }
 
   function handleSubmitUsernameChange(event: React.FormEvent<HTMLFormElement>) {
@@ -266,7 +277,7 @@ const InnerLayout = () => {
           {account?.["2fa_enabled"] ? (
             <TwoFactorEnabled />
           ) : (
-            <TwoFactorDisabled></TwoFactorDisabled>
+            <TwoFactorDisabled onEnabled={() => setTwoFaVerified(true)} />
           )}
           <label className="font-bold text-2xl mt-2">
             {t("settings.sso.title")}
@@ -351,7 +362,105 @@ const InnerLayout = () => {
     </Flex>
   );
 };
-const TwoFactorDisabled = () => {
+const AccountTwoFactorGate = ({
+  onVerified,
+}: {
+  onVerified: (code: string) => void;
+}) => {
+  const { t } = useTranslation();
+  const [code, setCode] = React.useState("");
+  const [verifying, setVerifying] = React.useState(false);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = code.trim();
+    if (!trimmed) {
+      toast.error(t("account.otp_empty_error"));
+      return;
+    }
+    setVerifying(true);
+    try {
+      const response = await fetch(
+        `/api/admin/2fa/verify?2fa_code=${encodeURIComponent(trimmed)}`,
+        {
+          method: "POST",
+          headers: {
+            "X-2FA-Code": trimmed,
+          },
+        },
+      );
+      if (response.ok) {
+        onVerified(trimmed);
+        return;
+      }
+      if (response.status === 404 && /^\d{6}$/.test(trimmed)) {
+        onVerified(trimmed);
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.message || t("account.otp_empty_error"));
+    } catch (err: any) {
+      toast.error(err.message || "2FA verification failed");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  return (
+    <Flex
+      direction="column"
+      align="center"
+      justify="center"
+      className="km-account-2fa-gate w-full min-h-[60vh] p-4"
+    >
+      <Flex
+        direction="column"
+        gap="4"
+        className="w-full max-w-md p-6 rounded-xl border border-[var(--gray-a5)] bg-[var(--color-panel-solid)] shadow-sm"
+      >
+        <Flex align="center" gap="3">
+          <div className="flex size-10 items-center justify-center rounded-lg bg-[var(--accent-a3)] text-[var(--accent-11)]">
+            <ShieldCheck className="size-5" />
+          </div>
+          <Flex direction="column">
+            <label className="text-xl font-bold">
+              {t("login.two_factor", "双重身份验证")}
+            </label>
+            <span className="text-xs text-muted-foreground">
+              {t("account.title")}
+            </span>
+          </Flex>
+        </Flex>
+        <label className="text-sm text-muted-foreground">
+          {t("account.2fa_otp_input_prompt")}
+        </label>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <TextField.Root
+            type="number"
+            autoFocus
+            placeholder="000000"
+            value={code}
+            onChange={(e) => setCode((e.target as HTMLInputElement).value)}
+          />
+          <Flex gap="2" justify="end" className="mt-1">
+            <Button
+              type="button"
+              variant="soft"
+              onClick={() => window.history.back()}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={verifying || !code.trim()}>
+              {t("common.confirm")}
+            </Button>
+          </Flex>
+        </form>
+      </Flex>
+    </Flex>
+  );
+};
+
+const TwoFactorDisabled = ({ onEnabled }: { onEnabled?: () => void }) => {
   const { t } = useTranslation();
   const { refresh } = useAccount();
   const [saving, setSaving] = React.useState(false);
@@ -401,6 +510,7 @@ const TwoFactorDisabled = () => {
       .then(() => {
         toast.success(t("common.updated_successfully"));
         setIsOpen(false);
+        onEnabled?.();
         refresh();
       })
       .catch((err) => toast.error(err.message))
