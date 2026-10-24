@@ -129,8 +129,19 @@ export const reportToLiveRecord = (report?: AgentReport): LiveRecord => {
   const resources = report?.resources;
   const network = report?.networkInterfaces.find((item) => item.name === "aggregate") ?? report?.networkInterfaces[0];
   const disk = report?.disks.find((item) => item.mountPoint === "aggregate") ?? report?.disks[0];
-  const gpuAverage = resources?.gpus.length
-    ? resources.gpus.reduce((sum, gpu) => sum + (gpu.utilizationPercent ?? 0), 0) / resources.gpus.length
+  const gpus = resources?.gpus ?? [];
+  const gpuDevices = gpus.map((gpu) => ({
+    name: gpu.name,
+    memory_total: Number(gpu.memoryTotalBytes ?? 0n),
+    memory_used: Number(gpu.memoryUsedBytes ?? 0n),
+    utilization: gpu.utilizationPercent ?? 0,
+    temperature: gpu.temperatureCelsius ?? 0,
+  }));
+  // Only devices that actually reported utilization count toward the average;
+  // a model-only report must not average to a permanent zero.
+  const measuredGpus = gpus.filter((gpu) => gpu.utilizationPercent !== undefined);
+  const gpuAverage = measuredGpus.length
+    ? measuredGpus.reduce((sum, gpu) => sum + (gpu.utilizationPercent ?? 0), 0) / measuredGpus.length
     : undefined;
   return {
     cpu: { usage: resources?.cpuPercent ?? 0 },
@@ -145,7 +156,9 @@ export const reportToLiveRecord = (report?: AgentReport): LiveRecord => {
       totalDown: Number(network?.bytesReceived ?? 0n),
     },
     connections: { tcp: Number(resources?.tcpConnectionCount ?? 0n), udp: Number(resources?.udpConnectionCount ?? 0n) },
-    gpu: gpuAverage === undefined ? undefined : { count: resources?.gpus.length ?? 0, average_usage: gpuAverage, detailed_info: [] },
+    gpu: gpus.length
+      ? { count: gpus.length, average_usage: gpuAverage ?? 0, detailed_info: gpuDevices }
+      : undefined,
     uptime: report?.system?.uptime ? Number(report.system.uptime.seconds) : 0,
     process: Number(resources?.processCount ?? 0n),
     message: report?.diagnosticMessage ?? "",
@@ -166,6 +179,11 @@ const RECENT_LIVE_METRICS = [
   "process.count",
   "connections.tcp",
   "connections.udp",
+  "gpu.usage",
+  "gpu.device.usage",
+  "gpu.memory.used",
+  "gpu.memory.total",
+  "gpu.temperature",
 ] as const;
 
 export const queryRecentLiveRecords = async (input: {
@@ -220,6 +238,31 @@ export const queryRecentLiveRecords = async (input: {
         case "process.count": record.process = point.value; break;
         case "connections.tcp": record.connections.tcp = point.value; break;
         case "connections.udp": record.connections.udp = point.value; break;
+        case "gpu.usage":
+          record.gpu ??= { count: 0, average_usage: 0, detailed_info: [] };
+          record.gpu.average_usage = point.value;
+          break;
+        case "gpu.device.usage":
+        case "gpu.memory.used":
+        case "gpu.memory.total":
+        case "gpu.temperature": {
+          const deviceIndex = Number(item.tags?.device_index ?? 0);
+          const deviceName = item.tags?.device_name ?? `GPU ${deviceIndex + 1}`;
+          record.gpu ??= { count: 0, average_usage: 0, detailed_info: [] };
+          let device = record.gpu.detailed_info.find((entry) => entry.name === deviceName);
+          if (!device) {
+            device = { name: deviceName, memory_total: 0, memory_used: 0, utilization: 0, temperature: 0 };
+            record.gpu.detailed_info.push(device);
+            record.gpu.count = record.gpu.detailed_info.length;
+          }
+          switch (item.metric_key) {
+            case "gpu.device.usage": device.utilization = point.value; break;
+            case "gpu.memory.used": device.memory_used = point.value; break;
+            case "gpu.memory.total": device.memory_total = point.value; break;
+            case "gpu.temperature": device.temperature = point.value; break;
+          }
+          break;
+        }
       }
     }
   }

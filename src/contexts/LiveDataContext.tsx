@@ -19,6 +19,25 @@ const sameStringArray = (left: string[], right: string[]) =>
   left.length === right.length &&
   left.every((value, index) => value === right[index]);
 
+const sameGpuDetail = (left: LiveRecord, right: LiveRecord) => {
+  const leftDevices = left.gpu?.detailed_info ?? [];
+  const rightDevices = right.gpu?.detailed_info ?? [];
+  if (leftDevices.length !== rightDevices.length) {
+    return false;
+  }
+  return leftDevices.every((device, index) => {
+    const other = rightDevices[index];
+    if (!other) {
+      return false;
+    }
+    return device.name === other.name &&
+      device.utilization === other.utilization &&
+      device.memory_used === other.memory_used &&
+      device.memory_total === other.memory_total &&
+      device.temperature === other.temperature;
+  });
+};
+
 const sameLiveRecord = (left: LiveRecord, right: LiveRecord) =>
   left.cpu.usage === right.cpu.usage &&
   left.ram.used === right.ram.used &&
@@ -34,6 +53,8 @@ const sameLiveRecord = (left: LiveRecord, right: LiveRecord) =>
   left.connections.tcp === right.connections.tcp &&
   left.connections.udp === right.connections.udp &&
   left.gpu?.average_usage === right.gpu?.average_usage &&
+  left.gpu?.count === right.gpu?.count &&
+  sameGpuDetail(left, right) &&
   Boolean(left.gpu) === Boolean(right.gpu) &&
   left.uptime === right.uptime &&
   left.process === right.process &&
