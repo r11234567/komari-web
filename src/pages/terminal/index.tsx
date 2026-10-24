@@ -15,6 +15,7 @@ import {
   Flex,
   IconButton,
   Text,
+  TextArea,
   TextField,
   Theme,
 } from "@radix-ui/themes";
@@ -25,6 +26,14 @@ import { Cross1Icon } from "@radix-ui/react-icons";
 import { Copy, Download, FilePlus2, FolderPlus, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { TablerAlertTriangleFilled } from "../../components/Icones/Tabler";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+import {
+  controlByteForCut,
+  copyTextToClipboard,
+  normalizeTerminalPaste,
+  readTextFromClipboard,
+  terminalKeyAction,
+} from "@/utils/terminalClipboard";
 import { TerminalContext } from "@/contexts/TerminalContext";
 import {
   isTransparentBackground,
@@ -331,6 +340,8 @@ const TerminalPage = () => {
   const [otpCode, setOtpCode] = useState<string | null>(null);
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
   const [otpInput, setOtpInput] = useState("");
+  const [manualPasteOpen, setManualPasteOpen] = useState(false);
+  const [manualPasteText, setManualPasteText] = useState("");
 
 
   useEffect(() => {
@@ -674,42 +685,133 @@ const TerminalPage = () => {
     };
     window.addEventListener("resize", handleResize);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey) {
-        if (e.key === "f" || e.key === "d") {
-          searchAddon.findNext("");
-          e.preventDefault();
-        }
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-
-    const handleContextMenu = (e: MouseEvent) => {
-      if (e.ctrlKey || !sessionIdRef.current) {
+    const sendTerminalText = (text: string) => {
+      if (disposed || !text) {
         return;
       }
-      const selection = window.getSelection();
-      const hasSelection = selection && selection.toString().length > 0;
-      if (hasSelection) {
-        e.preventDefault();
-        const selectedText = selection.toString();
-        navigator.clipboard.writeText(selectedText).finally(() => {
-          if (disposed) {
-            return;
-          }
-          term.focus();
-          term.clearSelection();
-        });
-      } else {
-        e.preventDefault();
+      const encoded = new TextEncoder().encode(normalizeTerminalPaste(text));
+      enqueueSessionCommand((sessionId, sequence, signal) =>
+        sendRemoteSessionInput({ sessionId, sequence, data: encoded, signal }),
+      );
+    };
+
+    const copySelection = async () => {
+      const selectedText = term.getSelection();
+      if (!selectedText) {
+        toast.info(t("terminal.select_content_first", "请先选中要复制的内容"));
         term.focus();
-        navigator.clipboard.readText().then((text) => {
-          if (disposed || !sessionIdRef.current) {
-            return;
-          }
-          const encoded = new TextEncoder().encode(text.replace(/\r?\n/g, "\r"));
-          enqueueSessionCommand((sessionId, sequence, signal) => sendRemoteSessionInput({ sessionId, sequence, data: encoded, signal }));
-        });
+        return;
+      }
+      const copied = await copyTextToClipboard(selectedText);
+      if (disposed) {
+        return;
+      }
+      if (copied) {
+        toast.success(t("terminal.copied", "已复制到系统剪贴板"));
+        term.clearSelection();
+      } else {
+        toast.error(t("terminal.copy_denied", "浏览器拒绝了剪贴板写入，请使用 HTTPS 访问"));
+      }
+      term.focus();
+    };
+
+    const pasteFromClipboard = async () => {
+      const text = await readTextFromClipboard();
+      if (disposed) {
+        return;
+      }
+      if (text === null) {
+        setManualPasteText("");
+        setManualPasteOpen(true);
+        return;
+      }
+      sendTerminalText(text);
+      term.focus();
+    };
+
+    // A real terminal clipboard: Ctrl+Shift+C/V and Ctrl+Insert copy the
+    // selection, while Ctrl+C with no selection still reaches the PTY.
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") {
+        return true;
+      }
+      const decision = terminalKeyAction(event, term.hasSelection());
+      if (decision.action === "copy") {
+        event.preventDefault();
+        event.stopPropagation();
+        void copySelection();
+        return false;
+      }
+      if (decision.action === "paste") {
+        if (decision.explicit) {
+          event.preventDefault();
+          event.stopPropagation();
+          void pasteFromClipboard();
+          return false;
+        }
+        // Let the browser emit a ClipboardEvent; its clipboardData works on
+        // HTTP deployments where navigator.clipboard.readText is unavailable.
+        return false;
+      }
+      if (decision.action === "send") {
+        event.stopPropagation();
+        // Ctrl+C without a selection still goes to the PTY, but leave the
+        // default in place so the browser can copy any page selection.
+        if (!decision.keepBrowserCopy) {
+          event.preventDefault();
+        }
+        const encoded = new Uint8Array([decision.byte]);
+        enqueueSessionCommand((sessionId, sequence, signal) =>
+          sendRemoteSessionInput({ sessionId, sequence, data: encoded, signal }),
+        );
+        return false;
+      }
+      return true;
+    });
+
+    const host = terminalRef.current;
+    const handlePaste = (event: ClipboardEvent) => {
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (!text) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      sendTerminalText(text);
+    };
+    // Chrome may turn Ctrl+X into a textarea cut and swallow the letter.
+    const handleBeforeInput = (event: Event) => {
+      if (!(event instanceof InputEvent)) {
+        return;
+      }
+      const control = controlByteForCut(event.inputType);
+      if (control === null) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const encoded = new Uint8Array([control]);
+      enqueueSessionCommand((sessionId, sequence, signal) =>
+        sendRemoteSessionInput({ sessionId, sequence, data: encoded, signal }),
+      );
+    };
+    const handleCut = (event: ClipboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    host?.addEventListener("paste", handlePaste, true);
+    host?.addEventListener("beforeinput", handleBeforeInput, true);
+    host?.addEventListener("cut", handleCut, true);
+
+    const handleContextMenu = (event: MouseEvent) => {
+      if (event.ctrlKey || !sessionIdRef.current) {
+        return;
+      }
+      event.preventDefault();
+      if (term.hasSelection()) {
+        void copySelection();
+      } else {
+        void pasteFromClipboard();
       }
     };
 
@@ -732,6 +834,9 @@ const TerminalPage = () => {
       if (firstBinaryTimeout !== null) {
         clearTimeout(firstBinaryTimeout);
       }
+      host?.removeEventListener("paste", handlePaste, true);
+      host?.removeEventListener("beforeinput", handleBeforeInput, true);
+      host?.removeEventListener("cut", handleCut, true);
       termDataDisposable.dispose();
       term.dispose();
       if (customCssStyle.parentNode) {
@@ -745,7 +850,6 @@ const TerminalPage = () => {
       sessionControllerRef.current = null;
       fitAddonRef.current = null;
       window.removeEventListener("resize", handleResize);
-      document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("contextmenu", handleContextMenu);
     };
   }, [settingsResolved, twoFaEnabled, twoFaResolved, remoteAgentReady, otpCode, uuid, resizeTerminal, enqueueSessionCommand, t]);
@@ -860,6 +964,53 @@ const TerminalPage = () => {
             </div>
           )}
         </Flex>
+        <Dialog.Root open={manualPasteOpen} onOpenChange={setManualPasteOpen}>
+          <Dialog.Content maxWidth="520px">
+            <Dialog.Title>{t("terminal.paste_title", "粘贴到终端")}</Dialog.Title>
+            <Dialog.Description size="2" mb="3">
+              {t(
+                "terminal.paste_unavailable",
+                "浏览器未授予剪贴板读取权限（常见于 HTTP 访问）。请在此粘贴文本，确认后会发送到终端。",
+              )}
+            </Dialog.Description>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const text = manualPasteText;
+                setManualPasteOpen(false);
+                setManualPasteText("");
+                if (!text) {
+                  return;
+                }
+                const encoded = new TextEncoder().encode(normalizeTerminalPaste(text));
+                enqueueSessionCommand((sessionId, sequence, signal) =>
+                  sendRemoteSessionInput({ sessionId, sequence, data: encoded, signal }),
+                );
+                terminalInstance.current?.focus();
+              }}
+            >
+              <Flex direction="column" gap="3">
+                <TextArea
+                  autoFocus
+                  rows={6}
+                  value={manualPasteText}
+                  onChange={(event) => setManualPasteText(event.target.value)}
+                  placeholder={t("terminal.paste_placeholder", "在此按 Ctrl+V 粘贴")}
+                />
+                <Flex gap="3" justify="end">
+                  <Dialog.Close>
+                    <Button variant="soft" color="gray" type="button">
+                      {t("common.cancel")}
+                    </Button>
+                  </Dialog.Close>
+                  <Button type="submit" disabled={!manualPasteText}>
+                    {t("common.confirm")}
+                  </Button>
+                </Flex>
+              </Flex>
+            </form>
+          </Dialog.Content>
+        </Dialog.Root>
         <Dialog.Root
           open={otpDialogOpen}
           onOpenChange={(open) => {
