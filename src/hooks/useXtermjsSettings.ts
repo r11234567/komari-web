@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SetStateAction } from "react";
 import type { ITerminalOptions, ITheme } from "@xterm/xterm";
+import { create } from "@bufbuild/protobuf";
+import type { JsonObject } from "@bufbuild/protobuf";
+import {
+  TerminalSettingsSchema,
+  type TerminalSettings,
+} from "@komari/proto/komari/admin/v1/terminal_pb";
+import { connectClients, connectUnary } from "@/api/connect/client";
 
 const DEFAULT_FONT_FAMILY = "'Cascadia Mono', 'Noto Sans SC', monospace";
 const DEFAULT_FONT_SIZE = 16;
@@ -274,15 +281,6 @@ function deserializeXtermTheme(value: unknown): Partial<ITheme> | undefined {
   return sanitizeThemeObject(value).theme;
 }
 
-function getXtermjsErrorMessage(
-  message: unknown,
-  fallback: string
-): string {
-  return typeof message === "string" && message.trim().length > 0
-    ? message
-    : fallback;
-}
-
 export function serializeXtermjsSettings(
   settings: XtermjsSettings
 ): XtermjsSettingsDto {
@@ -361,74 +359,72 @@ export function deserializeXtermjsSettings(value: unknown): XtermjsSettings {
   });
 }
 
-function parseXtermjsEnvelope(value: unknown): {
-  status?: unknown;
-  message?: unknown;
-  data?: unknown;
-} {
-  return isPlainObject(value) ? value : {};
-}
+const terminalSettingsFromDto = (dto: XtermjsSettingsDto): TerminalSettings =>
+  create(TerminalSettingsSchema, {
+    cursorBlink: dto.terminalOptions.cursorBlink,
+    convertEol: dto.terminalOptions.convertEol,
+    fontFamily: dto.terminalOptions.fontFamily,
+    fontSize: dto.terminalOptions.fontSize,
+    macOptionIsMeta: dto.terminalOptions.macOptionIsMeta,
+    scrollback: dto.terminalOptions.scrollback,
+    padding: dto.terminalPadding,
+    transparentBackground: dto.transparentBackground,
+    customCss: dto.customCss,
+    theme: dto.terminalOptions.theme
+      ? (dto.terminalOptions.theme as JsonObject)
+      : undefined,
+  });
 
-async function readXtermjsEnvelope(response: Response): Promise<{
-  status?: unknown;
-  message?: unknown;
-  data?: unknown;
-}> {
-  try {
-    return parseXtermjsEnvelope(await response.json());
-  } catch {
-    return {};
-  }
-}
+const dtoFromTerminalSettings = (settings?: TerminalSettings): XtermjsSettingsDto => ({
+  terminalOptions: {
+    cursorBlink: settings?.cursorBlink ?? DEFAULT_CURSOR_BLINK,
+    convertEol: settings?.convertEol ?? DEFAULT_CONVERT_EOL,
+    fontFamily: settings?.fontFamily || DEFAULT_FONT_FAMILY,
+    fontSize: settings?.fontSize || DEFAULT_FONT_SIZE,
+    macOptionIsMeta: settings?.macOptionIsMeta ?? DEFAULT_MAC_OPTION_IS_META,
+    scrollback: settings?.scrollback ?? DEFAULT_SCROLLBACK,
+    theme: settings?.theme ?? null,
+  },
+  terminalPadding: settings?.padding ?? DEFAULT_TERMINAL_PADDING,
+  transparentBackground:
+    settings?.transparentBackground ?? DEFAULT_TRANSPARENT_BACKGROUND,
+  customCss: settings?.customCss ?? DEFAULT_CUSTOM_CSS,
+});
 
-function getInvalidXtermjsEnvelopeMessage(): string {
-  return "Invalid response envelope from /api/admin/settings/xtermjs";
-}
+const requestSignal = (signal?: AbortSignal) =>
+  signal ?? new AbortController().signal;
 
 export async function fetchXtermjsSettings(options?: {
   signal?: AbortSignal;
 }): Promise<XtermjsSettings> {
-  const response = await fetch("/api/admin/settings/xtermjs", {
-    signal: options?.signal,
-  });
-
-  const json = await readXtermjsEnvelope(response);
-  if (!response.ok || json.status !== "success") {
-    throw new Error(
-      getXtermjsErrorMessage(
-        json.message,
-        response.ok ? getInvalidXtermjsEnvelopeMessage() : `HTTP ${response.status}`
-      )
-    );
-  }
-
-  return deserializeXtermjsSettings(json.data);
+  const response = await connectUnary(
+    { signal: requestSignal(options?.signal) },
+    (signal, timeoutMs) =>
+      connectClients.terminalSettings.getTerminalSettings(
+        {},
+        { signal, timeoutMs },
+      ),
+  );
+  return deserializeXtermjsSettings(
+    dtoFromTerminalSettings(response.settings),
+  );
 }
 
 export async function saveXtermjsSettings(
   settings: XtermjsSettings,
   options?: { signal?: AbortSignal }
 ): Promise<XtermjsSettings> {
-  const response = await fetch("/api/admin/settings/xtermjs", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(serializeXtermjsSettings(settings)),
-    signal: options?.signal,
-  });
-
-  const json = await readXtermjsEnvelope(response);
-  if (!response.ok || json.status !== "success") {
-    throw new Error(
-      getXtermjsErrorMessage(
-        json.message,
-        response.ok ? getInvalidXtermjsEnvelopeMessage() : `HTTP ${response.status}`
-      )
-    );
-  }
-
-  return deserializeXtermjsSettings(json.data);
+  const response = await connectUnary(
+    { signal: requestSignal(options?.signal) },
+    (signal, timeoutMs) =>
+      connectClients.terminalSettings.setTerminalSettings(
+        { settings: terminalSettingsFromDto(serializeXtermjsSettings(settings)) },
+        { signal, timeoutMs },
+      ),
+  );
+  return deserializeXtermjsSettings(
+    dtoFromTerminalSettings(response.settings),
+  );
 }
 
 export function isTransparentBackground(value: unknown): boolean {
