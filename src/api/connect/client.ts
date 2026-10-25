@@ -11,6 +11,7 @@ import { MetricsService } from "@komari/proto/komari/metrics/v1/metrics_pb";
 import { ExecutionService } from "@komari/proto/komari/exec/v1/exec_pb";
 import { WebSSHService } from "@komari/proto/komari/webssh/v1/webssh_pb";
 import { PluginService } from "@komari/proto/komari/plugin/v1/plugin_pb";
+import { FileService } from "@komari/proto/komari/file/v1/file_pb";
 import { EnrollmentService, EnrollmentAdminService } from "@komari/proto/komari/enrollment/v1/enrollment_pb";
 import { PrivilegedDeliveryService } from "@komari/proto/komari/config/v1/config_pb";
 import {
@@ -49,6 +50,7 @@ const plugin = createClient(PluginService, transport);
 const enrollment = createClient(EnrollmentService, transport);
 const enrollmentAdmin = createClient(EnrollmentAdminService, transport);
 const privilegedDelivery = createClient(PrivilegedDeliveryService, transport);
+const file = createClient(FileService, transport);
 
 export const connectClients = {
   browser,
@@ -66,6 +68,7 @@ export const connectClients = {
   enrollment,
   enrollmentAdmin,
   privilegedDelivery,
+  file,
 };
 
 export const connectUnary = <T>(
