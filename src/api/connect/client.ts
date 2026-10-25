@@ -1,4 +1,5 @@
-import { createClient } from "@connectrpc/connect";
+import { createClient, type Transport } from "@connectrpc/connect";
+import { workspaceAccess } from "./workspace";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { DashboardService } from "@komari/proto/komari/admin/v1/dashboard_pb";
 import { TerminalSettingsService } from "@komari/proto/komari/admin/v1/terminal_pb";
@@ -50,7 +51,19 @@ const plugin = createClient(PluginService, transport);
 const enrollment = createClient(EnrollmentService, transport);
 const enrollmentAdmin = createClient(EnrollmentAdminService, transport);
 const privilegedDelivery = createClient(PrivilegedDeliveryService, transport);
-const file = createClient(FileService, transport);
+// Wait for human verification before the network request's deadline starts.
+const fileTransport: Transport = {
+  ...transport,
+  async unary(method, signal, timeoutMs, header, input, contextValues) {
+    const agentId = (input as { agentId?: string }).agentId;
+    if (!agentId) throw new Error("File operation requires an agent");
+    const access = await workspaceAccess(agentId, signal ?? new AbortController().signal);
+    const headers = new Headers(header);
+    headers.set("X-Komari-Workspace-Grant", access.headers["X-Komari-Workspace-Grant"]);
+    return transport.unary(method, access.signal, timeoutMs, headers, input, contextValues);
+  },
+};
+const file = createClient(FileService, fileTransport);
 
 export const connectClients = {
   browser,

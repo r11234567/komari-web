@@ -700,7 +700,7 @@ const FileManagerPanel = ({ uuid }: FileManagerPanelProps) => {
 
   if (!uuid) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-[#777]">
+      <div data-workspace-agent={uuid ?? undefined} className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-[#777]">
         <HardDrive size={34} strokeWidth={1.25} />
         <span className="text-xs">{t("file_manager.no_server", "Open a terminal tab to browse its files")}</span>
       </div>
@@ -708,7 +708,7 @@ const FileManagerPanel = ({ uuid }: FileManagerPanelProps) => {
   }
 
   return (
-    <div
+    <div data-workspace-agent={uuid ?? undefined}
       className={`relative flex h-full min-h-0 flex-col bg-[#181818] text-[#cccccc] ${uploadProgress.length > 0 ? "select-none opacity-90" : ""}`}
       onClick={closeContextMenu}
       tabIndex={0}

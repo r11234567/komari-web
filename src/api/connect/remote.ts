@@ -1,3 +1,4 @@
+import { workspaceAccess, rememberWorkspaceSession, workspaceSessionAccess } from "./workspace";
 import { durationFromMs } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { Execution, ExecutionEvent } from "@komari/proto/komari/exec/v1/exec_pb";
@@ -98,22 +99,23 @@ export async function createRemoteSession(input: {
   agentId: string;
   rows: number;
   columns: number;
-  twoFactorCode: string;
+  twoFactorCode?: string;
   signal: AbortSignal;
 }) {
+  const access = await workspaceAccess(input.agentId, input.signal);
   const response = await connectUnary(
-    { signal: input.signal, timeoutMs: 15_000 },
+    { signal: access.signal, timeoutMs: 15_000 },
     (signal, timeoutMs) => connectClients.webssh.createSession({
       start: {
         agentId: input.agentId,
         shell: "",
         size: { rows: input.rows, columns: input.columns },
         workingDirectory: "",
-        twoFactor: { code: input.twoFactorCode, challengeId: "" },
       },
-    }, { signal, timeoutMs }),
+    }, { signal, timeoutMs, headers: access.headers }),
   );
   if (!response.started) throw new Error("Connect terminal did not return a session");
+  rememberWorkspaceSession(response.started.sessionId, input.agentId);
   return response.started;
 }
 
@@ -128,7 +130,7 @@ export const sendRemoteSessionInput = (input: {
     sessionId: input.sessionId,
     sequence: input.sequence,
     command: { case: "input", value: input.data },
-  }, { signal, timeoutMs }),
+  }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
 );
 
 export const sendRemoteSessionResize = (input: {
@@ -143,7 +145,7 @@ export const sendRemoteSessionResize = (input: {
     sessionId: input.sessionId,
     sequence: input.sequence,
     command: { case: "resize", value: { rows: input.rows, columns: input.columns } },
-  }, { signal, timeoutMs }),
+  }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
 );
 
 export const sendRemoteFileCommand = (input: {
@@ -157,7 +159,7 @@ export const sendRemoteFileCommand = (input: {
     sessionId: input.sessionId,
     sequence: input.sequence,
     command: { case: "file", value: input.command },
-  }, { signal, timeoutMs }),
+  }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
 );
 
 export const acknowledgeRemoteSessionEvents = (input: {
@@ -169,7 +171,7 @@ export const acknowledgeRemoteSessionEvents = (input: {
   (signal, timeoutMs) => connectClients.webssh.acknowledgeSessionEvents({
     sessionId: input.sessionId,
     acceptedSequence: input.acceptedSequence,
-  }, { signal, timeoutMs }),
+  }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
 );
 
 export async function* watchRemoteSession(input: {
@@ -185,7 +187,7 @@ export async function* watchRemoteSession(input: {
       for await (const response of connectClients.webssh.watchSession({
         sessionId: input.sessionId,
         afterSequence,
-      }, { signal, timeoutMs: DEFAULT_STREAM_DEADLINE_MS })) {
+      }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs: DEFAULT_STREAM_DEADLINE_MS })) {
         if (response.event) {
           afterSequence = response.event.sequence;
           yield response;
@@ -216,7 +218,7 @@ export async function closeRemoteSession(input: {
     (signal, timeoutMs) => connectClients.webssh.closeSession({
       sessionId: input.sessionId,
       reason: input.reason,
-    }, { signal, timeoutMs }),
+    }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
   );
   return response.closed;
 }

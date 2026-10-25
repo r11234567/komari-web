@@ -1413,7 +1413,7 @@ const FileEditorDialog = ({
   }
 
   return createPortal(
-    <div
+    <div data-workspace-agent={uuid}
       className="km-file-editor !fixed !m-0 !max-w-none overflow-hidden !rounded-[6px] !border !border-[#555] !bg-[#181818] !p-0 !shadow-2xl"
         style={
           fullscreen

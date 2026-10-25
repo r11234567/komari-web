@@ -1,4 +1,4 @@
-import { requestFileTwoFactor } from "./fileTwoFactor";
+import { ensureWorkspace } from "@/api/connect/workspace";
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -306,7 +306,7 @@ export const useRemoteFileUpload = (
 
       const send = async (operation: string, init?: RequestInit) => {
         const headers = new Headers(init?.headers);
-        if (operation === "init") headers.set("X-2FA-Code", requestFileTwoFactor().code);
+        if (operation === "init") await ensureWorkspace(uuid!);
         const response = await fetch(uploadEndpoint(uuid!, operation), {
           ...init,
           headers,

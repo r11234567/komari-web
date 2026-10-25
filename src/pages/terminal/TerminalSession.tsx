@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 import { Terminal } from "@xterm/xterm";
 import type { ITerminalOptions } from "@xterm/xterm";
@@ -12,7 +12,6 @@ import {
   Dialog,
   Flex,
   TextArea,
-  TextField,
 } from "@radix-ui/themes";
 import {
   closeRemoteSession,
@@ -25,6 +24,7 @@ import {
   readTextFromClipboard,
   terminalKeyAction,
 } from "@/utils/terminalClipboard";
+import { workspaceState, setActiveWorkspace } from "@/api/connect/workspace";
 import { writeClipboardText } from "@/utils/clipboard";
 import {
   DEFAULT_TERMINAL_OPTIONS,
@@ -58,7 +58,6 @@ export const TerminalSession = ({
   padding = DEFAULT_TERMINAL_PADDING,
   options,
   transparentBackground = false,
-  twoFaEnabled,
   disconnectMessage,
   onApiChange,
 }: TerminalSessionProps) => {
@@ -71,14 +70,11 @@ export const TerminalSession = ({
   optionsRef.current = options;
   const { t } = useTranslation();
 
-  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
-  const [otpInput, setOtpInput] = useState("");
-  const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const workspaceRevision = useSyncExternalStore(workspaceState.subscribe, () => workspaceState.revision(uuid), () => 0);
   const [manualPasteOpen, setManualPasteOpen] = useState(false);
   const [manualPasteText, setManualPasteText] = useState("");
 
   const pendingSendRef = useRef<((data: string | Uint8Array) => void) | null>(null);
-  const pendingStartRef = useRef<((code: string) => Promise<void>) | null>(null);
 
   activeRef.current = active;
 
@@ -172,17 +168,15 @@ export const TerminalSession = ({
     const sessionController = new AbortController();
     let starting = false;
 
-    const startSession = async (twoFactorCode: string) => {
+    const startSession = async () => {
       if (disposed || starting || sessionId) return;
       starting = true;
-      setOtpSubmitting(true);
       try {
         fit();
         const started = await createRemoteSession({
           agentId: uuid,
           rows: term.rows || 24,
           columns: term.cols || 80,
-          twoFactorCode,
           signal: sessionController.signal,
         });
         if (disposed) {
@@ -195,9 +189,6 @@ export const TerminalSession = ({
         }
         sessionId = started.sessionId;
         term.options.disableStdin = false;
-        setOtpSubmitting(false);
-        setOtpDialogOpen(false);
-        setOtpInput("");
         if (activeRef.current) term.focus();
 
         for await (const response of watchRemoteSession({
@@ -218,7 +209,6 @@ export const TerminalSession = ({
         if (!disposed && !sessionController.signal.aborted) {
           const msg = error instanceof Error ? error.message : String(error);
           term.write(`\r\n${msg}\r\n`);
-          if (!sessionId && twoFaEnabled) setOtpDialogOpen(true);
         }
       } finally {
         starting = false;
@@ -232,17 +222,10 @@ export const TerminalSession = ({
           }
           sessionId = null;
           term.options.disableStdin = true;
-          setOtpSubmitting(false);
-        }
+          }
       }
     };
-    pendingStartRef.current = startSession;
-
-    if (twoFaEnabled) {
-      setOtpDialogOpen(true);
-    } else {
-      void startSession("");
-    }
+    void startSession();
 
     term.onData((data) => {
       send(data);
@@ -364,7 +347,6 @@ export const TerminalSession = ({
     return () => {
       disposed = true;
       pendingSendRef.current = null;
-      pendingStartRef.current = null;
       apiRef.current = null;
       sessionController.abort();
       if (sessionId) {
@@ -378,7 +360,7 @@ export const TerminalSession = ({
       onApiChangeRef.current(null);
       term.dispose();
     };
-  }, [t, twoFaEnabled, uuid]);
+  }, [t, uuid, workspaceRevision]);
 
   useEffect(() => {
     const api = apiRef.current;
@@ -415,6 +397,9 @@ export const TerminalSession = ({
     <>
       <div
         ref={hostRef}
+        data-workspace-agent={uuid}
+        onFocusCapture={() => setActiveWorkspace(uuid)}
+        onPointerDown={() => setActiveWorkspace(uuid)}
         className="km-terminal-session relative h-full w-full overflow-hidden bg-[#000000]"
         style={style}
         onPaste={(event) => {
@@ -425,49 +410,6 @@ export const TerminalSession = ({
           }
         }}
       />
-
-      {/* 2FA OTP Dialog */}
-      <Dialog.Root open={otpDialogOpen && active} onOpenChange={setOtpDialogOpen}>
-        <Dialog.Content maxWidth="400px">
-          <Dialog.Title>{t("terminal.2fa_title", "两步验证")}</Dialog.Title>
-          <Dialog.Description size="2" mb="4">
-            {t("terminal.2fa_prompt", "需要双因素认证。请输入 6 位动态验证码：")}
-          </Dialog.Description>
-          <Flex direction="column" gap="3">
-            <TextField.Root
-              autoFocus
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="000000"
-              value={otpInput}
-              onChange={(e) => setOtpInput(e.target.value.trim())}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && /^\d{6}$/.test(otpInput) && !otpSubmitting) {
-                  e.preventDefault();
-                  void pendingStartRef.current?.(otpInput);
-                }
-              }}
-            />
-            <Flex gap="3" justify="end" mt="2">
-              <Button
-                variant="soft"
-                color="gray"
-                onClick={() => setOtpDialogOpen(false)}
-              >
-                {t("common.cancel", "取消")}
-              </Button>
-              <Button
-                disabled={!/^\d{6}$/.test(otpInput) || otpSubmitting}
-                onClick={() => {
-                  void pendingStartRef.current?.(otpInput);
-                }}
-              >
-                {t("common.confirm", "确认")}
-              </Button>
-            </Flex>
-          </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
 
       {/* Manual Paste Fallback Dialog */}
       <Dialog.Root open={manualPasteOpen} onOpenChange={setManualPasteOpen}>

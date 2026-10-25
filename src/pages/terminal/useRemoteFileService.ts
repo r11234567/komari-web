@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { requestFileTwoFactor } from "./fileTwoFactor";
+import { ensureWorkspace } from "@/api/connect/workspace";
 import { connectClients } from "@/api/connect/client";
 import { EntryKind, type FileEntry } from "@komari/proto/komari/file/v1/file_pb";
 import {
@@ -125,6 +125,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
 
   const read = useCallback(
     async (path: string) => {
+      await ensureWorkspace(uuid);
       const response = await fetch(fileDownloadUrl(uuid, path, true), {
         credentials: "include",
         cache: "no-store",
@@ -169,7 +170,6 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
   const mkdir = useCallback(
     async (path: string, mode = "0755") => {
       await connectClients.file.createEntry({
-        twoFactor: requestFileTwoFactor(),
         agentId: uuid,
         path,
         kind: EntryKind.DIRECTORY,
@@ -204,7 +204,6 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
   const remove = useCallback(
     async (path: string) => {
       await connectClients.file.deleteEntry({
-        twoFactor: requestFileTwoFactor(),
         agentId: uuid,
         path,
         recursive: true,
@@ -216,7 +215,6 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
   const move = useCallback(
     async (source: string, destination: string) => {
       await connectClients.file.moveEntry({
-        twoFactor: requestFileTwoFactor(),
         agentId: uuid,
         source,
         destination,
@@ -229,7 +227,6 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
   const copy = useCallback(
     async (source: string, destination: string) => {
       await connectClients.file.copyEntry({
-        twoFactor: requestFileTwoFactor(),
         agentId: uuid,
         source,
         destination,
@@ -243,7 +240,6 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
   const chmod = useCallback(
     async (path: string, mode: string) => {
       await connectClients.file.chmodEntry({
-        twoFactor: requestFileTwoFactor(),
         agentId: uuid,
         path,
         mode,
@@ -255,7 +251,6 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
   const chown = useCallback(
     async (path: string, owner: string, group: string) => {
       await connectClients.file.chownEntry({
-        twoFactor: requestFileTwoFactor(),
         agentId: uuid,
         path,
         owner,
