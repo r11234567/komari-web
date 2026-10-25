@@ -19,7 +19,8 @@ export class WorkspaceState {
   private revisions = new Map<string, number>();
   version = 0;
 
-  constructor(private now: () => number = Date.now) {}
+  private now: () => number;
+  constructor(now: () => number = Date.now) { this.now = now; }
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
