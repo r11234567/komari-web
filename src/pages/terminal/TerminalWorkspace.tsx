@@ -1,3 +1,4 @@
+import type { XtermjsSettings } from "@/hooks/useXtermjsSettings";
 import type {
   MouseEvent as ReactMouseEvent,
   RefObject,
@@ -19,6 +20,7 @@ export interface TerminalWorkspaceProps {
   clientsLoading: boolean;
   activeTabId: string | null;
   sessionsReady: boolean;
+  settings: XtermjsSettings;
   twoFaEnabled: boolean;
   disconnectMessage: string;
   searchOpen: boolean;
@@ -62,6 +64,7 @@ const TerminalWorkspace = ({
   clientsLoading,
   activeTabId,
   sessionsReady,
+  settings,
   twoFaEnabled,
   disconnectMessage,
   searchOpen,
@@ -116,6 +119,9 @@ const TerminalWorkspace = ({
               <TerminalSession
                 key={tab.id}
                 uuid={tab.uuid}
+                options={settings.terminalOptions}
+                padding={settings.terminalPadding}
+                transparentBackground={settings.transparentBackground}
                 active={tab.id === activeTabId}
                 twoFaEnabled={twoFaEnabled}
                 disconnectMessage={disconnectMessage}

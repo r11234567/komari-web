@@ -162,12 +162,16 @@ const SortableTabItem = ({
     zIndex: isDragging ? 20 : isActive ? 3 : 1,
   };
 
+  // useSortable disables dragging during rename. Its aria-disabled would
+  // also disable the nested tab and rename input for assistive technology.
+  // Keep the tab interactive while only the drag sensor is disabled.
   return (
     <div
       ref={setNodeRef}
       style={style}
       className="relative h-full shrink-0"
       {...attributes}
+      aria-disabled={undefined}
       {...listeners}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -495,6 +499,7 @@ const TerminalTabBar = ({
           <div className={TAB_SEPARATOR_CLASS_NAME} aria-hidden="true" />
         )}
         <DropdownMenu
+          modal={false}
           open={serverMenuOpen}
           onOpenChange={onServerMenuOpenChange}
         >
@@ -557,6 +562,7 @@ const TerminalTabBar = ({
         </DropdownMenu>
 
         <DropdownMenu
+          modal={false}
           open={workbenchMenuOpen}
           onOpenChange={onWorkbenchMenuOpenChange}
         >

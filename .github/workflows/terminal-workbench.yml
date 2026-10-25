@@ -1,46 +1,94 @@
-name: Terminal Workbench UI
+name: Terminal workbench feature audit
 on:
   pull_request:
   push:
-    branches: [main, 'feat/p5-terminal-workbench', 'feat/*']
+    branches: [main, 'feat/*', 'ci/feature-audit-*']
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: feature-audit-web-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  ui:
+  checks:
+    name: Web / ${{ matrix.check }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [typecheck, lint, unit, theme-build, system-build, dependency-audit]
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      AUDIT_CHECK: ${{ matrix.check }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - name: Joint integration test and build terminal workbench with full logs
+          node-version: '24'
+          cache: npm
+      - name: Protocol pin and tools
+        run: bash scripts/ci/run-audit-check.sh protocol bash -c 'node --version; npm --version; node scripts/ci/check-protocol.cjs'
+      - name: Install exact locked dependencies
+        id: install
+        run: bash scripts/ci/run-audit-check.sh install npm ci --no-audit
+      - name: Run independent check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p ci-artifacts
-          trap 'echo "$?" > ci-artifacts/exit-code.txt' EXIT
-          npm run test:proto 2>&1 | tee ci-artifacts/protocol-tests.log
-          node scripts/ci/check-protocol.cjs 2>&1 | tee ci-artifacts/protocol-source.log
-          npm ci 2>&1 | tee ci-artifacts/install.log
-          npm run audit:security 2>&1 | tee ci-artifacts/dependency-audit.log
-          npx tsc -b 2>&1 | tee ci-artifacts/typecheck.log
-          npx eslint src/pages/terminal/ tests/terminalWorkbench.test.ts tests/fileManagerWorkbench.test.ts 2>&1 | tee ci-artifacts/lint.log
-          npm test 2>&1 | tee ci-artifacts/tests.log
-          npm run build 2>&1 | tee ci-artifacts/build.log
-          mv dist dist-theme
-          npm run build:system 2>&1 | tee ci-artifacts/system-build.log
-          git rev-parse HEAD > ci-artifacts/source-commit.txt
-          sha256sum package-lock.json > ci-artifacts/dependencies.sha256
-      - uses: actions/upload-artifact@v4
+          case "$AUDIT_CHECK" in
+            typecheck) bash scripts/ci/run-audit-check.sh typecheck node node_modules/typescript/bin/tsc -b ;;
+            lint) bash scripts/ci/run-audit-check.sh lint npm run lint ;;
+            unit) bash scripts/ci/run-audit-check.sh unit npm test ;;
+            theme-build) bash scripts/ci/run-audit-check.sh theme-build npm run build ;;
+            system-build) bash scripts/ci/run-audit-check.sh system-build npm run build:system ;;
+            dependency-audit) bash scripts/ci/run-audit-check.sh dependency-audit npm run audit:security ;;
+            *) exit 2 ;;
+          esac
+      - name: Upload complete logs and available bundles
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: terminal-workbench-web-${{ github.run_id }}-${{ github.run_attempt }}
+          name: feature-audit-web-${{ matrix.check }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ci-artifacts/
             dist/
-            dist-theme/
+            bundle-analysis.html
+          if-no-files-found: warn
+          retention-days: 30
+  browser:
+    if: github.event_name == 'workflow_dispatch'
+    name: Web / actual terminal browser interactions
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked application dependencies
+        run: bash scripts/ci/run-audit-check.sh install npm ci --no-audit
+      - name: Install pinned CI-only browser test tooling
+        run: bash scripts/ci/run-audit-check.sh playwright-install npm install --no-save --package-lock=false --ignore-scripts --no-audit @playwright/test@1.56.1
+      - name: Install Chromium on the GitHub runner
+        run: bash scripts/ci/run-audit-check.sh chromium-install npx --no-install playwright install --with-deps chromium
+      - name: Test 2FA confirmation, actual system clipboard and terminal input
+        run: bash scripts/ci/run-audit-check.sh browser npx --no-install playwright test --config tests/browser/playwright.config.cjs
+      - name: Retain screenshots, videos, traces, HTML report and console logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-audit-web-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-artifacts/
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
           retention-days: 30

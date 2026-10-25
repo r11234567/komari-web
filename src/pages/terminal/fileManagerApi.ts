@@ -202,23 +202,7 @@ export const formatFileSize = (bytes: number) => {
   return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)} ${units[index]}`;
 };
 
-export const copyTextToClipboard = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    const copied = document.execCommand("copy");
-    textarea.remove();
-    return copied;
-  }
-};
+export { copyTextToClipboard } from "../../utils/terminalClipboard.ts";
 
 type DroppedFileSystemEntry = {
   isDirectory?: boolean;

@@ -364,6 +364,7 @@ const FileEditorDialog = ({
   const [positionLine, setPositionLine] = useState("1");
   const [positionColumn, setPositionColumn] = useState("1");
   const quickOpenTokenRef = useRef(0);
+  const [officeConsent, setOfficeConsent] = useState<string | null>(null);
   const [officePreviewSrc, setOfficePreviewSrc] = useState<string | null>(null);
   const [officePreviewError, setOfficePreviewError] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -1380,7 +1381,7 @@ const FileEditorDialog = ({
   };
 
   useEffect(() => {
-    if (!open || activeDocument?.kind !== "office") {
+    if (!open || activeDocument?.kind !== "office" || officeConsent !== `${uuid}:${activeDocument.path}`) {
       setOfficePreviewSrc(null);
       setOfficePreviewError(null);
       return;
@@ -1401,7 +1402,11 @@ const FileEditorDialog = ({
     return () => {
       cancelled = true;
     };
-  }, [activeDocument?.kind, activeDocument?.path, open, uuid]);
+  }, [activeDocument?.kind, activeDocument?.path, officeConsent, open, uuid]);
+
+  useEffect(() => {
+    setOfficeConsent(null);
+  }, [open, uuid]);
 
   if (!open) {
     return null;
@@ -1793,7 +1798,15 @@ const FileEditorDialog = ({
                   <iframe key={activeDocument.path} title={activeDocument.name} src={mediaUrl} className="h-full w-full border-0 bg-white" />
                 )}
                 {activeDocument?.kind === "office" && (
-                  officePreviewError ? (
+                  officeConsent !== `${uuid}:${activeDocument.path}` ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-xs text-[#bbbbbb]">
+                      <p>{t("file_manager.editor.office_consent", "Online preview gives Microsoft temporary access to this file. Continue only if you agree to share it.")}</p>
+                      <button type="button" onClick={() => setOfficeConsent(`${uuid}:${activeDocument.path}`)} className="text-[#75beff] hover:underline">
+                        {t("file_manager.editor.office_allow", "Allow Microsoft preview for this file")}
+                      </button>
+                      <a href={fileDownloadUrl(uuid, activeDocument.path)} className="text-[#75beff] hover:underline">{t("file_manager.download", "Download")}</a>
+                    </div>
+                  ) : officePreviewError ? (
                     <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#1e1e1e] text-xs text-[#a7a7a7]">
                       <Braces size={36} strokeWidth={1.25} />
                       <span>{t("file_manager.editor.preview_failed", "Unable to preview this file")}</span>

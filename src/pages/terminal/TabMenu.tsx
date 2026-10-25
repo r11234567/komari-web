@@ -66,8 +66,10 @@ const TabMenu = ({
 }: TabMenuProps) => {
   const { t } = useTranslation();
 
+  // Actions can open an OTP/editor dialog from another Radix root. Let that
+  // dialog own the modal pointer lock rather than nesting two modal owners.
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu modal={false} open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <span
           className="fixed h-px w-px pointer-events-none opacity-0"

@@ -70,3 +70,7 @@ coverage/
 vite.config.dev.ts
 todo.md
 .codex
+
+/ci-artifacts/
+/playwright-report/
+/test-results/

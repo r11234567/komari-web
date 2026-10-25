@@ -1,3 +1,4 @@
+import { requestFileTwoFactor } from "./fileTwoFactor";
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -304,8 +305,12 @@ export const useRemoteFileUpload = (
       };
 
       const send = async (operation: string, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        if (operation === "init") headers.set("X-2FA-Code", requestFileTwoFactor().code);
         const response = await fetch(uploadEndpoint(uuid!, operation), {
           ...init,
+          headers,
+          credentials: "include",
           signal: controller.signal,
         });
         const payload = await response.json().catch(() => null) as
