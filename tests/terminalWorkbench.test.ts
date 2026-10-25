@@ -10,6 +10,12 @@ import {
   formatTransferRate,
 } from "../src/pages/terminal/transferFormat.ts";
 import {
+  formatClipboardPath,
+  formatFileSize,
+  remoteBasename,
+  remoteDirname,
+} from "../src/pages/terminal/fileManagerApi.ts";
+import {
   controlByteForCut,
   normalizeTerminalPaste,
   terminalKeyAction,
@@ -281,3 +287,25 @@ test("Terminal Workbench: Feature flag & route fallback", () => {
   assert.equal(isEnabled("", "false"), false);
   assert.equal(isEnabled("", "true"), true);
 });
+
+test("Terminal Workbench: File path formatting and clipboard quoting", () => {
+  assert.equal(remoteBasename("/var/log/syslog"), "syslog");
+  assert.equal(remoteBasename("C:/Windows/System32"), "System32");
+  assert.equal(remoteBasename("/"), "/");
+  assert.equal(remoteDirname("/var/log/syslog"), "/var/log");
+  assert.equal(remoteDirname("C:/Windows/System32"), "C:/Windows");
+
+  // Path without spaces: unquoted
+  assert.equal(formatClipboardPath("/etc/nginx/nginx.conf"), "/etc/nginx/nginx.conf");
+  assert.equal(formatClipboardPath("/c/Users/admin/file.txt"), "c:\\Users\\admin\\file.txt");
+
+  // Path with spaces: quoted and escaped
+  assert.equal(formatClipboardPath("/var/log/my test app/log.txt"), '"/var/log/my test app/log.txt"');
+  assert.equal(formatClipboardPath('/c/Program Files/App "Super"/config.ini'), '"c:\\\\Program Files\\\\App \\"Super\\"\\\\config.ini"');
+
+  // File size formatting
+  assert.equal(formatFileSize(512), "512 B");
+  assert.equal(formatFileSize(1024), "1.00 KB");
+  assert.equal(formatFileSize(10485760), "10.0 MB");
+});
+

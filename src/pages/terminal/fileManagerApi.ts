@@ -279,7 +279,7 @@ export const formatClipboardPath = (value: string) => {
   const normalized = normalizeRemotePath(value);
   const windowsPath = normalized.replace(/^\/([A-Za-z])(?:\/|$)/, (_match, drive: string) => `${drive}:\\`);
   const converted = windowsPath.replace(/^([A-Za-z]:\\.*)$/, (path) => path.replace(/\//g, "\\"));
-  return /\s/.test(converted) ? `"${converted.replace(/"/g, '\\"')}"` : converted;
+  return /\s/.test(converted) ? `"${converted.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"` : converted;
 };
 
 export const formatFileDate = (value: string) => {
