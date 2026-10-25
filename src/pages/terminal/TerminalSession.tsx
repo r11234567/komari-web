@@ -24,6 +24,7 @@ import {
   readTextFromClipboard,
   terminalKeyAction,
 } from "@/utils/terminalClipboard";
+import { createTerminalCommandQueue } from "@/utils/terminalTransport";
 import { workspaceState, setActiveWorkspace } from "@/api/connect/workspace";
 import { writeClipboardText } from "@/utils/clipboard";
 import {
@@ -119,8 +120,7 @@ export const TerminalSession = ({
 
     let disposed = false;
     let sessionId: string | null = null;
-    let sessionSequence = 0n;
-    let commandQueue = Promise.resolve();
+    const sessionController = new AbortController();
 
     term.loadAddon(fitAddon);
     term.loadAddon(searchAddon);
@@ -136,36 +136,27 @@ export const TerminalSession = ({
       }
     };
 
-    const enqueueSessionCommand = (
-      fn: (sid: string, seq: bigint, signal: AbortSignal) => Promise<unknown>,
-    ) => {
-      if (!sessionId || disposed) return;
-      const sid = sessionId;
-      const seq = ++sessionSequence;
-      commandQueue = commandQueue
-        .then(async () => {
-          await fn(sid, seq, sessionController.signal);
-        })
-        .catch(() => {});
-    };
-
+    const commands = createTerminalCommandQueue({
+      signal: sessionController.signal,
+      input: (sequence, data) => sendRemoteSessionInput({
+        sessionId: sessionId!, sequence, data, signal: sessionController.signal,
+      }),
+      resize: (sequence, rows, columns) => sendRemoteSessionResize({
+        sessionId: sessionId!, sequence, rows, columns, signal: sessionController.signal,
+      }),
+      onError: (error) => {
+        term.options.disableStdin = true;
+        const message = error instanceof Error ? error.message : String(error);
+        term.write(`\r\n${message}\r\n`);
+        sessionController.abort();
+      },
+    });
     const send = (data: string | Uint8Array) => {
       if (disposed || !sessionId) return;
-      const encoded =
-        typeof data === "string" ? new TextEncoder().encode(data) : data;
-      enqueueSessionCommand((sid, seq, sig) =>
-        sendRemoteSessionInput({
-          sessionId: sid,
-          sequence: seq,
-          data: encoded,
-          signal: sig,
-        }),
-      );
+      commands.input(typeof data === "string" ? new TextEncoder().encode(data) : data);
     };
-
     pendingSendRef.current = send;
 
-    const sessionController = new AbortController();
     let starting = false;
 
     const startSession = async () => {
@@ -211,6 +202,7 @@ export const TerminalSession = ({
           term.write(`\r\n${msg}\r\n`);
         }
       } finally {
+        commands.dispose();
         starting = false;
         if (!disposed) {
           if (sessionId) {
@@ -222,7 +214,7 @@ export const TerminalSession = ({
           }
           sessionId = null;
           term.options.disableStdin = true;
-          }
+        }
       }
     };
     void startSession();
@@ -233,15 +225,7 @@ export const TerminalSession = ({
 
     term.onResize(({ rows, cols }) => {
       if (!sessionId || disposed) return;
-      enqueueSessionCommand((sid, seq, sig) =>
-        sendRemoteSessionResize({
-          sessionId: sid,
-          sequence: seq,
-          rows,
-          columns: cols,
-          signal: sig,
-        }),
-      );
+      commands.resize(rows, cols);
     });
 
     const copySelection = async () => {
@@ -348,6 +332,7 @@ export const TerminalSession = ({
       disposed = true;
       pendingSendRef.current = null;
       apiRef.current = null;
+      commands.dispose();
       sessionController.abort();
       if (sessionId) {
         void closeRemoteSession({
