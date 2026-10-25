@@ -41,7 +41,10 @@ jobs:
           case "$AUDIT_CHECK" in
             typecheck) bash scripts/ci/run-audit-check.sh typecheck node node_modules/typescript/bin/tsc -b ;;
             lint) bash scripts/ci/run-audit-check.sh lint npm run lint ;;
-            unit) bash scripts/ci/run-audit-check.sh unit npm test ;;
+            unit)
+              bash scripts/ci/run-audit-check.sh terminal-transport node --test tests/terminalTransport.test.ts
+              bash scripts/ci/run-audit-check.sh unit npm test
+              ;;
             theme-build) bash scripts/ci/run-audit-check.sh theme-build npm run build ;;
             system-build) bash scripts/ci/run-audit-check.sh system-build npm run build:system ;;
             dependency-audit) bash scripts/ci/run-audit-check.sh dependency-audit npm run audit:security ;;

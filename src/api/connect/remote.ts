@@ -4,6 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import type { Execution, ExecutionEvent } from "@komari/proto/komari/exec/v1/exec_pb";
 import type { FileCommand, SessionClosed, SessionEvent } from "@komari/proto/komari/webssh/v1/webssh_pb";
 import { connectClients, connectUnary } from "./client";
+import { createTerminalEventAcknowledger } from "../../utils/terminalTransport";
 import { DEFAULT_STREAM_DEADLINE_MS } from "./deadline";
 
 const reconnectableStreamError = (error: unknown) =>
@@ -182,28 +183,42 @@ export async function* watchRemoteSession(input: {
   let afterSequence = input.afterSequence ?? 0n;
   while (!input.signal.aborted) {
     const deadline = AbortSignal.timeout(DEFAULT_STREAM_DEADLINE_MS);
-    const signal = AbortSignal.any([input.signal, deadline]);
+    const connection = new AbortController();
+    const signal = AbortSignal.any([input.signal, deadline, connection.signal]);
+    let acknowledgementError: unknown;
+    const acknowledger = createTerminalEventAcknowledger({
+      signal,
+      acknowledge: (acceptedSequence) => acknowledgeRemoteSessionEvents({
+        sessionId: input.sessionId, acceptedSequence, signal,
+      }),
+      onError: (error) => {
+        acknowledgementError = error;
+        connection.abort();
+      },
+    });
     try {
       for await (const response of connectClients.webssh.watchSession({
         sessionId: input.sessionId,
         afterSequence,
       }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs: DEFAULT_STREAM_DEADLINE_MS })) {
         if (response.event) {
-          afterSequence = response.event.sequence;
           yield response;
-          await acknowledgeRemoteSessionEvents({
-            sessionId: input.sessionId,
-            acceptedSequence: afterSequence,
-            signal: AbortSignal.any([input.signal, AbortSignal.timeout(10_000)]),
-          });
+          // Advance only after the consumer accepted this event. WatchSession
+          // cumulatively ACKs this same cursor when resuming after a disconnect.
+          afterSequence = response.event.sequence;
+          acknowledger.accept(afterSequence);
           if (response.event.event.case === "closed") return;
         }
       }
       return;
     } catch (error) {
       if (input.signal.aborted) return;
-      if (!deadline.aborted && !reconnectableStreamError(error)) throw error;
+      const cause = acknowledgementError ?? error;
+      if (!deadline.aborted && !reconnectableStreamError(cause)) throw cause;
       await waitToReconnect(input.signal);
+    } finally {
+      acknowledger.dispose();
+      connection.abort();
     }
   }
 }
