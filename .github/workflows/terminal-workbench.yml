@@ -1,0 +1,46 @@
+name: Terminal Workbench UI
+on:
+  pull_request:
+  push:
+    branches: [main, 'feat/p5-terminal-workbench', 'feat/*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Joint integration test and build terminal workbench with full logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts
+          trap 'echo "$?" > ci-artifacts/exit-code.txt' EXIT
+          npm run test:proto 2>&1 | tee ci-artifacts/protocol-tests.log
+          node scripts/ci/check-protocol.cjs 2>&1 | tee ci-artifacts/protocol-source.log
+          npm ci 2>&1 | tee ci-artifacts/install.log
+          npm run audit:security 2>&1 | tee ci-artifacts/dependency-audit.log
+          npx tsc -b 2>&1 | tee ci-artifacts/typecheck.log
+          npx eslint src/pages/terminal/ tests/terminalWorkbench.test.ts 2>&1 | tee ci-artifacts/lint.log
+          npm test 2>&1 | tee ci-artifacts/tests.log
+          npm run build 2>&1 | tee ci-artifacts/build.log
+          mv dist dist-theme
+          npm run build:system 2>&1 | tee ci-artifacts/system-build.log
+          git rev-parse HEAD > ci-artifacts/source-commit.txt
+          sha256sum package-lock.json > ci-artifacts/dependencies.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: terminal-workbench-web-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-artifacts/
+            dist/
+            dist-theme/
+          retention-days: 30
