@@ -1,3 +1,5 @@
+import { writeClipboardText } from "./clipboard.ts";
+
 // Terminal keyboard and clipboard rules shared by the browser terminal.
 // Ctrl+Shift+C copies the xterm selection, Ctrl+Shift+V pastes, and Ctrl+C
 // still interrupts when nothing is selected.
@@ -87,40 +89,12 @@ export async function readTextFromClipboard(): Promise<string | null> {
   }
 }
 
-// navigator.clipboard.writeText is unavailable on plain HTTP deployments, so
-// fall back to the legacy selection copy that still works from a user gesture.
+// Compatibility wrapper for callers that only need a verified result.
 export async function copyTextToClipboard(text: string): Promise<boolean> {
   if (!text) return false;
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // Fall through to the legacy path.
-    }
-  }
-  if (typeof document === "undefined" || !document.body || typeof document.execCommand !== "function") {
-    return false;
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.top = "0";
-  textarea.style.left = "0";
-  textarea.style.width = "1px";
-  textarea.style.height = "1px";
-  textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
-  document.body.appendChild(textarea);
   try {
-    textarea.focus();
-    textarea.select();
-    textarea.setSelectionRange?.(0, text.length);
-    return document.execCommand("copy");
+    return (await writeClipboardText(text)).confirmed;
   } catch {
     return false;
-  } finally {
-    textarea.remove();
   }
 }

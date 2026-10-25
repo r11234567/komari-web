@@ -38,9 +38,9 @@ const InnerLayout = () => {
   if (account?.["2fa_enabled"] && !twoFaVerified) {
     return (
       <AccountTwoFactorGate
-        onVerified={(verifiedCode) => {
+        onVerified={() => {
           setTwoFaVerified(true);
-          setPasswordTwoFa(verifiedCode);
+          setPasswordTwoFa("");
         }}
       />
     );
@@ -365,7 +365,7 @@ const InnerLayout = () => {
 const AccountTwoFactorGate = ({
   onVerified,
 }: {
-  onVerified: (code: string) => void;
+  onVerified: () => void;
 }) => {
   const { t } = useTranslation();
   const [code, setCode] = React.useState("");
@@ -381,7 +381,7 @@ const AccountTwoFactorGate = ({
     setVerifying(true);
     try {
       const response = await fetch(
-        `/api/admin/2fa/verify?2fa_code=${encodeURIComponent(trimmed)}`,
+        "/api/admin/2fa/verify",
         {
           method: "POST",
           headers: {
@@ -390,11 +390,7 @@ const AccountTwoFactorGate = ({
         },
       );
       if (response.ok) {
-        onVerified(trimmed);
-        return;
-      }
-      if (response.status === 404 && /^\d{6}$/.test(trimmed)) {
-        onVerified(trimmed);
+        onVerified();
         return;
       }
       const data = await response.json().catch(() => ({}));

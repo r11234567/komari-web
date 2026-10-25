@@ -1608,7 +1608,8 @@
       "match_case": "Match Case",
       "use_regex": "Use Regular Expression",
       "close": "Close"
-    }
+    },
+    "copy_unconfirmed": "Copy attempted; the browser could not verify the system clipboard. Paste to check."
   },
   "theme": {
     "active": "Active",
@@ -1885,7 +1886,9 @@
       "unsaved_all": "{{count}} files have unsaved changes.",
       "unsaved_file": "Save changes to {{name}}?",
       "unsaved_title": "Save changes?",
-      "word_wrap": "Word Wrap"
+      "word_wrap": "Word Wrap",
+      "office_consent": "Online preview gives Microsoft temporary access to this file. Continue only if you agree to share it.",
+      "office_allow": "Allow Microsoft preview for this file"
     },
     "empty": "This directory is empty",
     "group": "Group",
@@ -1925,6 +1928,8 @@
     "upload_chunk_summary": "Showing active chunks only ({{active}} concurrent, {{count}} total)",
     "upload_chunk_uploading": "Uploading",
     "upload_chunks": "Chunked upload",
-    "uploading": "Uploading"
+    "uploading": "Uploading",
+    "fresh_2fa_prompt": "Enter a fresh, unused 6-digit 2FA code for this file operation. Enable 2FA in Account first if needed.",
+    "invalid_2fa": "A 6-digit 2FA code is required"
   }
 }

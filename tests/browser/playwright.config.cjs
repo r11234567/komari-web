@@ -1,4 +1,6 @@
 const { defineConfig } = require('@playwright/test');
+const path = require('node:path');
+const repoRoot = path.resolve(__dirname, '../..');
 module.exports = defineConfig({
   testDir: __dirname,
   testMatch: '**/*.spec.cjs',
@@ -22,6 +24,7 @@ module.exports = defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
+    cwd: repoRoot,
     command: 'node node_modules/vite/bin/vite.js --config tests/browser/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173/tests/browser/fixtures/terminal.html',
     timeout: 60000,

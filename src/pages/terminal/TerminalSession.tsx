@@ -22,11 +22,10 @@ import {
   watchRemoteSession,
 } from "@/api/connect/remote";
 import {
-  copyTextToClipboard,
-  normalizeTerminalPaste,
   readTextFromClipboard,
   terminalKeyAction,
 } from "@/utils/terminalClipboard";
+import { writeClipboardText } from "@/utils/clipboard";
 import {
   DEFAULT_TERMINAL_OPTIONS,
   DEFAULT_TERMINAL_PADDING,
@@ -45,6 +44,8 @@ interface TerminalSessionProps {
   active: boolean;
   fontSize?: number;
   padding?: number;
+  options?: Partial<ITerminalOptions>;
+  transparentBackground?: boolean;
   twoFaEnabled: boolean;
   disconnectMessage: string;
   onApiChange: (api: TerminalSessionApi | null) => void;
@@ -55,6 +56,8 @@ export const TerminalSession = ({
   active,
   fontSize = DEFAULT_TERMINAL_OPTIONS.fontSize,
   padding = DEFAULT_TERMINAL_PADDING,
+  options,
+  transparentBackground = false,
   twoFaEnabled,
   disconnectMessage,
   onApiChange,
@@ -63,14 +66,19 @@ export const TerminalSession = ({
   const activeRef = useRef(active);
   const disconnectMessageRef = useRef(disconnectMessage);
   const onApiChangeRef = useRef(onApiChange);
+  const apiRef = useRef<TerminalSessionApi | null>(null);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
   const { t } = useTranslation();
 
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
   const [otpInput, setOtpInput] = useState("");
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
   const [manualPasteOpen, setManualPasteOpen] = useState(false);
   const [manualPasteText, setManualPasteText] = useState("");
 
   const pendingSendRef = useRef<((data: string | Uint8Array) => void) | null>(null);
+  const pendingStartRef = useRef<((code: string) => Promise<void>) | null>(null);
 
   activeRef.current = active;
 
@@ -96,13 +104,15 @@ export const TerminalSession = ({
 
     const terminalOptions: Partial<ITerminalOptions> = {
       ...DEFAULT_TERMINAL_OPTIONS,
-      fontSize,
+      ...optionsRef.current,
       cursorStyle: "bar",
       cursorInactiveStyle: "bar",
       cursorWidth: 2,
       allowProposedApi: true,
+      disableStdin: true,
       overviewRuler: { width: 4 },
-      theme: themeWithSelection,
+      allowTransparency: true,
+      theme: { ...themeWithSelection, ...optionsRef.current?.theme },
     };
 
     const term = new Terminal(terminalOptions);
@@ -160,8 +170,12 @@ export const TerminalSession = ({
     pendingSendRef.current = send;
 
     const sessionController = new AbortController();
+    let starting = false;
 
     const startSession = async (twoFactorCode: string) => {
+      if (disposed || starting || sessionId) return;
+      starting = true;
+      setOtpSubmitting(true);
       try {
         fit();
         const started = await createRemoteSession({
@@ -171,8 +185,20 @@ export const TerminalSession = ({
           twoFactorCode,
           signal: sessionController.signal,
         });
-        if (disposed) return;
+        if (disposed) {
+          void closeRemoteSession({
+            sessionId: started.sessionId,
+            reason: "tab_closed",
+            signal: AbortSignal.timeout(3000),
+          }).catch(() => {});
+          return;
+        }
         sessionId = started.sessionId;
+        term.options.disableStdin = false;
+        setOtpSubmitting(false);
+        setOtpDialogOpen(false);
+        setOtpInput("");
+        if (activeRef.current) term.focus();
 
         for await (const response of watchRemoteSession({
           sessionId: started.sessionId,
@@ -183,6 +209,7 @@ export const TerminalSession = ({
           if (event.event.case === "output") {
             term.write(event.event.value);
           } else if (event.event.case === "closed") {
+            sessionId = null;
             term.write(`\r\n${disconnectMessageRef.current}\r\n`);
             break;
           }
@@ -191,9 +218,25 @@ export const TerminalSession = ({
         if (!disposed && !sessionController.signal.aborted) {
           const msg = error instanceof Error ? error.message : String(error);
           term.write(`\r\n${msg}\r\n`);
+          if (!sessionId && twoFaEnabled) setOtpDialogOpen(true);
+        }
+      } finally {
+        starting = false;
+        if (!disposed) {
+          if (sessionId) {
+            void closeRemoteSession({
+              sessionId,
+              reason: "stream_closed",
+              signal: AbortSignal.timeout(3000),
+            }).catch(() => {});
+          }
+          sessionId = null;
+          term.options.disableStdin = true;
+          setOtpSubmitting(false);
         }
       }
     };
+    pendingStartRef.current = startSession;
 
     if (twoFaEnabled) {
       setOtpDialogOpen(true);
@@ -225,11 +268,15 @@ export const TerminalSession = ({
         term.focus();
         return;
       }
-      const copied = await copyTextToClipboard(selectedText);
-      if (copied) {
-        toast.success(t("terminal.copied", "已复制到系统剪贴板"));
+      try {
+        const result = await writeClipboardText(selectedText);
+        if (result.confirmed) {
+          toast.success(t("terminal.copied", "已复制到系统剪贴板"));
+        } else {
+          toast.info(t("terminal.copy_unconfirmed", "已尝试复制，浏览器无法确认系统剪贴板内容，请粘贴检查"));
+        }
         term.clearSelection();
-      } else {
+      } catch {
         toast.error(
           t(
             "terminal.copy_denied",
@@ -247,7 +294,7 @@ export const TerminalSession = ({
         setManualPasteOpen(true);
         return;
       }
-      send(normalizeTerminalPaste(text));
+      term.paste(text);
       term.focus();
     };
 
@@ -300,6 +347,7 @@ export const TerminalSession = ({
       fit,
       exportText,
     };
+    apiRef.current = api;
     onApiChangeRef.current(api);
 
     requestAnimationFrame(() => {
@@ -316,6 +364,8 @@ export const TerminalSession = ({
     return () => {
       disposed = true;
       pendingSendRef.current = null;
+      pendingStartRef.current = null;
+      apiRef.current = null;
       sessionController.abort();
       if (sessionId) {
         void closeRemoteSession({
@@ -328,12 +378,29 @@ export const TerminalSession = ({
       onApiChangeRef.current(null);
       term.dispose();
     };
-  }, [fontSize, t, twoFaEnabled, uuid]);
+  }, [t, twoFaEnabled, uuid]);
+
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api) return;
+    api.terminal.options = {
+      ...DEFAULT_TERMINAL_OPTIONS,
+      ...options,
+      fontSize: options?.fontSize ?? fontSize,
+      theme: {
+        ...api.terminal.options.theme,
+        ...options?.theme,
+        background: transparentBackground ? "transparent" : (options?.theme?.background ?? "#000000"),
+      },
+    };
+    api.fit();
+  }, [fontSize, options, transparentBackground]);
 
   useEffect(() => {
     if (active) {
       requestAnimationFrame(() => {
-        // give dom a moment to switch visibility
+        apiRef.current?.fit();
+        apiRef.current?.terminal.focus();
       });
     }
   }, [active]);
@@ -341,6 +408,7 @@ export const TerminalSession = ({
   const style: CSSProperties = {
     display: active ? "block" : "none",
     padding: `${padding}px`,
+    background: transparentBackground ? "transparent" : (options?.theme?.background ?? "#000000"),
   };
 
   return (
@@ -353,13 +421,13 @@ export const TerminalSession = ({
           const text = event.clipboardData?.getData("text/plain");
           if (text) {
             event.preventDefault();
-            pendingSendRef.current?.(normalizeTerminalPaste(text));
+            apiRef.current?.terminal.paste(text);
           }
         }}
       />
 
       {/* 2FA OTP Dialog */}
-      <Dialog.Root open={otpDialogOpen} onOpenChange={setOtpDialogOpen}>
+      <Dialog.Root open={otpDialogOpen && active} onOpenChange={setOtpDialogOpen}>
         <Dialog.Content maxWidth="400px">
           <Dialog.Title>{t("terminal.2fa_title", "两步验证")}</Dialog.Title>
           <Dialog.Description size="2" mb="4">
@@ -368,13 +436,15 @@ export const TerminalSession = ({
           <Flex direction="column" gap="3">
             <TextField.Root
               autoFocus
+              inputMode="numeric"
+              maxLength={6}
               placeholder="000000"
               value={otpInput}
               onChange={(e) => setOtpInput(e.target.value.trim())}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && otpInput.length >= 6) {
-                  setOtpDialogOpen(false);
-                  // Trigger session start with OTP
+                if (e.key === "Enter" && /^\d{6}$/.test(otpInput) && !otpSubmitting) {
+                  e.preventDefault();
+                  void pendingStartRef.current?.(otpInput);
                 }
               }}
             />
@@ -387,10 +457,9 @@ export const TerminalSession = ({
                 {t("common.cancel", "取消")}
               </Button>
               <Button
-                disabled={otpInput.length < 6}
+                disabled={!/^\d{6}$/.test(otpInput) || otpSubmitting}
                 onClick={() => {
-                  setOtpDialogOpen(false);
-                  // Connected through session creation
+                  void pendingStartRef.current?.(otpInput);
                 }}
               >
                 {t("common.confirm", "确认")}
@@ -429,7 +498,7 @@ export const TerminalSession = ({
               <Button
                 onClick={() => {
                   if (manualPasteText) {
-                    pendingSendRef.current?.(normalizeTerminalPaste(manualPasteText));
+                    apiRef.current?.terminal.paste(manualPasteText);
                   }
                   setManualPasteOpen(false);
                 }}

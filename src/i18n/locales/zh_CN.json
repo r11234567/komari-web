@@ -1608,7 +1608,8 @@
       "title": "终端选项卡"
     },
     "title": "终端",
-    "title_with_sessions": "终端 - {{name}}（{{count}} 个会话）"
+    "title_with_sessions": "终端 - {{name}}（{{count}} 个会话）",
+    "copy_unconfirmed": "已尝试复制，但浏览器无法确认系统剪贴板内容，请粘贴检查。"
   },
   "theme": {
     "active": "当前使用",
@@ -1885,7 +1886,9 @@
       "unsaved_all": "有 {{count}} 个文件包含未保存的修改。",
       "unsaved_file": "是否保存对 {{name}} 的修改？",
       "unsaved_title": "保存修改？",
-      "word_wrap": "自动换行"
+      "word_wrap": "自动换行",
+      "office_consent": "在线预览会将此文件的临时访问权限交给 Microsoft，仅在同意分享文件时继续。",
+      "office_allow": "允许 Microsoft 在线预览此文件"
     },
     "empty": "当前目录为空",
     "group": "用户组",
@@ -1925,6 +1928,8 @@
     "upload_complete": "上传完成",
     "upload_destination": "目标",
     "upload_failed": "上传失败",
-    "uploading": "上传中"
+    "uploading": "上传中",
+    "fresh_2fa_prompt": "请输入一个全新、未使用的 6 位动态验证码以执行此文件操作。如未启用 2FA，请先在账户设置中启用。",
+    "invalid_2fa": "请输入 6 位动态验证码"
   }
 }

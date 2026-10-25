@@ -98,6 +98,7 @@ const TerminalWorkbench = () => {
       appearance="dark"
       className="km-page-terminal fixed inset-0 h-screen w-screen overflow-hidden bg-[#1e1e1e]"
     >
+      <style>{settings.customCss}</style>
       <TerminalNotices
         httpsCalloutOpen={httpsCalloutOpen}
         onDismissHttpsCallout={() => setHttpsCalloutOpen(false)}
@@ -157,6 +158,7 @@ const TerminalWorkbench = () => {
           clientsLoading={clientsLoading}
           activeTabId={activeTabId}
           sessionsReady={sessionsReady}
+          settings={settings}
           twoFaEnabled={twoFaEnabled}
           disconnectMessage={t("terminal.disconnect")}
           searchOpen={searchOpen}
