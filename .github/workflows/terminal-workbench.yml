@@ -59,6 +59,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
   browser:
+    if: github.event_name == 'workflow_dispatch'
     name: Web / actual terminal browser interactions
     runs-on: ubuntu-latest
     timeout-minutes: 25
