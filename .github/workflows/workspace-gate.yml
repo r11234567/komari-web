@@ -1,0 +1,30 @@
+name: Workspace UI authorization checkpoint
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: bash scripts/ci/run-audit-check.sh install npm ci --no-audit
+      - name: Workspace deadlines, cancellation, scope and account replacement
+        run: bash scripts/ci/run-audit-check.sh workspace node --test tests/workspaceState.test.ts
+      - name: Typecheck Connect integration
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/run-audit-check.sh types node node_modules/typescript/bin/tsc -b
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-artifacts/
+          retention-days: 30
