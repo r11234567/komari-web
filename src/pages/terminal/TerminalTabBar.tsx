@@ -499,6 +499,7 @@ const TerminalTabBar = ({
           <div className={TAB_SEPARATOR_CLASS_NAME} aria-hidden="true" />
         )}
         <DropdownMenu
+          modal={false}
           open={serverMenuOpen}
           onOpenChange={onServerMenuOpenChange}
         >
@@ -561,6 +562,7 @@ const TerminalTabBar = ({
         </DropdownMenu>
 
         <DropdownMenu
+          modal={false}
           open={workbenchMenuOpen}
           onOpenChange={onWorkbenchMenuOpenChange}
         >
