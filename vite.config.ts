@@ -105,6 +105,13 @@ export default defineConfig(({ mode }) => {
           ),
         },
         { find: "@", replacement: path.resolve(configDir, "./src") },
+        {
+          find: /^monaco-editor-codicon\.css$/,
+          replacement: path.resolve(
+            configDir,
+            "node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css",
+          ),
+        },
         // Force xterm to use the CJS build to avoid a rollup bug where `||=` in
         // xterm.mjs is incorrectly lowered to `void 0||(i={})` with an undeclared `i`,
         // causing `ReferenceError: i is not defined` at requestMode when vi sends DECRQM sequences.

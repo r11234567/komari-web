@@ -1,6 +1,4 @@
-// chardet and legacy encodings are dynamically checked; full support lands in P6
-const chardetModule: { detect?: (bytes: Uint8Array) => string | null } | null =
-  (globalThis as unknown as { __komariChardet?: { detect: (bytes: Uint8Array) => string | null } }).__komariChardet ?? null;
+import chardet from "chardet";
 export const MAX_EDITABLE_FILE_SIZE = 2 * 1024 * 1024;
 /** Default logical block size for both file uploads and downloads. */
 export const TRANSFER_CHUNK_SIZE = 25 * 1024 * 1024;
@@ -351,21 +349,19 @@ export const detectRemoteTextEncoding = (bytes: Uint8Array): RemoteTextEncoding 
     new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     return "utf-8";
   } catch {
-    const detected = chardetModule?.detect ? normalizeRemoteTextEncoding(chardetModule.detect(bytes)) : null;
+    const detected = normalizeRemoteTextEncoding(chardet.detect(bytes));
     return detected && detected !== "utf-8" ? detected : detectByCandidateScore(bytes);
   }
 };
 
-let legacyEncoderModulePromise: Promise<any> | null = null;
+let legacyEncoderModulePromise: Promise<{ TextEncoder: any }> | null = null;
 
 const loadLegacyTextEncoder = async () => {
   legacyEncoderModulePromise ??= (async () => {
     try {
-      const encodingPkg = "@zxing/text-encoding/es2015/encoding";
-      const indexesPkg = "@zxing/text-encoding/es2015/encoding-indexes";
       const [encodingModule, indexesModule] = await Promise.all([
-        import(/* @vite-ignore */ encodingPkg),
-        import(/* @vite-ignore */ indexesPkg),
+        import("@zxing/text-encoding/es2015/encoding"),
+        import("@zxing/text-encoding/es2015/encoding-indexes"),
       ]);
       const scope = globalThis as typeof globalThis & {
         TextEncodingIndexes?: { encodingIndexes: typeof indexesModule.encodingIndexes };
@@ -373,7 +369,19 @@ const loadLegacyTextEncoder = async () => {
       scope.TextEncodingIndexes ??= { encodingIndexes: indexesModule.encodingIndexes };
       return encodingModule;
     } catch {
-      return { TextEncoder };
+      try {
+        const { createRequire } = await import("node:module");
+        const req = createRequire(import.meta.url);
+        const encodingModule = req("@zxing/text-encoding");
+        const indexesModule = req("@zxing/text-encoding/cjs/encoding-indexes.js");
+        const scope = globalThis as typeof globalThis & {
+          TextEncodingIndexes?: { encodingIndexes: typeof indexesModule.encodingIndexes };
+        };
+        scope.TextEncodingIndexes ??= { encodingIndexes: indexesModule.encodingIndexes };
+        return encodingModule;
+      } catch {
+        return { TextEncoder };
+      }
     }
   })();
   const module = await legacyEncoderModulePromise;
