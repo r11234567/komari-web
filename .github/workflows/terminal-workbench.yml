@@ -28,7 +28,7 @@ jobs:
           npm ci 2>&1 | tee ci-artifacts/install.log
           npm run audit:security 2>&1 | tee ci-artifacts/dependency-audit.log
           npx tsc -b 2>&1 | tee ci-artifacts/typecheck.log
-          npx eslint src/pages/terminal/ tests/terminalWorkbench.test.ts 2>&1 | tee ci-artifacts/lint.log
+          npx eslint src/pages/terminal/ tests/terminalWorkbench.test.ts tests/fileManagerWorkbench.test.ts 2>&1 | tee ci-artifacts/lint.log
           npm test 2>&1 | tee ci-artifacts/tests.log
           npm run build 2>&1 | tee ci-artifacts/build.log
           mv dist dist-theme
