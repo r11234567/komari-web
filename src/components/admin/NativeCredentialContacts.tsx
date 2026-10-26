@@ -5,6 +5,7 @@ import { CredentialPurpose, type GetCredentialContactsResponse, type TrustedCred
 import { connectClients } from "@/api/connect/client";
 import { deleteContactResource, nativeContactResource, normalizeNativeContact, type ContactKind, type NativeContactDraft } from "@/utils/nativeContacts";
 import { toast } from "sonner";
+import { requestTrustedPasskey } from "@/utils/trustedPasskey";
 
 type Action = { type: "bind"; draft: NativeContactDraft; resource: string } | { type: "delete"; kind: ContactKind; resource: string };
 type Stage = "edit" | "authorize" | "destination";
@@ -75,19 +76,35 @@ export default function NativeCredentialContacts() {
   const startVerification = () => void run(async (signal) => {
     if (!action) return;
     const result = await client.beginVerification({ providerId: provider, purpose: CredentialPurpose.MANAGE_CREDENTIALS, resource: action.resource }, options(signal));
-    if (result.promptType !== "otp" || !result.challengeId) throw new Error("Unsupported verification prompt");
+    if (!result.challengeId || !["otp", "webauthn"].includes(result.promptType)) throw new Error("Unsupported verification prompt");
     rememberChallenge(result.challengeId);
+    if (result.promptType === "webauthn") {
+      let token: string | undefined;
+      try {
+        const proof = await requestTrustedPasskey(result.prompt, signal);
+        const completed = await client.completeVerification({ challengeId: result.challengeId, proof }, options(signal));
+        token = completed.authorization?.grantToken;
+      } catch (error) {
+        void client.cancelVerification({ challengeId: result.challengeId }).catch(() => {});
+        if (challengeRef.current === result.challengeId) rememberChallenge("");
+        throw error;
+      }
+      await finish(token, signal);
+    }
   });
+  const finish = async (token: string | undefined, signal: AbortSignal) => {
+    if (!action || !token) throw new Error("Missing credential authorization");
+    rememberChallenge("");
+    if (stage === "authorize" && action.type === "bind") { await startDestination(action.draft, token, signal); return; }
+    if (action.type === "delete") await client.deleteCredentialContact({ kind: action.kind, grantToken: token }, options(signal));
+    else await client.saveCredentialContact({ ...action.draft, grantToken: token }, options(signal));
+    await refresh(signal); setStage("edit"); setAction(undefined); setAddress(""); setPassword("");
+    toast.success(t("account.native_otp.saved"));
+  };
   const verify = () => void run(async (signal) => {
     if (!action || !challenge || !/^[0-9]{6}$/.test(code)) throw new Error(t("account.native_otp.enter_code"));
     const result = await client.completeVerification({ challengeId: challenge, proof: { code } }, options(signal));
-    if (!result.authorization?.grantToken) throw new Error("Missing credential authorization");
-    rememberChallenge("");
-    if (stage === "authorize" && action.type === "bind") { await startDestination(action.draft, result.authorization.grantToken, signal); return; }
-    if (action.type === "delete") await client.deleteCredentialContact({ kind: action.kind, grantToken: result.authorization.grantToken }, options(signal));
-    else await client.saveCredentialContact({ ...action.draft, grantToken: result.authorization.grantToken }, options(signal));
-    await refresh(signal); setStage("edit"); setAction(undefined); setAddress(""); setPassword("");
-    toast.success(t("account.native_otp.saved"));
+    await finish(result.authorization?.grantToken, signal);
   });
 
   return <Flex direction="column" gap="3" className="km-account-native-otp w-full max-w-xl">
