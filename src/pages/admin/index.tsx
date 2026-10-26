@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { TrafficSettingsDialog } from "@/components/admin/TrafficSettingsDialog";
 import {
   NodeDetailsProvider,
   useNodeDetails,
@@ -604,6 +605,7 @@ const ActionButtons = ({ node }: { node: NodeDetail }) => {
   return (
     <div className="flex items-center gap-4">
       <AgentDeploymentDialog agentId={node.uuid} title="配置下发" />
+      <TrafficSettingsDialog uuid={node.uuid} name={node.name} />
       <IconButton
         title={t("terminal.title")}
         variant="ghost"
