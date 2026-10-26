@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { billingRequest, expiryEditPayload, resetBillingCache, type BillingPolicy } from "@/utils/billing";
 import { TrafficSettingsDialog } from "@/components/admin/TrafficSettingsDialog";
 import {
   NodeDetailsProvider,
@@ -1117,6 +1118,22 @@ function BillingButton({ node }: { node: NodeDetail }) {
   );
   const [currency, setCurrency] = React.useState<string>(node.currency || "$");
 
+  const [policy, setPolicy] = React.useState<BillingPolicy | null>(null);
+  const [expiryLocal, setExpiryLocal] = React.useState("");
+  const [expiryZone, setExpiryZone] = React.useState("Asia/Shanghai");
+  const [policyError, setPolicyError] = React.useState("");
+  React.useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    setPolicy(null); setPolicyError("");
+    setBillingCycle(String(node.billing_cycle)); setCurrency(node.currency || "$"); setAutoRenewal(node.auto_renewal || false);
+    void billingRequest<BillingPolicy>(`/api/admin/client/${node.uuid}/billing-policy`, { signal: controller.signal }).then((value) => {
+      if (controller.signal.aborted) return;
+      setPolicy(value); setExpiryLocal(value.expiry_local_datetime); setExpiryZone(value.expiry_timezone);
+    }).catch((error) => { if (!controller.signal.aborted) setPolicyError(String(error)); });
+    return () => controller.abort();
+  }, [open, node.uuid, node.billing_cycle, node.currency, node.auto_renewal]);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -1133,18 +1150,15 @@ function BillingButton({ node }: { node: NodeDetail }) {
       const billingCycleValue = parseInt(
         (formData.get("billingCycle") as string) || "30"
       );
-      const expiredAtValue = (formData.get("expiredAt") as string) || "";
-      const expiredAt = expiredAtValue
-        ? new Date(`${expiredAtValue}T00:00:00Z`).toISOString()
-        : null;
+      if (!policy) throw new Error("账单策略尚未加载");
       const currencyValue = (formData.get("currency") as string) || "$";
 
-      await fetch(`/api/admin/client/${node.uuid}/edit`, {
+      const response = await fetch(`/api/admin/client/${node.uuid}/edit`, {
         method: "POST",
         body: JSON.stringify({
           price,
           billing_cycle: billingCycleValue,
-          expired_at: expiredAt,
+          ...expiryEditPayload(policy, expiryLocal, expiryZone),
           currency: currencyValue,
           auto_renewal: autoRenewal,
         }),
@@ -1152,6 +1166,9 @@ function BillingButton({ node }: { node: NodeDetail }) {
           "Content-Type": "application/json",
         },
       });
+      const result = await response.json();
+      if (!response.ok || result.status !== "success") throw new Error(result.message || `HTTP ${response.status}`);
+      resetBillingCache();
       refresh();
       setOpen(false);
     } catch (error) {
@@ -1220,34 +1237,11 @@ function BillingButton({ node }: { node: NodeDetail }) {
                 {t("admin.nodeTable.expiredAt")}
               </label>
             </Flex>
-            <TextField.Root
-              name="expiredAt"
-              defaultValue={
-                node.expired_at
-                  ? new Date(node.expired_at).toISOString().slice(0, 10)
-                  : "0001-01-01"
-              }
-              type="date"
-            >
-              <TextField.Slot side="right">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    const dateInput = document.querySelector(
-                      'input[name="expiredAt"]'
-                    ) as HTMLInputElement;
-                    if (dateInput) {
-                      const futureDate = new Date();
-                      futureDate.setFullYear(futureDate.getFullYear() + 200);
-                      dateInput.value = futureDate.toISOString().slice(0, 10);
-                    }
-                  }}
-                >
-                  {t("admin.nodeTable.setToLongTerm", "设置为长期")}
-                </Button>
-              </TextField.Slot>
-            </TextField.Root>
+            {policyError ? <Callout.Root color="red"><Callout.Text>{policyError}</Callout.Text></Callout.Root> : null}
+            <TextField.Root name="expiredAt" type="datetime-local" step="1" value={expiryLocal} disabled={!policy || saving} onChange={(event) => setExpiryLocal(event.target.value)} />
+            <TextField.Root aria-label="到期时区" placeholder="Asia/Shanghai" value={expiryZone} disabled={!policy || saving} onChange={(event) => setExpiryZone(event.target.value)} />
+            <Text size="1" color="gray">到期时区（IANA，例如 Asia/Shanghai、UTC）。留空到期时间表示长期。</Text>
+            <Button type="button" variant="soft" disabled={!policy || saving} onClick={() => setExpiryLocal("")}>{t("admin.nodeTable.setToLongTerm", "设置为长期")}</Button>
             <Flex gap="2" align="center"></Flex>
             <SettingCardSwitch
               title={t("admin.nodeTable.autoRenewal")}
@@ -1255,7 +1249,7 @@ function BillingButton({ node }: { node: NodeDetail }) {
               defaultChecked={node.auto_renewal || false}
               onChange={setAutoRenewal}
             />
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || !policy || !expiryZone.trim()}>
               {t("common.save")}
             </Button>
           </Flex>

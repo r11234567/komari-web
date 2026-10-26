@@ -1,5 +1,5 @@
 export type BillingCurrency = "CNY" | "USD";
-export type BillingNativeCurrency = "CNY" | "USD" | "EUR" | "GBP" | "CAD";
+export type BillingNativeCurrency = "CNY" | "USD" | "EUR" | "GBP" | "CAD" | "HKD";
 
 export type AmountBreakdown = {
   base: string;
@@ -66,6 +66,7 @@ export type BillingServer = {
   month_extra: string;
   month_total: string;
   expired_at?: string | null;
+  expiry_timezone?: string;
   remaining_days?: number | null;
   remaining_value?: string | null;
 };
@@ -136,12 +137,15 @@ export const billingNativeCurrencies: BillingNativeCurrency[] = [
   "EUR",
   "GBP",
   "CAD",
+  "HKD",
 ];
 
 const currencySymbols: Record<string, string> = {
   CNY: "¥",
   USD: "$",
   CAD: "C$",
+  HKD: "HK$",
+  "HK$": "HK$",
   EUR: "€",
   GBP: "£",
   "¥": "¥",
@@ -317,4 +321,42 @@ export function billingTypeLabel(type: string): string {
     voided: "已作废",
   };
   return labels[type] || type;
+}
+
+export type BillingPolicy = { expired_at: string | null; expiry_timezone: string; expiry_local_datetime: string };
+
+export function isLongTermExpiry(value?: string | null): boolean {
+  if (!value) return true;
+  const date = new Date(value);
+  return !Number.isFinite(date.getTime()) || date.getUTCFullYear() < 2 || date.getUTCFullYear() > 2200;
+}
+
+export function remainingExpiryDays(value?: string | null, now = Date.now()): number | null {
+  return isLongTermExpiry(value) ? null : Math.max(0, Math.ceil((new Date(value!).getTime() - now) / 86400000));
+}
+
+export function formatExpiry(value?: string | null, timezone = "Asia/Shanghai"): string {
+  if (isLongTermExpiry(value)) return "长期";
+  try {
+    return new Intl.DateTimeFormat("sv-SE", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(new Date(value!)) + " " + timezone;
+  } catch { return new Date(value!).toISOString(); }
+}
+
+// Omit an untouched expiry so subsecond precision and ambiguous DST instants survive unrelated edits.
+export function expiryEditPayload(policy: BillingPolicy, local: string, zone: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  if (zone !== policy.expiry_timezone) result.expiry_timezone = zone.trim();
+  if (local !== policy.expiry_local_datetime) {
+    if (!local) result.expired_at = null;
+    else {
+      const precise = local.length === 16 ? local + ":00" : local;
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(precise)) throw new Error("到期时间需精确到秒");
+      result.expiry_local_datetime = precise;
+      result.expiry_timezone = zone.trim();
+    }
+  } else if (zone !== policy.expiry_timezone && local) {
+    // Changing timezone keeps the displayed wall clock, matching an explicit editor choice.
+    result.expiry_local_datetime = local;
+  }
+  return result;
 }
