@@ -42,6 +42,7 @@ jobs:
             typecheck) bash scripts/ci/run-audit-check.sh typecheck node node_modules/typescript/bin/tsc -b ;;
             lint) bash scripts/ci/run-audit-check.sh lint npm run lint ;;
             unit)
+              bash scripts/ci/run-audit-check.sh traffic-calibration node --test tests/trafficCalibration.test.ts
               bash scripts/ci/run-audit-check.sh terminal-transport node --test tests/terminalTransport.test.ts
               bash scripts/ci/run-audit-check.sh unit npm test
               ;;
