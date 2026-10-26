@@ -193,12 +193,8 @@ const ApiCard = () => {
 
   // 生成32位随机字符串
   const generateRandomString = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'komari-';
-    for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(crypto.getRandomValues(new Uint32Array(1))[0] % chars.length));
-    }
-    return result;
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    return "komari-" + Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   };
 
   // 处理生成按钮点击

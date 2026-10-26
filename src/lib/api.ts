@@ -195,8 +195,7 @@ export async function updateSettingsWithToast(
  */
 export async function updateSingleSetting<K extends keyof SettingsResponse>(
   key: K,
-  value: SettingsResponse[K],
-  _currentSettings: SettingsResponse
+  value: SettingsResponse[K]
 ): Promise<SettingsRestart | undefined> {
   return updateSettings({ [key]: value });
 }
@@ -279,7 +278,7 @@ export function useSettings() {
     value: SettingsResponse[K]
   ) => {
     try {
-      const restart = await updateSingleSetting(key, value, cachedSettings);
+      const restart = await updateSingleSetting(key, value);
       return restart;
     } catch (err) {
       settingsError =
