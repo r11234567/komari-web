@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Button, Dialog, Text, TextField } from "@radix-ui/themes";
 import { LoaderCircle, LogIn } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useNativePasswordLogin } from "@/hooks/useNativePasswordLogin";
+import PasswordCredentialStep from "@/components/PasswordCredentialStep";
 
 export type RestrictedAuthStatus = {
   oauth_enabled: boolean;
@@ -9,11 +11,6 @@ export type RestrictedAuthStatus = {
   password_login_enabled: boolean;
   logged_in: boolean;
   username?: string;
-};
-
-type APIResponse = {
-  status: "success" | "error";
-  message?: string;
 };
 
 type RestrictedLoginDialogProps = {
@@ -25,46 +22,16 @@ type RestrictedLoginDialogProps = {
 export default function RestrictedLoginDialog({
   auth,
   onAuthenticated,
-  requestFailedKey = "login.request_failed",
 }: RestrictedLoginDialogProps) {
   const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [twoFactor, setTwoFactor] = useState("");
-  const [requireTwoFactor, setRequireTwoFactor] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const flow = useNativePasswordLogin(onAuthenticated);
+  const busy = flow.busy;
+  const error = flow.error;
 
   const login = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username,
-          password,
-          ...(twoFactor ? { "2fa_code": twoFactor } : {}),
-        }),
-      });
-      const payload = (await response.json()) as APIResponse;
-      if (!response.ok) {
-        if (payload.message === "2FA code is required") {
-          setRequireTwoFactor(true);
-        }
-        throw new Error(payload.message || `HTTP ${response.status}`);
-      }
-      await onAuthenticated();
-    } catch (loginError) {
-      setError(
-        loginError instanceof Error
-          ? loginError.message
-          : t(requestFailedKey),
-      );
-    } finally {
-      setBusy(false);
-    }
+    if (await flow.start(username, password)) setPassword("");
   };
 
   return (
@@ -82,10 +49,11 @@ export default function RestrictedLoginDialog({
             className="km-restricted-login-form mt-5 space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
-              void login();
+              if (flow.pending) void (flow.challenge ? flow.verify() : flow.beginFactor());
+              else void login();
             }}
           >
-            <label className="block">
+            <label className="block" hidden={flow.pending}>
               <Text as="div" size="2" weight="bold" mb="1">
                 {t("login.username")}
               </Text>
@@ -99,7 +67,7 @@ export default function RestrictedLoginDialog({
                 disabled={busy}
               />
             </label>
-            <label className="block">
+            <label className="block" hidden={flow.pending}>
               <Text as="div" size="2" weight="bold" mb="1">
                 {t("login.password")}
               </Text>
@@ -113,28 +81,13 @@ export default function RestrictedLoginDialog({
                 disabled={busy}
               />
             </label>
-            {requireTwoFactor && (
-              <label className="block">
-                <Text as="div" size="2" weight="bold" mb="1">
-                  {t("login.two_factor")}
-                </Text>
-                <TextField.Root
-                  id="restricted-login-2fa-code"
-                  name="2fa_code"
-                  value={twoFactor}
-                  onChange={(event) => setTwoFactor(event.target.value)}
-                  autoComplete="one-time-code"
-                  inputMode="numeric"
-                  disabled={busy}
-                />
-              </label>
-            )}
+            {flow.pending && <PasswordCredentialStep login={flow} />}
             {error && (
               <Text as="div" size="2" color="red">
                 {error}
               </Text>
             )}
-            <Button
+            {!flow.pending && <Button
               type="submit"
               className="w-full"
               disabled={busy || !username.trim() || !password}
@@ -145,7 +98,7 @@ export default function RestrictedLoginDialog({
                 <LogIn size={16} />
               )}
               {busy ? t("loading") : t("login.title")}
-            </Button>
+            </Button>}
           </form>
         )}
         {auth?.oauth_enabled && (

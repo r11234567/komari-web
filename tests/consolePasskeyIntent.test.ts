@@ -101,6 +101,7 @@ function dialogHarness() {
       }
       if (name === "@/contexts/AccountContext") return { useAccount: () => ({ ...state, refresh: async () => {} }) };
       if (name === "@/contexts/PublicInfoContext") return { usePublicInfo: () => ({ publicInfo: {} }) };
+      if (name === "@/hooks/useNativePasswordLogin") return { useNativePasswordLogin: () => ({ busy: false, pending: false, error: "" }) };
       if (name === "react-i18next") return { useTranslation: () => [(key: string) => key] };
       if (name === "@/utils/consolePasskeyIntent") return {
         markConsolePasskeyIntent: (path: string) => markConsolePasskeyIntent(path, options),
