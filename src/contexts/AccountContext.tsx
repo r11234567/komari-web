@@ -8,6 +8,7 @@ type Account = {
   username: string;
   uuid: string;
   "2fa_enabled": boolean;
+  trusted_2fa_enabled?: boolean;
 };
 
 // Context

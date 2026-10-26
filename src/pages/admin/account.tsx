@@ -14,6 +14,9 @@ import {
 import { Github, Globe, User } from "lucide-react";
 import AccountTwoFactorGate from "@/components/admin/AccountTwoFactorGate";
 import Loading from "@/components/loading";
+import TrustedCredentialVerification from "@/components/TrustedCredentialVerification";
+import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential_pb";
+import { credentialHeader } from "@/api/connect/trustedCredential";
 import NativeCredentialContacts from "@/components/admin/NativeCredentialContacts";
 
 const Account = () => {
@@ -29,7 +32,7 @@ const InnerLayout = () => {
   const { account, loading, error, refresh } = useAccount();
   const [usernameSaving, setUsernameSaving] = React.useState(false);
   const [passwordSaving, setPasswordSaving] = React.useState(false);
-  const [passwordTwoFa, setPasswordTwoFa] = React.useState("");
+  const [passwordDraft, setPasswordDraft] = React.useState<{ password: string } | null>(null);
   const [twoFaVerified, setTwoFaVerified] = React.useState(false);
   if (loading) {
     return <Loading />;
@@ -37,12 +40,11 @@ const InnerLayout = () => {
   if (error) {
     return <div>{error.message}</div>;
   }
-  if (account?.["2fa_enabled"] && !twoFaVerified) {
+  if ((account?.trusted_2fa_enabled ?? account?.["2fa_enabled"]) && !twoFaVerified) {
     return (
       <AccountTwoFactorGate
         onVerified={() => {
           setTwoFaVerified(true);
-          setPasswordTwoFa("");
         }}
       />
     );
@@ -98,42 +100,26 @@ const InnerLayout = () => {
       toast.error(t("account.password_strength_error"));
       return;
     }
-    if (account?.["2fa_enabled"] && !passwordTwoFa) {
-      toast.error(t("account.otp_empty_error"));
-      return;
-    }
+    setPasswordDraft({ password });
+    form.reset();
+  }
+  async function savePassword(token: string, signal: AbortSignal) {
+    if (!passwordDraft || !account) return;
     setPasswordSaving(true);
-    fetch("/api/admin/update/user", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        uuid: account?.uuid,
-        password: password,
-        "2fa_code": passwordTwoFa,
-      }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.message || "Failed to update password");
-        }
-        return response.json();
-      })
-      .then(() => {
-        toast.success(t("common.updated_successfully"));
-        setPasswordTwoFa("");
-        setTimeout(() => {
-          window.location.href = "/";
-        }, 2000);
-      })
-      .catch((error) => {
-        toast.error(error.message);
-      })
-      .finally(() => {
-        setPasswordSaving(false);
+    try {
+      const response = await fetch("/api/admin/update/user", {
+        method: "POST", credentials: "same-origin", signal,
+        headers: { "Content-Type": "application/json", [credentialHeader]: token },
+        body: JSON.stringify({ uuid: account.uuid, password: passwordDraft.password }),
       });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to update password");
+      }
+      setPasswordDraft(null);
+      toast.success(t("common.updated_successfully"));
+      setTimeout(() => { window.location.href = "/"; }, 2000);
+    } finally { setPasswordSaving(false); }
   }
   
   // SSO 辅助函数
@@ -249,30 +235,20 @@ const InnerLayout = () => {
               name="password_repeat"
               type="password"
             ></TextField.Root>
-            {account?.["2fa_enabled"] ? (
-              <>
-                <label htmlFor="password_2fa">
-                  {t("account.2fa_otp_input_prompt")}
-                </label>
-                <TextField.Root
-                  className="max-w-128"
-                  id="password_2fa"
-                  name="password_2fa"
-                  type="number"
-                  placeholder="000000"
-                  value={passwordTwoFa}
-                  onChange={(e) =>
-                    setPasswordTwoFa((e.target as HTMLInputElement).value)
-                  }
-                />
-              </>
-            ) : null}
             <div>
               <Button disabled={passwordSaving} type="submit">
                 {t("account.change_password_button")}
               </Button>
             </div>
           </form>
+          <Dialog.Root open={Boolean(passwordDraft)} onOpenChange={(open) => { if (!open && !passwordSaving) setPasswordDraft(null); }}>
+            <Dialog.Content>
+              <Dialog.Title>{t("account.change_password_button")}</Dialog.Title>
+              <Dialog.Description>{t("login.two_factor")}</Dialog.Description>
+              <TrustedCredentialVerification purpose={CredentialPurpose.SENSITIVE_OPERATION} resource={`account:password:${account?.uuid ?? ""}`} onAuthorized={savePassword} />
+              <Button type="button" variant="soft" disabled={passwordSaving} onClick={() => setPasswordDraft(null)}>{t("common.cancel")}</Button>
+            </Dialog.Content>
+          </Dialog.Root>
         </Flex>
         <NativeCredentialContacts />
         <Flex direction="column" className="km-account-2fa gap-2">
@@ -466,36 +442,19 @@ const TwoFactorEnabled = () => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
-  const [code, setCode] = React.useState("");
   const { refresh } = useAccount();
-  const disable2fa = () => {
-    if (!code) {
-      toast.error(t("account.otp_empty_error"));
-      return;
-    }
+  const disable2fa = async (token: string, signal: AbortSignal) => {
     setSaving(true);
-    fetch(`/api/admin/2fa/disable?2fa_code=${encodeURIComponent(code)}`, {
-      method: "POST",
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.message || "Failed to disable 2FA");
-        }
-        return response.json();
-      })
-      .then(() => {
-        toast.success(t("common.updated_successfully"));
-        setIsOpen(false);
-        setCode("");
-        refresh();
-      })
-      .catch((error) => {
-        toast.error(error.message);
-      })
-      .finally(() => {
-        setSaving(false);
+    try {
+      const response = await fetch("/api/admin/2fa/disable", {
+        method: "POST", credentials: "same-origin", signal, headers: { [credentialHeader]: token },
       });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to disable 2FA");
+      }
+      toast.success(t("common.updated_successfully")); setIsOpen(false); await refresh();
+    } finally { setSaving(false); }
   };
   return (
     <Flex direction="column" gap="2" className="km-account-2fa-disable">
@@ -512,26 +471,8 @@ const TwoFactorEnabled = () => {
             <Dialog.Description>
               {t("account.disable_2fa_confirmation")}
             </Dialog.Description>
-            <Flex direction="column" gap="2" className="mt-4">
-              <label htmlFor="disable_2fa_code">
-                {t("account.2fa_otp_input_prompt")}
-              </label>
-              <TextField.Root
-                id="disable_2fa_code"
-                type="number"
-                placeholder="000000"
-                value={code}
-                onChange={(e) => setCode((e.target as HTMLInputElement).value)}
-              />
-            </Flex>
-            <Flex gap="2" justify="end" className="mt-4">
-              <Button variant="soft" onClick={() => setIsOpen(false)}>
-                {t("common.cancel")}
-              </Button>
-              <Button disabled={saving} color="red" onClick={disable2fa}>
-                {t("common.confirm")}
-              </Button>
-            </Flex>
+            <TrustedCredentialVerification purpose={CredentialPurpose.SENSITIVE_OPERATION} resource="rest:POST:/api/admin/2fa/disable" onAuthorized={disable2fa} />
+            <Button variant="soft" disabled={saving} onClick={() => setIsOpen(false)}>{t("common.cancel")}</Button>
           </Dialog.Content>
         </Dialog.Root>
       </div>

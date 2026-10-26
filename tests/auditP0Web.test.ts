@@ -179,7 +179,8 @@ test("Sidebar 1.5.0 layout: top-level items and categorized groups", () => {
 test("Account page requires 2FA verification before entry when 2FA is enabled", () => {
   const accountSource = readFileSync(new URL("../src/pages/admin/account.tsx", import.meta.url), "utf8");
   assert.match(accountSource, /AccountTwoFactorGate/);
-  assert.match(accountSource, /account\?\.\["2fa_enabled"\]\s*&&\s*!twoFaVerified/);
+  assert.match(accountSource, /account\?\.trusted_2fa_enabled\s*\?\?\s*account\?\.\["2fa_enabled"\]/);
+  assert.match(accountSource, /&&\s*!twoFaVerified/);
   const gateSource = readFileSync(new URL("../src/components/admin/AccountTwoFactorGate.tsx", import.meta.url), "utf8");
   assert.match(gateSource, /\/api\/admin\/2fa\/verify/);
 });

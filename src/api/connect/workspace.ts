@@ -27,8 +27,8 @@ export const ensureWorkspace = (agentId: string) => {
   if (!activeAgent) activeAgent = agentId;
   return workspaceState.authorize(agentId);
 };
-export async function unlockWorkspace(agentId: string, systemUser: string, code: string) {
-  const response = await client.unlockWorkspace({ agentId, systemUser, twoFactor: { code, challengeId: "" } });
+export async function unlockWorkspace(agentId: string, systemUser: string, authorizationToken: string, signal?: AbortSignal) {
+  const response = await client.unlockWorkspace({ agentId, systemUser, twoFactor: { authorizationToken } }, { signal });
   if (!response.authorization) throw new Error("Missing workspace authorization");
   const grant = fromAuthorization(response.authorization);
   workspaceState.install(grant);

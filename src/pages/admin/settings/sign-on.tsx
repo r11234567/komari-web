@@ -28,7 +28,7 @@ function SignOnGate() {
  }, [verified]);
  if (loading) return <Loading />;
  if (error) return <Text color="red">{error.message}</Text>;
- if (!account?.["2fa_enabled"]) return <div className="p-4 space-y-3">
+ if (!(account?.trusted_2fa_enabled ?? account?.["2fa_enabled"])) return <div className="p-4 space-y-3">
   <Text as="p">{t("account.login_requires_2fa", "Enable two-factor authentication on your account before opening login settings.")}</Text>
   <Button asChild><Link to="/admin/account">{t("account.title")}</Link></Button>
  </div>;

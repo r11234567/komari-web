@@ -1,24 +1,16 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { lockWorkspace, trackWorkspaceActivity, unlockWorkspace, workspaceState } from "@/api/connect/workspace";
+import TrustedCredentialVerification from "@/components/TrustedCredentialVerification";
+import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential_pb";
+import { workspaceCredentialResource } from "@/api/connect/trustedCredential";
 
 function UnlockDialog({ agentId }: { agentId: string }) {
   const [username, setUsername] = useState(() => {
     try { return localStorage.getItem(`workspace-user:${agentId}`) ?? ""; } catch { return ""; }
   });
-  const [code, setCode] = useState("");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const submit = async () => {
-    if (submitting || !username.trim() || !/^\d{6}$/.test(code)) return;
-    setSubmitting(true); setError("");
-    try {
-      await unlockWorkspace(agentId, username.trim(), code);
-      try { localStorage.setItem(`workspace-user:${agentId}`, username.trim()); } catch { /* Optional account preference. */ }
-    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); setCode(""); }
-    finally { setSubmitting(false); }
-  };
-  return <Dialog.Root open onOpenChange={(open) => { if (!open && !submitting) workspaceState.cancel(agentId); }}>
+  const [targetUser, setTargetUser] = useState("");
+  return <Dialog.Root open onOpenChange={(open) => { if (!open) workspaceState.cancel(agentId); }}>
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 bg-[#111]" style={{ zIndex: 200000 }} />
       <Dialog.Content className="fixed left-1/2 top-1/2 w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-neutral-600 bg-[#252526] p-5 text-neutral-100 shadow-xl" style={{ zIndex: 200001 }}>
@@ -26,20 +18,20 @@ function UnlockDialog({ agentId }: { agentId: string }) {
         <Dialog.Description className="mt-2 break-all text-sm text-neutral-300">
           目标：{agentId}。验证后最多使用 30 分钟，3 分钟无操作自动锁定。终端和文件使用下方系统账号的真实权限。
         </Dialog.Description>
-        <form onSubmit={(event) => { event.preventDefault(); void submit(); }} className="mt-4 grid gap-3">
+        <div className="mt-4 grid gap-3">
           <label className="grid gap-1 text-sm">目标机器的系统账号
-            <input autoFocus autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="例如 alice" className="rounded border border-neutral-600 bg-[#1e1e1e] p-2" />
+            <input autoFocus autoComplete="username" disabled={Boolean(targetUser)} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="例如 alice" className="rounded border border-neutral-600 bg-[#1e1e1e] p-2" />
           </label>
-          <label className="grid gap-1 text-sm">新的 2FA 验证码
-            <input type="password" autoComplete="one-time-code" inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.trim())} className="rounded border border-neutral-600 bg-[#1e1e1e] p-2" />
-          </label>
-          <p className="text-xs text-neutral-400">请先在账户启用 2FA；root 还需机器端明确允许。Windows 身份切换暂不支持。</p>
-          {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
+          <p className="text-xs text-neutral-400">请先在账户配置可信凭据；root 还需机器端明确允许。Windows 身份切换暂不支持。</p>
+          {targetUser ? <TrustedCredentialVerification purpose={CredentialPurpose.UNLOCK_WORKSPACE} resource={workspaceCredentialResource(agentId, targetUser)} onAuthorized={async (token, signal) => {
+            await unlockWorkspace(agentId, targetUser, token, signal);
+            try { localStorage.setItem(`workspace-user:${agentId}`, targetUser); } catch { /* Optional account preference. */ }
+          }} /> : <button type="button" disabled={!username.trim()} onClick={() => setTargetUser(username.trim())} className="rounded bg-blue-600 px-3 py-2 disabled:opacity-50">验证并解锁</button>}
           <div className="flex justify-end gap-3">
-            <button type="button" disabled={submitting} onClick={() => workspaceState.cancel(agentId)}>取消</button>
-            <button type="submit" disabled={submitting || !username.trim() || !/^\d{6}$/.test(code)} className="rounded bg-blue-600 px-3 py-2 disabled:opacity-50">{submitting ? "验证中…" : "解锁"}</button>
+            {targetUser && <button type="button" onClick={() => setTargetUser("")}>更换账号</button>}
+            <button type="button" onClick={() => workspaceState.cancel(agentId)}>取消</button>
           </div>
-        </form>
+        </div>
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;
