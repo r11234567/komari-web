@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies only on the runner
         run: bash scripts/ci/run-audit-check.sh trusted-actions-install npm ci --no-audit
       - name: Scoped OTP, Passkey and cancellation transitions (synthetic only)
-        run: bash scripts/ci/run-audit-check.sh trusted-actions-flow node --test tests/trustedVerification.test.ts tests/trustedPasskey.test.ts tests/workspaceState.test.ts
+        run: bash scripts/ci/run-audit-check.sh trusted-actions-flow node --test tests/trustedVerification.test.ts tests/credentialAction.test.ts tests/remoteCredential.test.ts tests/trustedPasskey.test.ts tests/workspaceState.test.ts
       - name: Existing UI compatibility
         if: ${{ !cancelled() }}
         run: bash scripts/ci/run-audit-check.sh trusted-actions-compat npm test

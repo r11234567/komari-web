@@ -22,7 +22,7 @@ const waitToReconnect = (signal: AbortSignal) => new Promise<void>((resolve) => 
 export async function createRemoteExecutions(input: {
   agentIds: string[];
   command: string;
-  twoFactorCode: string;
+  authorizationToken: string;
   timeoutMs?: number;
   maxOutputBytes?: bigint;
   idempotencyKey: string;
@@ -36,7 +36,7 @@ export async function createRemoteExecutions(input: {
       timeout: durationFromMs(input.timeoutMs ?? 5 * 60_000),
       maxOutputBytes: input.maxOutputBytes ?? BigInt(1 << 20),
       idempotencyKey: input.idempotencyKey,
-      twoFactor: { code: input.twoFactorCode, challengeId: "" },
+      twoFactor: { authorizationToken: input.authorizationToken },
     }, { signal, timeoutMs }),
   );
   if (response.executions.length > 0) return response.executions;
@@ -85,14 +85,14 @@ export async function* watchRemoteExecution(input: {
 export const cancelRemoteExecution = (input: {
   executionId: string;
   reason: string;
-  twoFactorCode: string;
+  authorizationToken: string;
   signal: AbortSignal;
 }) => connectUnary(
   { signal: input.signal, timeoutMs: 10_000 },
   (signal, timeoutMs) => connectClients.execution.cancelExecution({
     executionId: input.executionId,
     reason: input.reason,
-    twoFactor: { code: input.twoFactorCode, challengeId: "" },
+    twoFactor: { authorizationToken: input.authorizationToken },
   }, { signal, timeoutMs }),
 );
 
@@ -100,7 +100,6 @@ export async function createRemoteSession(input: {
   agentId: string;
   rows: number;
   columns: number;
-  twoFactorCode?: string;
   signal: AbortSignal;
 }) {
   const access = await workspaceAccess(input.agentId, input.signal);

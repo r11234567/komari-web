@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
+import { workspaceState } from "@/api/connect/workspace";
 import { create } from "@bufbuild/protobuf";
 import { Terminal } from "@xterm/xterm";
 import type { ITerminalOptions } from "@xterm/xterm";
@@ -318,6 +319,7 @@ const TerminalPage = () => {
   const initializedUuidRef = useRef<string | null>(null);
   const params = new URLSearchParams(window.location.search);
   const uuid = params.get("uuid");
+  const workspaceRevision = useSyncExternalStore(workspaceState.subscribe, () => uuid ? workspaceState.revision(uuid) : 0, () => 0);
   const [t] = useTranslation();
   const disconnectMessageRef = useRef(t("terminal.disconnect"));
   const firstBinary = useRef(false);
@@ -333,30 +335,11 @@ const TerminalPage = () => {
   const [settingsResolutionError, setSettingsResolutionError] =
     useState<Error | null>(null);
   const [appearance, setAppearance] = useState<CSSProperties>({});
-  const [twoFaEnabled, setTwoFaEnabled] = useState(false);
-  const [twoFaResolved, setTwoFaResolved] = useState(false);
   const [remoteAgentReady, setRemoteAgentReady] = useState(false);
   const [sessionConnected, setSessionConnected] = useState(false);
-  const [otpCode, setOtpCode] = useState<string | null>(null);
-  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
-  const [otpInput, setOtpInput] = useState("");
   const [manualPasteOpen, setManualPasteOpen] = useState(false);
   const [manualPasteText, setManualPasteText] = useState("");
 
-
-  useEffect(() => {
-    fetch("/api/me")
-      .then((response) => response.json())
-      .then((data) => {
-        setTwoFaEnabled(Boolean(data?.["2fa_enabled"]));
-      })
-      .catch(() => {
-        setTwoFaEnabled(false);
-      })
-      .finally(() => {
-        setTwoFaResolved(true);
-      });
-  }, []);
 
   useEffect(() => {
     if (settingsLoading || settingsResolved) {
@@ -538,20 +521,10 @@ const TerminalPage = () => {
     return () => controller.abort();
   }, [t, uuid]);
 
-  // Trigger OTP dialog when 2FA is enabled
+  // WorkspaceBoundary owns fresh credential verification and account scope.
   useEffect(() => {
-    if (!settingsResolved || !twoFaResolved) return;
-    if (twoFaEnabled && otpCode === null) {
-      setOtpDialogOpen(true);
-    }
-  }, [settingsResolved, twoFaResolved, twoFaEnabled, otpCode]);
-
-  // Connection effect - waits for OTP if 2FA is enabled
-  useEffect(() => {
-    if (!settingsResolved || !twoFaResolved || !remoteAgentReady || uuid === null || !terminalRef.current) return;
-    if (!twoFaEnabled) return;
+    if (!settingsResolved || !remoteAgentReady || uuid === null || !terminalRef.current) return;
     if (initializedUuidRef.current === uuid) return;
-    if (twoFaEnabled && otpCode === null) return; // Wait for OTP
 
     initializedUuidRef.current = uuid;
     firstBinary.current = false;
@@ -624,7 +597,6 @@ const TerminalPage = () => {
           agentId: uuid,
           rows: term.rows,
           columns: term.cols,
-          twoFactorCode: otpCode ?? "",
           signal: sessionController.signal,
         });
         if (disposed) return;
@@ -852,14 +824,7 @@ const TerminalPage = () => {
       window.removeEventListener("resize", handleResize);
       document.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [settingsResolved, twoFaEnabled, twoFaResolved, remoteAgentReady, otpCode, uuid, resizeTerminal, enqueueSessionCommand, t]);
-
-  const submitOtp = useCallback(() => {
-    if (!otpInput) return;
-    setOtpCode(otpInput);
-    setOtpDialogOpen(false);
-  }, [otpInput]);
-
+  }, [settingsResolved, remoteAgentReady, workspaceRevision, uuid, resizeTerminal, enqueueSessionCommand, t]);
 
   // 移除对 leftWidth 的直接依赖，改用防抖
   useEffect(() => {
@@ -879,23 +844,8 @@ const TerminalPage = () => {
     <TerminalContext.Provider
       value={{ terminal: terminalInstance.current, sendCommand }}
     >
-      <Theme appearance="dark" className="km-page-terminal">
+      <Theme appearance="dark" className="km-page-terminal" data-workspace-agent={uuid ?? undefined}>
         <Toaster theme="dark" />
-        {twoFaResolved && !twoFaEnabled ? (
-          <div className="absolute left-1/2 top-4 z-40 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2">
-            <Callout.Root color="red" size="2">
-              <Callout.Icon><TablerAlertTriangleFilled /></Callout.Icon>
-              <Callout.Text>
-                <Flex align="center" justify="between" gap="3">
-                  <span>{t("exec.errors.twoFactorRequired", "请先配置双重验证")}</span>
-                  <Button size="1" variant="soft" onClick={() => { window.location.href = "/admin/account"; }}>
-                    {t("common.settings", "设置")}
-                  </Button>
-                </Flex>
-              </Callout.Text>
-            </Callout.Root>
-          </div>
-        ) : null}
         {settingsResolutionError ? (
           <div className="absolute left-4 top-4 z-30 max-w-[32rem]">
             <Callout.Root
@@ -1004,54 +954,6 @@ const TerminalPage = () => {
                     </Button>
                   </Dialog.Close>
                   <Button type="submit" disabled={!manualPasteText}>
-                    {t("common.confirm")}
-                  </Button>
-                </Flex>
-              </Flex>
-            </form>
-          </Dialog.Content>
-        </Dialog.Root>
-        <Dialog.Root
-          open={otpDialogOpen}
-          onOpenChange={(open) => {
-            // 阻止在未输入验证码时关闭
-            if (!open && otpCode === null) {
-              return;
-            }
-            setOtpDialogOpen(open);
-          }}
-        >
-          <Dialog.Content maxWidth="400px">
-            <Dialog.Title>{t("login.two_factor")}</Dialog.Title>
-            <Dialog.Description size="2" mb="3">
-              {t("account.2fa_otp_input_prompt")}
-            </Dialog.Description>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitOtp();
-              }}
-            >
-              <Flex direction="column" gap="3">
-                <TextField.Root
-                  type="number"
-                  autoFocus
-                  value={otpInput}
-                  placeholder="123456"
-                  onChange={(e) => setOtpInput(e.target.value)}
-                />
-                <Flex gap="3" justify="end">
-                  <Button
-                    variant="soft"
-                    color="gray"
-                    type="button"
-                    onClick={() => {
-                      window.location.href = "/";
-                    }}
-                  >
-                    {t("common.cancel")}
-                  </Button>
-                  <Button type="submit" disabled={!otpInput}>
                     {t("common.confirm")}
                   </Button>
                 </Flex>

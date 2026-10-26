@@ -155,11 +155,11 @@ export const useTerminalPage = () => {
     let mounted = true;
     fetch("/api/me")
       .then((response) => response.json())
-      .then((data: { "2fa_enabled"?: boolean; logged_in?: boolean }) => {
+      .then((data: { "2fa_enabled"?: boolean; trusted_2fa_enabled?: boolean; logged_in?: boolean }) => {
         if (!mounted) {
           return;
         }
-        const enabled = Boolean(data?.["2fa_enabled"]);
+        const enabled = Boolean(data?.trusted_2fa_enabled ?? data?.["2fa_enabled"]);
         setTwoFaEnabled(enabled);
         setTwoFaResolved(true);
         setOnboardingAuthenticated(data.logged_in === true);

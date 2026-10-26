@@ -9,13 +9,13 @@ import {
     Text,
     Separator,
     Badge,
-    TextField,
 } from "@radix-ui/themes";
 import { Play, AlertCircle, CheckCircle2, Copy, Clock, Square } from "lucide-react";
 import { toast } from "sonner";
 import NodeSelector from "@/components/NodeSelector";
 import { SettingCardCollapse } from "@/components/admin/SettingCard";
 import { cancelRemoteExecution, createRemoteExecutions, listRemoteAgentCapabilities, watchRemoteExecution } from "@/api/connect/remote";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import { OperationState } from "@komari/proto/komari/common/v1/common_pb";
 
 interface TaskResult {
@@ -81,7 +81,7 @@ const ExecContent = () => {
     const [commandFocused, setCommandFocused] = useState(false);
     const [commandEditorHeight, setCommandEditorHeight] = useState(COMMAND_EDITOR_COLLAPSED_HEIGHT);
     const [twoFaEnabled, setTwoFaEnabled] = useState(false);
-    const [twoFaCode, setTwoFaCode] = useState("");
+    const [credentialAction, setCredentialAction] = useState<SensitiveAction | null>(null);
     const [executionCapableNodes, setExecutionCapableNodes] = useState<Set<string>>(new Set());
     const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
 
@@ -159,7 +159,7 @@ const ExecContent = () => {
         fetch("/api/me")
             .then((response) => response.json())
             .then((data) => {
-                setTwoFaEnabled(Boolean(data?.["2fa_enabled"]));
+                setTwoFaEnabled(Boolean(data?.trusted_2fa_enabled ?? data?.["2fa_enabled"]));
             })
             .catch(() => {
                 setTwoFaEnabled(false);
@@ -213,78 +213,76 @@ const ExecContent = () => {
             return;
         }
 
-        if (twoFaEnabled && !twoFaCode.trim()) {
-            toast.error(t("account.otp_empty_error"));
-            return;
-        }
-
-        for (const controller of executionControllersRef.current.values()) {
-            controller.abort();
-        }
-        executionControllersRef.current.clear();
-
-        setExecuting(true);
-        setResults([]);
-        setTaskId(null);
-
-        try {
-            const createController = new AbortController();
-            const executions = await createRemoteExecutions({
-                agentIds: selectedNodes,
-                command,
-                twoFactorCode: twoFaCode,
-                idempotencyKey: crypto.randomUUID(),
-                signal: createController.signal,
-            });
-            if (executions.length === 0) {
-                throw new Error(t("common.unknownError"));
+        const targets = selectedNodes.map((id) => id.trim());
+        const idempotencyKey = crypto.randomUUID();
+        setCredentialAction({ action: "execution:create", targets, title: t("exec.execute"), execute: async (authorizationToken, verificationSignal) => {
+            for (const controller of executionControllersRef.current.values()) {
+                controller.abort();
             }
-            setTaskId(executions[0].executionId);
-            setTwoFaCode("");
-            setResults(executions.map((execution) => ({
-                task_id: execution.executionId,
-                client: execution.agentId,
-                client_info: { uuid: execution.agentId, name: nodeDetail.find((node) => node.uuid === execution.agentId)?.name ?? execution.agentId },
-                result: "",
-                exit_code: execution.exitCode ?? null,
-                finished_at: execution.finishedAt ? execution.finishedAt.toString() : null,
-                created_at: execution.createdAt?.toString() ?? new Date().toISOString(),
-                state: execution.state,
-            })));
-            for (const execution of executions) {
-                const controller = new AbortController();
-                executionControllersRef.current.set(execution.executionId, controller);
-                void (async () => {
-                    let output = "";
-                    try {
-                        for await (const update of watchRemoteExecution({ executionId: execution.executionId, signal: controller.signal })) {
-                            const event = update.event;
-                            if (!event) continue;
-                            if (event.output.byteLength > 0) output += new TextDecoder().decode(event.output, { stream: true });
-                            setResults((current) => current.map((result) => result.task_id === execution.executionId ? {
-                                ...result,
-                                result: output,
-                                state: event.state,
-                                exit_code: event.exitCode ?? result.exit_code,
-                                finished_at: [OperationState.CANCELLED, OperationState.DEADLINE_EXCEEDED, OperationState.FAILED, OperationState.SUCCEEDED].includes(event.state) ? new Date().toISOString() : result.finished_at,
-                            } : result));
+            executionControllersRef.current.clear();
+
+            setExecuting(true);
+            setResults([]);
+            setTaskId(null);
+
+            try {
+                const executions = await createRemoteExecutions({
+                    agentIds: targets,
+                    command,
+                    authorizationToken,
+                    idempotencyKey,
+                    signal: verificationSignal,
+                });
+                if (executions.length === 0) {
+                    throw new Error(t("common.unknownError"));
+                }
+                setTaskId(executions[0].executionId);
+                setResults(executions.map((execution) => ({
+                    task_id: execution.executionId,
+                    client: execution.agentId,
+                    client_info: { uuid: execution.agentId, name: nodeDetail.find((node) => node.uuid === execution.agentId)?.name ?? execution.agentId },
+                    result: "",
+                    exit_code: execution.exitCode ?? null,
+                    finished_at: execution.finishedAt ? execution.finishedAt.toString() : null,
+                    created_at: execution.createdAt?.toString() ?? new Date().toISOString(),
+                    state: execution.state,
+                })));
+                for (const execution of executions) {
+                    const controller = new AbortController();
+                    executionControllersRef.current.set(execution.executionId, controller);
+                    void (async () => {
+                        let output = "";
+                        try {
+                            for await (const update of watchRemoteExecution({ executionId: execution.executionId, signal: controller.signal })) {
+                                const event = update.event;
+                                if (!event) continue;
+                                if (event.output.byteLength > 0) output += new TextDecoder().decode(event.output, { stream: true });
+                                setResults((current) => current.map((result) => result.task_id === execution.executionId ? {
+                                    ...result,
+                                    result: output,
+                                    state: event.state,
+                                    exit_code: event.exitCode ?? result.exit_code,
+                                    finished_at: [OperationState.CANCELLED, OperationState.DEADLINE_EXCEEDED, OperationState.FAILED, OperationState.SUCCEEDED].includes(event.state) ? new Date().toISOString() : result.finished_at,
+                                } : result));
+                            }
+                        } catch (error) {
+                            if (!controller.signal.aborted) {
+                                toast.error(error instanceof Error ? error.message : t("common.unknownError"));
+                            }
+                        } finally {
+                            executionControllersRef.current.delete(execution.executionId);
                         }
-                    } catch (error) {
-                        if (!controller.signal.aborted) {
-                            toast.error(error instanceof Error ? error.message : t("common.unknownError"));
-                        }
-                    } finally {
-                        executionControllersRef.current.delete(execution.executionId);
-                    }
-                })();
+                    })();
+                }
+                toast.success(t("exec.taskStarted"));
+            } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : t("common.unknownError");
+                toast.error(errorMessage);
+                throw err;
+            } finally {
+                setExecuting(false);
             }
-            toast.success(t("exec.taskStarted"));
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : t("common.unknownError");
-            toast.error(errorMessage);
-        } finally {
-            setExecuting(false);
-        }
+        } });
     };
 
     const handleCommandKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -328,30 +326,18 @@ const ExecContent = () => {
         return { status: "failed", color: "red" as const, text: t("common.error") };
     };
 
-    const cancelExecution = async (result: TaskResult) => {
-        if (twoFaEnabled && !twoFaCode.trim()) {
-            toast.error(t("account.otp_empty_error"));
-            return;
-        }
-        const controller = new AbortController();
-        try {
-            const response = await cancelRemoteExecution({
-                executionId: result.task_id,
-                reason: "cancelled by administrator",
-                twoFactorCode: twoFaCode,
-                signal: controller.signal,
-            });
-            setTwoFaCode("");
+    const cancelExecution = (result: TaskResult) => {
+        setCredentialAction({ action: "execution:cancel", targets: [result.task_id], title: t("exec.status.cancelRequested", "正在取消"), execute: async (authorizationToken, signal) => {
+            const response = await cancelRemoteExecution({ executionId: result.task_id, reason: "cancelled by administrator", authorizationToken, signal });
             if (response.execution) {
                 setResults((current) => current.map((item) => item.task_id === result.task_id ? { ...item, state: response.execution?.state } : item));
             }
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : t("common.unknownError"));
-        }
+        } });
     };
 
     return (
         <div className="km-page-admin-exec km-exec-header p-4 flex flex-col gap-3">
+            <SensitiveActionDialog request={credentialAction} onClose={() => setCredentialAction(null)} />
             {/* 页面标题 */}
             <div>
                 <h1 className="text-2xl font-bold">{t("exec.title")}</h1>
@@ -433,18 +419,9 @@ const ExecContent = () => {
                     </div>
 
                     <Flex justify="end" gap="2">
-                        {twoFaEnabled ? (
-                            <TextField.Root
-                                className="w-32"
-                                type="number"
-                                placeholder="2FA"
-                                value={twoFaCode}
-                                onChange={(e) => setTwoFaCode((e.target as HTMLInputElement).value)}
-                            />
-                        ) : null}
                         <Button
                             onClick={executeCommand}
-                            disabled={executing || !twoFaEnabled || !command.trim() || selectedNodes.length === 0 || !twoFaCode.trim()}
+                            disabled={executing || !twoFaEnabled || !command.trim() || selectedNodes.length === 0}
                         >
                             {executing ? (
                                 <>

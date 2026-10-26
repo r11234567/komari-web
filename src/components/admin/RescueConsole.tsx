@@ -22,6 +22,7 @@ import {
 } from "@radix-ui/themes";
 import { Power, RefreshCw, ShieldAlert, Square } from "lucide-react";
 import { toast } from "sonner";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import { connectUnary } from "@/api/connect/client";
 import { DEFAULT_STREAM_DEADLINE_MS } from "@/api/connect/deadline";
 import { useConnect } from "@/contexts/ConnectContext";
@@ -72,7 +73,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   const [statusError, setStatusError] = React.useState("");
   const [helperStatus, setHelperStatus] = React.useState<RescueHelperStatus>();
   const [action, setAction] = React.useState<RescueAction>(RescueAction.TEMPORARY_SSH_ACCESS);
-  const [twoFactorCode, setTwoFactorCode] = React.useState("");
+  const [credentialAction, setCredentialAction] = React.useState<SensitiveAction | null>(null);
   const [sshPort, setSshPort] = React.useState("22");
   const [session, setSession] = React.useState<RescueSession>();
   const [output, setOutput] = React.useState("");
@@ -101,6 +102,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   React.useEffect(() => {
     statusController.current?.abort();
     streamController.current?.abort();
+    setCredentialAction(null);
     setAvailable(false);
     setStatusLoaded(false);
     setStatusError("");
@@ -166,18 +168,15 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     }
   };
 
-  const start = async () => {
-    if (!agentId || !twoFactorCode.trim()) {
-      toast.error("请输入新的 2FA 验证码");
-      return;
-    }
+  const start = async (authorizationToken: string, verificationSignal: AbortSignal) => {
+    if (!agentId) throw new Error("请选择节点");
     const controller = new AbortController();
     statusController.current?.abort();
     statusController.current = controller;
     setBusy(true);
     setOutput("");
     try {
-      const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
+      const response = await connectUnary({ signal: AbortSignal.any([controller.signal, verificationSignal]) }, (signal, timeoutMs) =>
         rescue.createRescueSession(
           {
             agentId,
@@ -188,53 +187,38 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
             maxOutputBytes: 256n * 1024n,
             idempotencyKey: crypto.randomUUID(),
             twoFactor: create(TwoFactorProofSchema, {
-              code: twoFactorCode.trim(),
-              challengeId: "",
+              authorizationToken,
             }),
           },
           { signal, timeoutMs },
         ),
       );
-      setTwoFactorCode("");
       setSession(response.session);
       if (response.session) void watch(response.session.sessionId);
     } catch (error) {
       setBusy(false);
-      if (!controller.signal.aborted) {
-        toast.error(error instanceof Error ? error.message : "创建救援任务失败");
-      }
+      throw error;
     }
   };
 
-  const cancel = async () => {
-    if (!session || !twoFactorCode.trim()) {
-      toast.error("取消也需要新的 2FA 验证码");
-      return;
-    }
+  const cancel = async (authorizationToken: string, verificationSignal: AbortSignal) => {
+    if (!session) throw new Error("救援会话已变化");
     const controller = new AbortController();
     statusController.current?.abort();
     statusController.current = controller;
-    try {
-      const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
-        rescue.cancelRescueSession(
-          {
-            sessionId: session.sessionId,
-            reason: "cancelled by administrator",
-            twoFactor: create(TwoFactorProofSchema, {
-              code: twoFactorCode.trim(),
-              challengeId: "",
-            }),
-          },
-          { signal, timeoutMs },
-        ),
-      );
-      setTwoFactorCode("");
-      if (response.session) setSession(response.session);
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        toast.error(error instanceof Error ? error.message : "取消救援任务失败");
-      }
-    }
+    const response = await connectUnary({ signal: AbortSignal.any([controller.signal, verificationSignal]) }, (signal, timeoutMs) =>
+      rescue.cancelRescueSession(
+        {
+          sessionId: session.sessionId,
+          reason: "cancelled by administrator",
+          twoFactor: create(TwoFactorProofSchema, {
+            authorizationToken,
+          }),
+        },
+        { signal, timeoutMs },
+      ),
+    );
+    if (response.session) setSession(response.session);
   };
 
   if (!agentId) return null;
@@ -271,6 +255,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   return (
     <Card className="p-6">
       <Flex direction="column" gap="4">
+        <SensitiveActionDialog request={credentialAction} onClose={() => setCredentialAction(null)} />
         <Flex align="center" gap="2">
           <ShieldAlert size="18" />
           <Text size="4" weight="bold">救援模式控制台</Text>
@@ -306,18 +291,12 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
           </Flex>
         )}
         <Flex gap="2" justify="end" wrap="wrap">
-          <TextField.Root
-            type="password"
-            placeholder="新的 2FA 验证码"
-            value={twoFactorCode}
-            onChange={(event) => setTwoFactorCode(event.target.value)}
-          />
           {session && !terminal ? (
-            <Button color="red" variant="soft" onClick={() => void cancel()}>
+            <Button color="red" variant="soft" onClick={() => setCredentialAction({ action: "rescue:cancel", targets: [session.sessionId], title: "取消救援任务", execute: cancel })}>
               <Square size="15" />取消任务
             </Button>
           ) : (
-            <Button {...(selectedAction.destructive ? { color: "red" as const } : {})} disabled={busy} onClick={() => void start()}>
+            <Button {...(selectedAction.destructive ? { color: "red" as const } : {})} disabled={busy} onClick={() => setCredentialAction({ action: "rescue:create", targets: [agentId, String(action), String(action === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0)], title: `执行${selectedAction.label}`, execute: start })}>
               {action === RescueAction.RESTORE_NETWORK ? <RefreshCw size="15" /> : <Power size="15" />}
               执行{selectedAction.label}
             </Button>
