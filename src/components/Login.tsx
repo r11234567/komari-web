@@ -11,6 +11,8 @@ import { useTranslation } from "react-i18next";
 import { TablerSettings } from "./Icones/Tabler";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
+import { useNativePasswordLogin } from "@/hooks/useNativePasswordLogin";
+import PasswordCredentialStep from "@/components/PasswordCredentialStep";
 import {
   clearConsolePasskeyIntent,
   consumeConsolePasskeyIntent,
@@ -44,15 +46,18 @@ export const LoginForm = ({
   onOAuthLoginStart,
   onPasskeyLoginStart,
 }: LoginFormProps) => {
-  const { account, refresh } = useAccount();
+  const { refresh } = useAccount();
   const { publicInfo } = usePublicInfo();
   const [t] = useTranslation();
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [twoFac, setTwoFac] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState("");
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [require2FA, setRequire2FA] = React.useState(false);
+  const login = useNativePasswordLogin(async () => {
+    await refresh();
+    if (onLoginSuccess) onLoginSuccess();
+    else window.location.assign("/admin/dashboard");
+  });
+  const isLoading = login.busy;
   const fieldId = React.useId().replace(/:/g, "");
   const passwordLoginEnabled = !publicInfo?.disable_password_login;
   const isFormValid =
@@ -66,41 +71,7 @@ export const LoginForm = ({
 
     onPasswordLoginStart?.();
     setErrorMsg("");
-    setIsLoading(true);
-
-    try {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username,
-          password,
-          ...(twoFac && !account?.["2fa_enabled"]
-            ? { "2fa_code": twoFac }
-            : {}),
-        }),
-      });
-      const data = (await response.json()) as { message?: string };
-      if (response.ok) {
-        await refresh();
-        if (onLoginSuccess) {
-          onLoginSuccess();
-        } else {
-          window.location.assign("/admin/dashboard");
-        }
-        return;
-      }
-      if (data.message === "2FA code is required") {
-        setRequire2FA(true);
-        return;
-      }
-      setErrorMsg(data.message || "Login failed");
-    } catch (error) {
-      setErrorMsg("Network error");
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+    if (await login.start(username, password)) setPassword("");
   };
 
   return (
@@ -114,15 +85,16 @@ export const LoginForm = ({
       }}
       onSubmit={(event) => {
         event.preventDefault();
-        if (isFormValid && !isLoading) {
-          void handleLogin();
+        if (!isLoading) {
+          if (login.pending) void (login.challenge ? login.verify() : login.beginFactor());
+          else if (isFormValid) void handleLogin();
         }
       }}
     >
       <Flex direction="column" gap="3">
         {passwordLoginEnabled && (
           <>
-            <label>
+            <label hidden={login.pending}>
               <Text as="div" size="2" mb="1" weight="bold">
                 {t("login.username")}
               </Text>
@@ -138,7 +110,7 @@ export const LoginForm = ({
                 autoFocus
               />
             </label>
-            <label>
+            <label hidden={login.pending}>
               <Text as="div" size="2" mb="1" weight="bold">
                 {t("login.password")}
               </Text>
@@ -154,40 +126,24 @@ export const LoginForm = ({
                 disabled={isLoading}
               />
             </label>
-            <label hidden={!require2FA}>
-              <Text as="div" size="2" mb="1" weight="bold">
-                {t("login.two_factor")}
-              </Text>
-              <TextField.Root
-                className="km-login-input"
-                value={twoFac}
-                onChange={(event) => setTwoFac(event.target.value)}
-                id={`login-2fa-code-${fieldId}`}
-                name="2fa_code"
-                type="text"
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                placeholder="000000"
-                disabled={isLoading}
-              />
-            </label>
-            {errorMsg && (
+            {login.pending && <PasswordCredentialStep login={login} />}
+            {(errorMsg || login.error) && (
               <Text
                 as="div"
                 size="2"
                 color="red"
                 className="km-login-error"
               >
-                {errorMsg}
+                {errorMsg || login.error}
               </Text>
             )}
-            <Button
+            {!login.pending && <Button
               type="submit"
               disabled={isLoading || !isFormValid}
               style={{ opacity: isLoading || !isFormValid ? 0.6 : 1 }}
             >
               {isLoading ? "Logging in..." : t("login.title")}
-            </Button>
+            </Button>}
           </>
         )}
         {publicInfo?.oauth_enable && (
