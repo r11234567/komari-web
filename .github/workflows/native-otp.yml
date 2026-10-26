@@ -23,6 +23,9 @@ jobs:
       - name: Existing account, workspace and plugin regressions
         if: ${{ !cancelled() }}
         run: bash scripts/ci/run-audit-check.sh native-otp-regression npm test
+      - name: Trusted Passkey options and assertion serialization (synthetic only)
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/run-audit-check.sh trusted-passkey node --test tests/trustedPasskey.test.ts
       - name: Typecheck and compile native account UI
         if: ${{ !cancelled() }}
         run: bash scripts/ci/run-audit-check.sh native-otp-build npm run build:system
