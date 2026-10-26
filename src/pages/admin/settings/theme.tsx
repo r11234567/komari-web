@@ -13,7 +13,7 @@ import {
   Callout,
   Separator,
 } from "@radix-ui/themes";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Upload,
   Settings,
@@ -32,6 +32,7 @@ import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import Loading from "@/components/loading";
 import { useSettings } from "@/lib/api";
 import UploadDialog from "@/components/UploadDialog";
+import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 import {
   getThemeConfigurationType,
   normalizeThemeManifest,
@@ -58,7 +59,8 @@ const ThemePage = () => {
   const [themesLoading, setThemesLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadXhr, setUploadXhr] = useState<XMLHttpRequest | null>(null);
+  const uploadTaskRef = useRef<ChunkUploadTask | null>(null);
+  useEffect(() => () => uploadTaskRef.current?.cancel(), []);
   const [settingTheme, setSettingTheme] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -158,99 +160,21 @@ const ThemePage = () => {
     }
   };
 
-  // 上传主题
   const uploadTheme = async (file: File) => {
-    if (!file.name.endsWith(".zip")) {
-      toast.error(t("theme.invalid_file_type"));
-      return;
-    }
-
-    setUploading(true);
-    setUploadProgress(0);
-    const formData = new FormData();
-    formData.append("file", file);
-
-    return new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      setUploadXhr(xhr);
-
-      // 监听上传进度
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const percentComplete = (e.loaded / e.total) * 100;
-          setUploadProgress(Math.round(percentComplete));
-        }
-      });
-
-      // 监听请求完成
-      xhr.addEventListener("load", async () => {
-        if (xhr.status === 413) {
-          toast.error(t("theme.upload_413_content_too_large"));
-          setUploading(false);
-          setUploadProgress(0);
-          setUploadXhr(null);
-          return;
-        }
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            // 检查响应是否成功
-            JSON.parse(xhr.responseText);
-            toast.success(t("theme.upload_success"));
-            setUploadDialogOpen(false);
-            setUploadProgress(0);
-            await fetchThemes();
-            resolve();
-          } catch (err) {
-            toast.error(t("theme.upload_failed") + ": Parse error");
-            reject(err);
-          }
-        } else {
-          try {
-            const errorData = JSON.parse(xhr.responseText);
-            throw new Error(errorData.message || "Upload failed");
-          } catch (err) {
-            toast.error(
-              t("theme.upload_failed") +
-                ": " +
-                (err instanceof Error ? err.message : "Unknown error"),
-            );
-            reject(err);
-          }
-        }
-        setUploading(false);
-        setUploadXhr(null);
-      });
-
-      // 监听错误
-      xhr.addEventListener("error", () => {
-        toast.error(t("theme.upload_failed") + ": Network error");
-        setUploading(false);
-        setUploadProgress(0);
-        setUploadXhr(null);
-        reject(new Error("Network error"));
-      });
-
-      // 监听中断
-      xhr.addEventListener("abort", () => {
-        toast.error(t("theme.upload_failed") + ": Upload cancelled");
-        setUploading(false);
-        setUploadProgress(0);
-        setUploadXhr(null);
-        reject(new Error("Upload cancelled"));
-      });
-
-      // 发送请求
-      xhr.open("PUT", "/api/admin/theme/upload");
-      xhr.send(formData);
-    });
+    if (uploading) return;
+    if (!file.name.toLowerCase().endsWith(".zip")) { toast.error(t("theme.invalid_file_type")); return; }
+    setUploading(true); setUploadProgress(0);
+    const task = createChunkUploadTask("/api/admin/upload");
+    uploadTaskRef.current = task;
+    try {
+      await task.upload("theme", file, setUploadProgress);
+      toast.success(t("theme.upload_success")); setUploadDialogOpen(false);
+      await fetchThemes();
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) toast.error(t("theme.upload_failed") + ": " + String(error));
+    } finally { setUploading(false); setUploadProgress(0); uploadTaskRef.current = null; }
   };
-
-  // 取消上传
-  const cancelUpload = () => {
-    if (uploadXhr) {
-      uploadXhr.abort();
-    }
-  };
+  const cancelUpload = () => uploadTaskRef.current?.cancel();
 
   // 设置主题
   const setActiveTheme = async (themeShort: string) => {

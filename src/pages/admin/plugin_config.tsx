@@ -118,7 +118,10 @@ export default function PluginConfigPage() {
       items.forEach((item) => {
         if (item.type !== "title" && item.key) {
           const saved = result?.data?.[item.key];
-          init[item.key] = saved !== undefined ? saved : item.default;
+          const value = saved !== undefined ? saved : item.default;
+          init[item.key] = item.type === "nodes" || item.type === "pingtasks"
+            ? typeof value === "string" ? value : JSON.stringify(value ?? [])
+            : value;
         }
       });
       setValues(init);

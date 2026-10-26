@@ -1,5 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import type { JsonObject } from "@bufbuild/protobuf";
+import { toJson, type JsonObject } from "@bufbuild/protobuf";
+import { ValueSchema, type Value } from "@bufbuild/protobuf/wkt";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import {
   MetricMigrationState,
@@ -23,10 +24,7 @@ const textValue = (value?: LocalizedText): I18nText | undefined => {
   return value.fallback || undefined;
 };
 
-const arbitraryValue = (value: unknown): unknown => {
-  const kind = (value as { kind?: { value?: unknown } } | undefined)?.kind;
-  return kind?.value;
-};
+const arbitraryValue = (value?: Value): unknown => value ? toJson(ValueSchema, value) : undefined;
 
 const configurationValue = (
   configuration?: ProtoPluginConfiguration,

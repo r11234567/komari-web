@@ -6,14 +6,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Box, Flex, Heading, Tabs } from "@radix-ui/themes";
+import { Box, Button, Flex, Heading, Tabs } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
 import {
+  SettingCard,
   SettingCardLongTextInput,
   SettingCardSelect,
   SettingCardShortTextInput,
   SettingCardSwitch,
 } from "@/components/admin/SettingCard";
+import SelectorDialog from "@/components/SelectorDialog";
+import { useNodeList } from "@/contexts/NodeListContext";
+import { listPingTasks } from "@/api/connect/ping";
 import type { I18nText } from "@/utils/i18nText";
 
 export interface ConfigFormItem {
@@ -31,6 +35,101 @@ interface Group {
   items: ConfigFormItem[];
 }
 
+interface ConfigSelectionOption {
+  id: string;
+  name: string;
+  weight?: number;
+}
+
+interface PingTaskResponse {
+  id?: number;
+  name?: string;
+  weight?: number;
+}
+
+const MAX_SELECTED_NAMES_LENGTH = 50;
+
+function parseSelectionValue(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  try {
+    const source = JSON.parse(value);
+    if (!Array.isArray(source)) return [];
+    return source
+      .filter(
+        (item): item is string | number =>
+          typeof item === "string" || typeof item === "number",
+      )
+      .map(String);
+  } catch {
+    return [];
+  }
+}
+
+function serializeSelectionValue(type: "nodes" | "pingtasks", ids: string[]) {
+  if (type === "nodes") return JSON.stringify(ids);
+  return JSON.stringify(ids.map(Number));
+}
+
+function truncateSelectedNames(value: string) {
+  if (value.length <= MAX_SELECTED_NAMES_LENGTH) return value;
+  return `${value.slice(0, MAX_SELECTED_NAMES_LENGTH - 3)}...`;
+}
+
+function ConfigSelectionField({
+  title,
+  description,
+  value,
+  onValueChange,
+  options,
+  buttonLabel,
+  dialogTitle,
+  listLabel,
+  type,
+}: {
+  title?: string;
+  description?: string;
+  value: unknown;
+  onValueChange: (value: string) => void;
+  options: ConfigSelectionOption[];
+  buttonLabel: string;
+  dialogTitle: string;
+  listLabel: string;
+  type: "nodes" | "pingtasks";
+}) {
+  const selectedIds = parseSelectionValue(value);
+  const names = new Map(options.map((option) => [option.id, option.name]));
+  const selectedNames = truncateSelectedNames(
+    selectedIds.map((id) => names.get(id) || id).join(","),
+  );
+  const fieldDescription =
+    description || selectedNames ? (
+      <>
+        {description}
+        {description && selectedNames ? <br /> : null}
+        {selectedNames}
+      </>
+    ) : undefined;
+
+  return (
+    <SettingCard title={title} description={fieldDescription}>
+      <SettingCard.Action>
+        <SelectorDialog
+          value={selectedIds}
+          onChange={(ids) => onValueChange(serializeSelectionValue(type, ids))}
+          items={options}
+          getId={(option) => option.id}
+          getLabel={(option) => option.name}
+          sortItems={(left, right) => (left.weight ?? 0) - (right.weight ?? 0)}
+          title={dialogTitle}
+          headerLabel={listLabel}
+          className="km-config-selector-dialog"
+          trigger={<Button>{buttonLabel}</Button>}
+        />
+      </SettingCard.Action>
+    </SettingCard>
+  );
+}
+
 interface ConfigFormTabsProps {
   items: ConfigFormItem[];
   values: Record<string, any>;
@@ -46,6 +145,8 @@ interface ConfigFormTabsProps {
   footer?: ReactNode;
   className?: string;
   formClassName?: string;
+  /** Keep the form in a bounded container with its own scroll area. */
+  fillHeight?: boolean;
 }
 
 const SPY_LINE_OFFSET = 16;
@@ -67,9 +168,12 @@ const ConfigFormTabs = ({
   footer,
   className,
   formClassName,
+  fillHeight = true,
 }: ConfigFormTabsProps) => {
   const { t } = useTranslation();
+  const { nodeList } = useNodeList();
   const [activeTab, setActiveTab] = useState(0);
+  const [pingTasks, setPingTasks] = useState<PingTaskResponse[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const lastTabRef = useRef(0);
@@ -80,20 +184,66 @@ const ConfigFormTabs = ({
   const groups = useMemo(() => {
     const result: Group[] = [];
     let current: Group | null = null;
+    let pendingTextboxes: ConfigFormItem[] = [];
     for (const item of items) {
       if (item.type === "title") {
-        current = { title: item.name, items: [] };
+        current = { title: item.name, items: pendingTextboxes };
+        pendingTextboxes = [];
         result.push(current);
-      } else if (item.key) {
+      } else if (item.type === "textbox" && !current) {
+        pendingTextboxes.push(item);
+      } else if (item.key || item.type === "textbox") {
         if (!current) {
-          current = { title: undefined, items: [] };
+          current = { title: undefined, items: pendingTextboxes };
+          pendingTextboxes = [];
           result.push(current);
         }
         current.items.push(item);
       }
     }
+    if (pendingTextboxes.length > 0) {
+      if (result.length > 0) {
+        result[0].items.unshift(...pendingTextboxes);
+      } else {
+        result.push({ title: undefined, items: pendingTextboxes });
+      }
+    }
     return result;
   }, [items]);
+
+  const nodeOptions = useMemo<ConfigSelectionOption[]>(
+    () =>
+      (nodeList ?? []).map((node) => ({
+        id: node.uuid,
+        name: node.name,
+        weight: node.weight,
+      })),
+    [nodeList],
+  );
+  const pingTaskOptions = useMemo<ConfigSelectionOption[]>(
+    () =>
+      pingTasks
+        .filter((task) => task.id !== undefined)
+        .map((task) => ({
+          id: String(task.id),
+          name: task.name || String(task.id),
+          weight: task.weight,
+        })),
+    [pingTasks],
+  );
+  const hasPingTaskFields = items.some((item) => item.type === "pingtasks");
+
+  useEffect(() => {
+    if (!hasPingTaskFields) {
+      setPingTasks([]);
+      return;
+    }
+    const controller = new AbortController();
+    void listPingTasks(controller.signal)
+      .then((result) => { if (!controller.signal.aborted) setPingTasks(result); })
+      .catch(() => { if (!controller.signal.aborted) setPingTasks([]); });
+    return () => controller.abort();
+  }, [hasPingTaskFields]);
 
   useEffect(() => {
     setActiveTab(0);
@@ -167,24 +317,70 @@ const ConfigFormTabs = ({
     lastTabRef.current = index;
     const el = sectionRefs.current[index];
     const container = scrollRef.current;
-    if (el && container) {
-      const containerRect = container.getBoundingClientRect();
-      const elRect = el.getBoundingClientRect();
-      container.scrollTo({
-        top: container.scrollTop + (elRect.top - containerRect.top),
-        behavior: "smooth",
-      });
+    if (el) {
+      if (fillHeight && container) {
+        const containerRect = container.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        container.scrollTo({
+          top: container.scrollTop + (elRect.top - containerRect.top),
+          behavior: "smooth",
+        });
+      } else {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     }
     clearScrollEndTimer();
     scrollEndTimerRef.current = setTimeout(resumeSpy, 400);
   };
 
-  const renderField = (item: ConfigFormItem) => {
+  const renderField = (item: ConfigFormItem, index: number) => {
     const title = resolveText(item.name);
     const description = resolveText(item.help);
+    if (item.type === "textbox") {
+      return (
+        <Box
+          key={`textbox-${index}`}
+          className="km-config-textbox"
+          dangerouslySetInnerHTML={{ __html: title || "" }}
+        />
+      );
+    }
+
     const key = item.key!;
     const value = values[key];
     switch (item.type) {
+      case "nodes":
+        return (
+          <Box key={key} id={key}>
+            <ConfigSelectionField
+              title={title}
+              description={description}
+              value={value}
+              onValueChange={(nextValue) => onValueChange(key, nextValue)}
+              options={nodeOptions}
+              buttonLabel={t("common.select_nodes")}
+              dialogTitle={title || t("common.select_nodes")}
+              listLabel={t("common.server")}
+              type="nodes"
+            />
+          </Box>
+        );
+      case "pingtasks":
+        return (
+          <Box key={key} id={key}>
+            <ConfigSelectionField
+              title={title}
+              description={description}
+              value={value}
+              onValueChange={(nextValue) => onValueChange(key, nextValue)}
+              options={pingTaskOptions}
+              buttonLabel={t("common.select_ping_tasks")}
+              dialogTitle={title || t("common.select_ping_tasks")}
+              listLabel={t("common.name")}
+              type="pingtasks"
+            />
+          </Box>
+        );
       case "switch":
         return (
           <Box key={key} id={key}>
@@ -282,7 +478,12 @@ const ConfigFormTabs = ({
     ));
 
   return (
-    <Flex direction="column" className={`h-full min-h-0 ${className}`}>
+    <Flex
+      direction="column"
+      className={
+        fillHeight ? `h-full min-h-0 ${className}` : className
+      }
+    >
       {/* titlearea：固定顶部，不随滚动移动 */}
       <Box className="shrink-0 mb-5">
         <Flex direction="column" gap="3">
@@ -313,8 +514,12 @@ const ConfigFormTabs = ({
       {/* scrollview：独立滚动窗口，内容（configarea）在其中滚动 */}
       <Box
         ref={scrollRef}
-        onScroll={handleScroll}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        onScroll={fillHeight ? handleScroll : undefined}
+        className={
+          fillHeight
+            ? "min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            : undefined
+        }
       >
         {notice}
         {sidebar ? (
@@ -323,9 +528,7 @@ const ConfigFormTabs = ({
             gap="4"
             align="start"
           >
-            <Box className="w-full shrink-0 md:w-64">
-              {sidebar}
-            </Box>
+            <Box className="w-full shrink-0 md:w-64">{sidebar}</Box>
             <Flex
               direction="column"
               gap="3"
