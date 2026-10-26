@@ -37,7 +37,7 @@ export default function RestrictedLoginDialog({
   return (
     <Dialog.Root open={auth !== null && !auth.logged_in}>
       <Dialog.Content
-        className="km-restricted-login-dialog"
+        className={`km-restricted-login-dialog${flow.pending ? " km-password-factor-pending" : ""}`}
         maxWidth="430px"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
@@ -97,11 +97,11 @@ export default function RestrictedLoginDialog({
               ) : (
                 <LogIn size={16} />
               )}
-              {busy ? t("loading") : t("login.title")}
+              {busy ? t("loading") : t("login.continue", "Continue")}
             </Button>}
           </form>
         )}
-        {auth?.oauth_enabled && (
+        {!flow.pending && auth?.oauth_enabled && (
           <Button
             variant={auth.password_login_enabled ? "soft" : "solid"}
             className="mt-3 w-full"

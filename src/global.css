@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Plugins may inject a Passkey button after the form renders. The password
+   second-factor step has one continuation path and hides alternative logins. */
+.km-password-factor-pending .km-passkey-login {
+  display: none !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

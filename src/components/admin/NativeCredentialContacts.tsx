@@ -6,6 +6,7 @@ import { connectClients } from "@/api/connect/client";
 import { deleteContactResource, nativeContactResource, normalizeNativeContact, type ContactKind, type NativeContactDraft } from "@/utils/nativeContacts";
 import { toast } from "sonner";
 import { requestTrustedPasskey } from "@/utils/trustedPasskey";
+import { normalizeOTP, otpFormat, validOTP } from "@/utils/otpInput";
 
 type Action = { type: "bind"; draft: NativeContactDraft; resource: string } | { type: "delete"; kind: ContactKind; resource: string };
 type Stage = "edit" | "authorize" | "destination";
@@ -19,6 +20,7 @@ export default function NativeCredentialContacts() {
   const [transport, setTransport] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [format, setFormat] = useState(otpFormat(undefined));
   const [stage, setStage] = useState<Stage>("edit");
   const [action, setAction] = useState<Action>();
   const [providers, setProviders] = useState<TrustedCredentialProvider[]>([]);
@@ -60,7 +62,7 @@ export default function NativeCredentialContacts() {
   const startDestination = async (draft: NativeContactDraft, token: string, signal: AbortSignal) => {
     const result = await client.beginContactBinding({ ...draft, authorizationToken: token, password: token ? "" : password }, options(signal));
     if (result.promptType !== "otp" || !result.challengeId) throw new Error("Unsupported verification prompt");
-    setPassword(""); rememberChallenge(result.challengeId); setStage("destination");
+    setFormat(otpFormat(result.prompt)); setPassword(""); rememberChallenge(result.challengeId); setStage("destination");
   };
   const authorize = async (pending: Action, signal: AbortSignal) => {
     const result = await client.listTrustedCredentialProviders({ purpose: CredentialPurpose.MANAGE_CREDENTIALS }, options(signal));
@@ -77,7 +79,7 @@ export default function NativeCredentialContacts() {
     if (!action) return;
     const result = await client.beginVerification({ providerId: provider, purpose: CredentialPurpose.MANAGE_CREDENTIALS, resource: action.resource }, options(signal));
     if (!result.challengeId || !["otp", "webauthn"].includes(result.promptType)) throw new Error("Unsupported verification prompt");
-    rememberChallenge(result.challengeId);
+    setFormat(otpFormat(result.prompt)); rememberChallenge(result.challengeId);
     if (result.promptType === "webauthn") {
       let token: string | undefined;
       try {
@@ -102,7 +104,7 @@ export default function NativeCredentialContacts() {
     toast.success(t("account.native_otp.saved"));
   };
   const verify = () => void run(async (signal) => {
-    if (!action || !challenge || !/^[0-9]{6}$/.test(code)) throw new Error(t("account.native_otp.enter_code"));
+    if (!action || !challenge || !validOTP(code, format)) throw new Error(t("account.native_otp.enter_code"));
     const result = await client.completeVerification({ challengeId: challenge, proof: { code } }, options(signal));
     await finish(result.authorization?.grantToken, signal);
   });
@@ -134,8 +136,8 @@ export default function NativeCredentialContacts() {
         <Button disabled={busy || !provider} onClick={startVerification}>{t("account.native_otp.begin")}</Button>
       </>}
       {challenge && <>
-        <TextField.Root aria-label={t("account.native_otp.enter_code")} value={code} inputMode="numeric" autoComplete="one-time-code" maxLength={6} disabled={busy} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))} placeholder="000000" />
-        <Button disabled={busy || code.length !== 6} onClick={verify}>{t("account.native_otp.verify")}</Button>
+        <TextField.Root aria-label={t("account.native_otp.enter_code")} value={code} inputMode={format.alphanumeric ? "text" : "numeric"} autoComplete="one-time-code" autoCapitalize="characters" spellCheck={false} maxLength={format.length} disabled={busy} onChange={(e) => setCode(normalizeOTP(e.target.value, format))} placeholder={format.alphanumeric ? "AB12CD34" : "000000"} />
+        <Button disabled={busy || !validOTP(code, format)} onClick={verify}>{t("account.native_otp.verify")}</Button>
       </>}
       <Button variant="soft" onClick={reset}>{t("account.native_otp.cancel")}</Button>
     </>}

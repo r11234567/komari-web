@@ -76,10 +76,11 @@ export const LoginForm = ({
 
   return (
     <form
-      className="km-login-form"
+      className={`km-login-form${login.pending ? " km-password-factor-pending" : ""}`}
       onClickCapture={(event) => {
         const target = event.target;
         if (target instanceof Element && target.closest(".km-passkey-login")) {
+          if (login.pending) { event.preventDefault(); event.stopPropagation(); return; }
           onPasskeyLoginStart?.();
         }
       }}
@@ -142,11 +143,11 @@ export const LoginForm = ({
               disabled={isLoading || !isFormValid}
               style={{ opacity: isLoading || !isFormValid ? 0.6 : 1 }}
             >
-              {isLoading ? "Logging in..." : t("login.title")}
+              {isLoading ? t("loading") : t("login.continue", "Continue")}
             </Button>}
           </>
         )}
-        {publicInfo?.oauth_enable && (
+        {!login.pending && publicInfo?.oauth_enable && (
           <Button
             onClick={() => {
               onOAuthLoginStart?.();
