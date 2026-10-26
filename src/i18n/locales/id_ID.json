@@ -27,7 +27,8 @@
     "password_too_short_error": "Kata sandi minimal 8 karakter",
     "qr_fetch_error": "Tidak dapat memuat kode QR",
     "title": "Akun",
-    "menu": "Akun"
+    "menu": "Akun",
+    "login_requires_2fa": "Enable two-factor authentication on your account before opening login settings."
   },
   "account_settings": {
     "bind_sso": "Hubungkan Akun Eksternal",
@@ -400,7 +401,10 @@
     "update": "Perbarui",
     "update_available": "Versi baru tersedia",
     "updated_successfully": "Berhasil diperbarui",
-    "weight": "Bobot"
+    "weight": "Bobot",
+    "more": "Lainnya",
+    "select_nodes": "Pilih node",
+    "select_ping_tasks": "Pilih tugas Ping"
   },
   "copy_success": "Berhasil disalin!",
   "current_online": "Sedang online",
@@ -680,6 +684,12 @@
       "window": "Jendela",
       "window_minutes": "Jendela (menit)",
       "description": "Atur ambang packet loss, jendela evaluasi, dan jeda berdasarkan hasil pemantauan latensi."
+    },
+    "channels": {
+      "title": "Saluran Notifikasi"
+    },
+    "general": {
+      "title": "Peristiwa Umum"
     }
   },
   "page_not_found": "Server tidak dapat menemukan halaman yang Anda minta.",
@@ -760,7 +770,22 @@
     "upload_failed": "Unggahan plugin gagal",
     "uploaded": "Plugin diunggah",
     "uploading": "Mengunggah...",
-    "zip_files_only": "Hanya file .zip yang didukung"
+    "zip_files_only": "Hanya file .zip yang didukung",
+    "config_saved_and_reloaded": "Konfigurasi disimpan dan plugin dimuat ulang",
+    "config_saved_reload_failed": "Konfigurasi disimpan, tetapi plugin gagal dimuat ulang",
+    "market_category": "Kategori plugin",
+    "categories": {
+      "notification": "Saluran notifikasi",
+      "monitoring": "Pemantauan dan peringatan",
+      "network": "Jaringan dan domain",
+      "security": "Login dan keamanan",
+      "integration": "Data dan integrasi",
+      "utility": "Sistem dan utilitas",
+      "uncategorized": "Tanpa kategori"
+    },
+    "market_update_required": "Komari perlu diperbarui",
+    "save_and_reload": "Simpan dan muat ulang",
+    "saving_and_reloading": "Menyimpan dan memuat ulang..."
   },
   "pprof": {
     "capture_duration": "Durasi pengambilan CPU dan trace",
@@ -1838,5 +1863,19 @@
     "upload_destination": "ke",
     "upload_failed": "Unggah gagal",
     "uploading": "Mengunggah"
+  },
+  "adminNavigation": {
+    "operations": "Pemantauan & operasi",
+    "system": "Pengaturan sistem",
+    "security": "Akun & keamanan",
+    "site": "Pengaturan situs",
+    "general": "Pengaturan umum",
+    "login": "Autentikasi",
+    "profile": "Profil",
+    "sessions": "Sesi login",
+    "pluginSettings": "Pengaturan plugin",
+    "events": "Notifikasi peristiwa",
+    "pluginFeatures": "Fitur plugin",
+    "extensions": "Tampilan & plugin"
   }
 }

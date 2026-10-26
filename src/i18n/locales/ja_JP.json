@@ -27,7 +27,8 @@
     "password_too_short_error": "パスワードの長さは最低8文字でなければなりません",
     "qr_fetch_error": "QRコードを読み込めません",
     "title": "アカウント",
-    "menu": "アカウント"
+    "menu": "アカウント",
+    "login_requires_2fa": "Enable two-factor authentication on your account before opening login settings."
   },
   "account_settings": {
     "bind_sso": "外部アカウントをバインド",
@@ -400,7 +401,10 @@
     "update": "更新",
     "update_available": "新しいバージョンがあります",
     "updated_successfully": "更新されました",
-    "weight": "重み"
+    "weight": "重み",
+    "more": "もっと見る",
+    "select_nodes": "ノードを選択",
+    "select_ping_tasks": "Ping タスクを選択"
   },
   "copy_success": "クリップボードにコピーされました",
   "current_online": "現在オンライン",
@@ -680,6 +684,12 @@
       "window": "集計期間",
       "window_minutes": "集計期間（分）",
       "description": "遅延監視の結果に基づいて、パケット損失しきい値、集計期間、クールダウンを設定します。"
+    },
+    "channels": {
+      "title": "通知チャンネル"
+    },
+    "general": {
+      "title": "一般イベント"
     }
   },
   "page_not_found": "残念ながら、ページは小鞠に食べられてしまいました。",
@@ -760,7 +770,22 @@
     "upload_failed": "プラグインのアップロードに失敗しました",
     "uploaded": "プラグインをアップロードしました",
     "uploading": "アップロード中...",
-    "zip_files_only": ".zip ファイルのみ対応しています"
+    "zip_files_only": ".zip ファイルのみ対応しています",
+    "config_saved_and_reloaded": "設定を保存し、プラグインを再読み込みしました",
+    "config_saved_reload_failed": "設定は保存されましたが、プラグインの再読み込みに失敗しました",
+    "market_category": "プラグインのカテゴリ",
+    "categories": {
+      "notification": "通知チャンネル",
+      "monitoring": "監視とアラート",
+      "network": "ネットワークとドメイン",
+      "security": "ログインとセキュリティ",
+      "integration": "データと連携",
+      "utility": "システムとツール",
+      "uncategorized": "未分類"
+    },
+    "market_update_required": "Komari の更新が必要です",
+    "save_and_reload": "保存して再読み込み",
+    "saving_and_reloading": "保存して再読み込み中..."
   },
   "pprof": {
     "capture_duration": "CPU とトレースの取得時間",
@@ -1838,5 +1863,19 @@
     "upload_destination": "宛先",
     "upload_failed": "アップロードに失敗しました",
     "uploading": "アップロード中"
+  },
+  "adminNavigation": {
+    "operations": "監視と運用",
+    "system": "システム設定",
+    "security": "アカウントとセキュリティ",
+    "site": "サイト設定",
+    "general": "一般設定",
+    "login": "ログイン認証",
+    "profile": "プロフィール",
+    "sessions": "ログインセッション",
+    "pluginSettings": "プラグイン設定",
+    "events": "イベント通知",
+    "pluginFeatures": "プラグイン機能",
+    "extensions": "外観とプラグイン"
   }
 }

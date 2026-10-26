@@ -366,16 +366,33 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     return () => window.removeEventListener("resize", handleResize);
   }, [isMobile]);
 
-  // 插件注入页面作为“插件”主菜单的二级菜单；主题配置菜单保持顶级扩展项。
+  // 外观与插件保留管理入口；插件自定义页面使用独立的插件功能菜单。
   const mergedBaseMenuItems: ExtendedMenuItem[] = useMemo(() => {
-    if (pluginMenuItems.length === 0) return baseMenuItems;
-    return baseMenuItems.map((item) =>
-      item.labelKey === "plugin.title"
-        ? { ...item, children: [...(item.children || []), ...pluginMenuItems] }
-        : item,
-    );
-  }, [pluginMenuItems]);
-
+    return baseMenuItems.flatMap((item): ExtendedMenuItem[] => {
+      if (item.labelKey === "adminNavigation.extensions") {
+        const children = item.children || [];
+        return [
+          {
+            ...item,
+            children: [
+              ...children.filter((child) => !child.path.includes("/plugins")),
+              ...extraMenuItems,
+              ...children.filter((child) => child.path.includes("/plugins")),
+            ],
+          },
+          ...(pluginMenuItems.length > 0
+            ? [{
+                labelKey: "adminNavigation.pluginFeatures",
+                path: "/admin/plugin-page",
+                icon: "PanelsTopLeft",
+                children: pluginMenuItems,
+              }]
+            : []),
+        ];
+      }
+      return [item];
+    });
+  }, [extraMenuItems, pluginMenuItems]);
   const bottomStartPath = mergedBaseMenuItems.find(
     (item) => item.bottom,
   )?.path;
@@ -386,7 +403,6 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     const newState: { [key: string]: boolean } = {};
     const combined: ExtendedMenuItem[] = [
       ...mergedBaseMenuItems,
-      ...extraMenuItems,
     ];
     combined.forEach((item) => {
       if (item.children) {
@@ -621,7 +637,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
                 className="h-full md:mt-0 mt-6"
                 style={{ width: "100%" }}
               >
-                {[...mergedBaseMenuItems, ...extraMenuItems].map(
+                {mergedBaseMenuItems.map(
                   (item: ExtendedMenuItem) => {
                     // 支持 icon 为 URL/相对路径
                     const isOpen = openSubMenus[item.path];

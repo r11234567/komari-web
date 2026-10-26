@@ -168,12 +168,11 @@ test("Sidebar 1.5.0 layout: top-level items and categorized groups", () => {
     .filter((item: { children?: unknown[] }) => Array.isArray(item.children) && item.children.length > 0)
     .map((item: { labelKey: string }) => item.labelKey);
   assert.deepEqual(groupKeys, [
-    "operations.title",
+    "adminNavigation.operations",
     "notification.title",
-    "theme.menu",
-    "plugin.title",
-    "system.title",
-    "account.menu",
+    "adminNavigation.extensions",
+    "adminNavigation.system",
+    "adminNavigation.security",
   ]);
 });
 
@@ -181,5 +180,6 @@ test("Account page requires 2FA verification before entry when 2FA is enabled", 
   const accountSource = readFileSync(new URL("../src/pages/admin/account.tsx", import.meta.url), "utf8");
   assert.match(accountSource, /AccountTwoFactorGate/);
   assert.match(accountSource, /account\?\.\["2fa_enabled"\]\s*&&\s*!twoFaVerified/);
-  assert.match(accountSource, /\/api\/admin\/2fa\/verify/);
+  const gateSource = readFileSync(new URL("../src/components/admin/AccountTwoFactorGate.tsx", import.meta.url), "utf8");
+  assert.match(gateSource, /\/api\/admin\/2fa\/verify/);
 });

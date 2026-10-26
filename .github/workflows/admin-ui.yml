@@ -1,0 +1,35 @@
+name: Admin UI and plugin integration checkpoint
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies on the runner
+        run: bash scripts/ci/run-audit-check.sh install npm ci --no-audit
+      - name: Account, Connect and existing custom feature regressions
+        run: bash scripts/ci/run-audit-check.sh tests npm test
+      - name: Compile control panel and typed plugin integration
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/run-audit-check.sh system-build npm run build:system
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: admin-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-artifacts/
+            dist/
+          retention-days: 30

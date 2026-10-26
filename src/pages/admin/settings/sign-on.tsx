@@ -9,10 +9,40 @@ import { Button, Text } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
 import React from "react";
+import { Link } from "react-router-dom";
+import { AccountProvider, useAccount } from "@/contexts/AccountContext";
+import AccountTwoFactorGate from "@/components/admin/AccountTwoFactorGate";
+import { reloadGlobalSettings } from "@/lib/api";
+
+export default function SignOnSettings() {
+ return <AccountProvider><SignOnGate /></AccountProvider>;
+}
+function SignOnGate() {
+ const { account, loading, error } = useAccount();
+ const { t } = useTranslation();
+ const [verified, setVerified] = React.useState(false);
+ React.useEffect(() => {
+  if (!verified) return;
+  const timer = window.setTimeout(() => setVerified(false), 30 * 60 * 1000);
+  return () => window.clearTimeout(timer);
+ }, [verified]);
+ if (loading) return <Loading />;
+ if (error) return <Text color="red">{error.message}</Text>;
+ if (!account?.["2fa_enabled"]) return <div className="p-4 space-y-3">
+  <Text as="p">{t("account.login_requires_2fa", "Enable two-factor authentication on your account before opening login settings.")}</Text>
+  <Button asChild><Link to="/admin/account">{t("account.title")}</Link></Button>
+ </div>;
+ if (!verified) return <AccountTwoFactorGate endpoint="/api/admin/2fa/sign-on" onVerified={async () => {
+  await reloadGlobalSettings(true);
+  setVerified(true);
+ }} />;
+ return <SignOnSettingsBody />;
+}
+
 import { renderProviderInputs } from "@/utils/renderProviders";
 import { toast } from "sonner";
 
-export default function SignOnSettings() {
+function SignOnSettingsBody() {
   const { t } = useTranslation();
   const { settings, loading, error } = useSettings();
   const [providerDefs, setProviderDefs] = React.useState<any>({});
@@ -166,7 +196,7 @@ const ApiCard = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = 'komari-';
     for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(Math.floor(crypto.getRandomValues(new Uint32Array(1))[0] % chars.length));
     }
     return result;
   };
