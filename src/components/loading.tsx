@@ -1,46 +1,47 @@
+import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import "./Loading.css"
+import "./Loading.css";
 
 type LoadingProps = {
   text?: string;
-  children?: React.ReactNode;
-  size?: number
+  children?: ReactNode;
+  size?: number;
+  compact?: boolean;
 };
 
-const Loading = ({ text, children, size }: LoadingProps) => {
+const Loading = ({ text, children, size, compact = false }: LoadingProps) => {
   const { t } = useTranslation();
+  const diameter = compact ? 16 : Math.max(16, (size ?? 5) * 10);
 
   return (
-    <div className="km-loading flex items-center justify-center flex-col">
-      <div
-        className="showbox"
-        style={{
-          transform: `scale(${size ? size * 0.1 : 0.5})`,
-          transition: "transform 0.2s",
-        }}
+    <span
+      role="status"
+      aria-live="polite"
+      className={`km-loading ${compact ? "inline-flex items-center gap-2 align-middle" : "flex flex-col items-center justify-center gap-2 py-4"}`}
+    >
+      <span
+        className="loader shrink-0"
+        style={{ width: diameter, height: diameter }}
+        aria-hidden="true"
       >
-        <div className="loader">
-          <svg className="circular" viewBox="25 25 50 50">
-            <circle
-              className="path"
-              cx="50"
-              cy="50"
-              r="20"
-              fill="none"
-              strokeWidth="2"
-              strokeMiterlimit="10"
-            />
-          </svg>
-        </div>
-      </div>
-      <p className="text-lg font-bold">{t("loading")}</p>
-      <p className="text-sm text-muted-foreground mb-4">
-        {text}
-      </p>
-      <div>
-        {children}
-      </div>
-    </div>
+        <svg className="circular" viewBox="25 25 50 50">
+          <circle
+            className="path"
+            cx="50"
+            cy="50"
+            r="20"
+            fill="none"
+            strokeWidth="2"
+            strokeMiterlimit="10"
+          />
+        </svg>
+      </span>
+      <span className={compact ? "text-sm" : "text-lg font-bold"}>
+        {t("loading")}
+      </span>
+      {text && <span className="text-sm text-muted-foreground text-center">{text}</span>}
+      {children}
+    </span>
   );
 };
 

@@ -27,7 +27,8 @@
     "password_too_short_error": "Password must be at least 8 characters long",
     "qr_fetch_error": "Unable to load qrcode",
     "title": "Account",
-    "menu": "Account"
+    "menu": "Account",
+    "login_requires_2fa": "Enable two-factor authentication on your account before opening login settings."
   },
   "account_settings": {
     "bind_sso": "Bind External Account",
@@ -400,7 +401,10 @@
     "update": "Update",
     "update_available": "New version available",
     "updated_successfully": "Updated successfully",
-    "weight": "Weight"
+    "weight": "Weight",
+    "more": "More",
+    "select_nodes": "Select nodes",
+    "select_ping_tasks": "Select Ping tasks"
   },
   "copy_success": "Copied!",
   "current_online": "Current Online",
@@ -680,6 +684,12 @@
       "window": "Window",
       "window_minutes": "Window (minutes)",
       "description": "Set packet-loss thresholds, evaluation windows, and cooldowns based on latency monitor results."
+    },
+    "channels": {
+      "title": "Notification Channels"
+    },
+    "general": {
+      "title": "General Events"
     }
   },
   "page_not_found": "The server cannot find the specific page you're trying to access.",
@@ -760,7 +770,22 @@
     "upload_failed": "Plugin upload failed",
     "uploaded": "Plugin uploaded",
     "uploading": "Uploading...",
-    "zip_files_only": "Only .zip files are supported"
+    "zip_files_only": "Only .zip files are supported",
+    "config_saved_and_reloaded": "Configuration saved and plugin reloaded",
+    "config_saved_reload_failed": "Configuration saved, but plugin reload failed",
+    "market_category": "Plugin category",
+    "categories": {
+      "notification": "Notifications",
+      "monitoring": "Monitoring and alerts",
+      "network": "Network and domains",
+      "security": "Login and security",
+      "integration": "Data and integrations",
+      "utility": "System and utilities",
+      "uncategorized": "Uncategorized"
+    },
+    "market_update_required": "Komari update required",
+    "saving_and_reloading": "Saving and reloading...",
+    "save_and_reload": "Save and reload"
   },
   "pprof": {
     "capture_duration": "CPU and trace capture duration",
@@ -1931,5 +1956,19 @@
     "uploading": "Uploading",
     "fresh_2fa_prompt": "Enter a fresh, unused 6-digit 2FA code for this file operation. Enable 2FA in Account first if needed.",
     "invalid_2fa": "A 6-digit 2FA code is required"
+  },
+  "adminNavigation": {
+    "operations": "Monitoring & operations",
+    "system": "System settings",
+    "security": "Account & security",
+    "site": "Site settings",
+    "general": "General settings",
+    "login": "Authentication",
+    "profile": "Profile",
+    "sessions": "Login sessions",
+    "pluginSettings": "Plugin settings",
+    "events": "Event notifications",
+    "pluginFeatures": "Plugin features",
+    "extensions": "Appearance & plugins"
   }
 }

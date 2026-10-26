@@ -27,7 +27,8 @@
     "password_too_short_error": "密码长度必须至少8位",
     "qr_fetch_error": "无法加载二维码",
     "title": "账户",
-    "menu": "账户"
+    "menu": "账户",
+    "login_requires_2fa": "请先在账户页面启用双重身份验证，再进入登录设置。"
   },
   "account_settings": {
     "bind_sso": "绑定外部账户",
@@ -351,7 +352,10 @@
     "update": "更新",
     "update_available": "有新版本",
     "updated_successfully": "成功更新",
-    "weight": "权重"
+    "weight": "权重",
+    "more": "更多",
+    "select_nodes": "选择节点",
+    "select_ping_tasks": "选择 Ping 任务"
   },
   "copy_success": "已复制到剪贴板",
   "current_online": "当前在线",
@@ -680,6 +684,12 @@
       "title": "延迟监测告警",
       "window": "统计窗口",
       "window_minutes": "统计窗口（分钟）"
+    },
+    "channels": {
+      "title": "通知渠道"
+    },
+    "general": {
+      "title": "通用事件"
     }
   },
   "page_not_found": "真不巧，网页被小鞠吃掉了。",
@@ -760,7 +770,22 @@
     "upload_failed": "插件上传失败",
     "uploaded": "插件已上传",
     "uploading": "上传中...",
-    "zip_files_only": "仅支持 .zip 文件"
+    "zip_files_only": "仅支持 .zip 文件",
+    "categories": {
+      "integration": "数据与集成",
+      "monitoring": "监控与告警",
+      "network": "网络与域名",
+      "notification": "通知渠道",
+      "security": "登录与安全",
+      "uncategorized": "未分类",
+      "utility": "系统与工具"
+    },
+    "config_saved_and_reloaded": "配置已保存，插件已重载",
+    "config_saved_reload_failed": "配置已保存，但插件重载失败",
+    "market_category": "插件分类",
+    "market_update_required": "需要更新 Komari",
+    "save_and_reload": "保存并重载",
+    "saving_and_reloading": "保存并重载中..."
   },
   "pprof": {
     "capture_duration": "CPU 与 trace 采集时长",
@@ -1931,5 +1956,19 @@
     "uploading": "上传中",
     "fresh_2fa_prompt": "请输入一个全新、未使用的 6 位动态验证码以执行此文件操作。如未启用 2FA，请先在账户设置中启用。",
     "invalid_2fa": "请输入 6 位动态验证码"
+  },
+  "adminNavigation": {
+    "events": "事件通知",
+    "extensions": "外观与插件",
+    "general": "通用设置",
+    "login": "登录认证",
+    "operations": "监控与运维",
+    "pluginFeatures": "插件功能",
+    "pluginSettings": "插件设置",
+    "profile": "个人账户",
+    "security": "账号与安全",
+    "sessions": "登录会话",
+    "site": "站点设置",
+    "system": "系统设置"
   }
 }

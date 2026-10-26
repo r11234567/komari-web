@@ -27,7 +27,8 @@
     "password_too_short_error": "密碼長度必須至少8位",
     "qr_fetch_error": "無法載入二維碼",
     "title": "帳戶",
-    "menu": "帳戶"
+    "menu": "帳戶",
+    "login_requires_2fa": "請先在帳戶頁面啟用雙重身分驗證，再進入登入設定。"
   },
   "account_settings": {
     "bind_sso": "繫結外部帳戶",
@@ -400,7 +401,10 @@
     "update": "更新",
     "update_available": "有新版本",
     "updated_successfully": "成功更新",
-    "weight": "權重"
+    "weight": "權重",
+    "more": "更多",
+    "select_nodes": "選擇節點",
+    "select_ping_tasks": "選擇 Ping 任務"
   },
   "copy_success": "已複製到剪貼簿",
   "current_online": "當前線上",
@@ -680,6 +684,12 @@
       "window": "統計視窗",
       "window_minutes": "統計視窗（分鐘）",
       "description": "依延遲監測結果設定封包遺失門檻、統計視窗與冷卻時間。"
+    },
+    "channels": {
+      "title": "通知頻道"
+    },
+    "general": {
+      "title": "通用事件"
     }
   },
   "page_not_found": "真不巧，網頁被小鞠吃掉了。",
@@ -760,7 +770,22 @@
     "upload_failed": "外掛上傳失敗",
     "uploaded": "外掛已上傳",
     "uploading": "上傳中...",
-    "zip_files_only": "僅支援 .zip 檔案"
+    "zip_files_only": "僅支援 .zip 檔案",
+    "config_saved_and_reloaded": "設定已儲存，外掛已重新載入",
+    "config_saved_reload_failed": "設定已儲存，但外掛重新載入失敗",
+    "market_category": "外掛分類",
+    "categories": {
+      "notification": "通知管道",
+      "monitoring": "監控與警報",
+      "network": "網路與網域",
+      "security": "登入與安全",
+      "integration": "資料與整合",
+      "utility": "系統與工具",
+      "uncategorized": "未分類"
+    },
+    "market_update_required": "需要更新 Komari",
+    "save_and_reload": "儲存並重新載入",
+    "saving_and_reloading": "儲存並重新載入中..."
   },
   "pprof": {
     "capture_duration": "CPU 與 trace 擷取時長",
@@ -1838,5 +1863,19 @@
     "upload_destination": "目標",
     "upload_failed": "上傳失敗",
     "uploading": "上傳中"
+  },
+  "adminNavigation": {
+    "operations": "監控與維運",
+    "system": "系統設定",
+    "security": "帳號與安全",
+    "site": "站台設定",
+    "general": "一般設定",
+    "login": "登入驗證",
+    "profile": "個人帳戶",
+    "sessions": "登入工作階段",
+    "pluginSettings": "外掛設定",
+    "events": "事件通知",
+    "pluginFeatures": "外掛功能",
+    "extensions": "外觀與外掛"
   }
 }
