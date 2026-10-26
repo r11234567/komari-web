@@ -14,6 +14,7 @@ import {
 import { Github, Globe, User } from "lucide-react";
 import AccountTwoFactorGate from "@/components/admin/AccountTwoFactorGate";
 import Loading from "@/components/loading";
+import NativeCredentialContacts from "@/components/admin/NativeCredentialContacts";
 
 const Account = () => {
   return (
@@ -273,6 +274,7 @@ const InnerLayout = () => {
             </div>
           </form>
         </Flex>
+        <NativeCredentialContacts />
         <Flex direction="column" className="km-account-2fa gap-2">
           <label className="font-bold text-2xl">2FA</label>
           {account?.["2fa_enabled"] ? (

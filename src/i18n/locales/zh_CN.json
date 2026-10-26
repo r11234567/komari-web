@@ -6,6 +6,28 @@
     "readme_open_in_new_tab": "在新标签页中打开"
   },
   "account": {
+    "native_otp": {
+      "title": "可信联系方式",
+      "description": "绑定用户邮箱或 TG 私聊 ID，用于原生通知验证码。复用通知渠道的发送配置，不会修改告警收件人，也不会关闭 TOTP。同一收件人每分钟最多发送一次，验证码 3 分钟有效。",
+      "email": "邮箱",
+      "telegram_id": "TG 用户 ID（正整数）",
+      "transport": "发送渠道",
+      "contact_type": "联系方式",
+      "no_transport": "请先配置对应的邮件或 Telegram 通知渠道",
+      "telegram_hint": "请先向配置的 Bot 发送 /start；仅支持用户私聊 ID，不支持群组和话题。",
+      "password": "当前密码（首次绑定确认）",
+      "bind": "绑定或更换",
+      "remove": "解绑",
+      "provider": "现有可信凭据",
+      "no_provider": "没有可用的现有可信凭据，请先配置 TOTP。",
+      "verify_existing": "先验证现有可信凭据，授权这次操作。",
+      "verify_new": "请输入发送到新联系方式的验证码，验证成功后才会保存。",
+      "begin": "开始验证 / 发送验证码",
+      "enter_code": "六位验证码",
+      "verify": "验证并继续",
+      "cancel": "取消 / 重新开始",
+      "saved": "可信联系方式已更新"
+    },
     "2fa_disabled": "双重身份验证已禁用",
     "2fa_enabled": "双重身份验证已启用",
     "2fa_otp_input_prompt": "请输入您的身份验证应用生成的动态口令",
