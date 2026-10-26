@@ -1,0 +1,30 @@
+name: Lite billing UI checkpoint
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  billing-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: bash scripts/ci/run-audit-check.sh install npm ci --no-audit
+      - name: Precision, DST preservation, finite expiry and HKD
+        run: bash scripts/ci/run-audit-check.sh billing node --test tests/billingFollowup.test.ts tests/trafficCalibration.test.ts
+      - name: Typecheck
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/run-audit-check.sh types node node_modules/typescript/bin/tsc -b
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lite-billing-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-artifacts/
+          retention-days: 30
