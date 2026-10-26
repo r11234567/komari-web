@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Select } from "@radix-ui/themes";
 import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential_pb";
 import { useTrustedVerification } from "@/hooks/useTrustedVerification";
 import { normalizeOTP, validOTP } from "@/utils/otpInput";
@@ -15,9 +16,12 @@ export default function TrustedCredentialVerification({ purpose, resource, onAut
     {flow.error && <p role="alert" className="text-sm text-red-500">{flow.error}</p>}
     {!flow.challenge ? <>
       <label className="grid gap-1 text-sm">{t("account.native_otp.provider")}
-        <select className="rounded border border-neutral-500 bg-transparent p-2" value={flow.provider} disabled={flow.busy} onChange={(event) => flow.setProvider(event.target.value)}>
-          {flow.providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.displayName}</option>)}
-        </select>
+        <Select.Root value={flow.provider} disabled={flow.busy || !flow.providers.length} onValueChange={flow.setProvider}>
+          <Select.Trigger aria-label={t("account.native_otp.provider")} placeholder={t("account.native_otp.no_provider")} style={{ width: "100%" }} />
+          <Select.Content position="popper" style={{ zIndex: 200010 }}>
+            {flow.providers.map((provider) => <Select.Item key={provider.id} value={provider.id}>{provider.displayName}</Select.Item>)}
+          </Select.Content>
+        </Select.Root>
       </label>
       <button type="button" className={button} disabled={flow.busy || !flow.provider} onClick={() => void flow.begin()}>{t("account.native_otp.begin")}</button>
     </> : <>

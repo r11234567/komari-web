@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Badge, Button, Flex, Text, TextField } from "@radix-ui/themes";
+import { Badge, Button, Flex, Select, Text, TextField } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
 import { CredentialPurpose, type GetCredentialContactsResponse, type TrustedCredentialProvider } from "@komari/proto/komari/credential/v1/credential_pb";
 import { connectClients } from "@/api/connect/client";
@@ -119,20 +119,35 @@ export default function NativeCredentialContacts() {
       <Button size="1" variant="soft" color="red" disabled={busy || stage !== "edit"} onClick={() => void run((signal) => authorize({ type: "delete", kind: contact.kind as ContactKind, resource: deleteContactResource(contact.kind as ContactKind) }, signal))}>{t("account.native_otp.remove")}</Button>
     </Flex>)}
     {stage === "edit" ? <>
-      <label>{t("account.native_otp.contact_type")}<select className="ml-2" value={kind} disabled={busy} onChange={(e) => { setKind(e.target.value as ContactKind); setAddress(""); }}>
-        <option value="email">{t("account.native_otp.email")}</option><option value="telegram">Telegram</option>
-      </select></label>
+      <label className="grid gap-1 text-sm">{t("account.native_otp.contact_type")}
+        <Select.Root value={kind} disabled={busy} onValueChange={(value) => { setKind(value as ContactKind); setAddress(""); }}>
+          <Select.Trigger aria-label={t("account.native_otp.contact_type")} style={{ width: "100%" }} />
+          <Select.Content position="popper">
+            <Select.Item value="email">{t("account.native_otp.email")}</Select.Item><Select.Item value="telegram">Telegram</Select.Item>
+          </Select.Content>
+        </Select.Root>
+      </label>
       <TextField.Root aria-label={kind === "email" ? t("account.native_otp.email") : t("account.native_otp.telegram_id")} type={kind === "email" ? "email" : "text"} inputMode={kind === "telegram" ? "numeric" : "email"} autoComplete="off" value={address} disabled={busy} onChange={(e) => setAddress(e.target.value)} placeholder={kind === "email" ? "you@example.com" : t("account.native_otp.telegram_id")} />
-      <label>{t("account.native_otp.transport")}<select className="ml-2" value={chosenTransport} disabled={busy || !available.length} onChange={(e) => setTransport(e.target.value)}>
-        {!available.length && <option value="">{t("account.native_otp.no_transport")}</option>}{available.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}
-      </select></label>
+      <label className="grid gap-1 text-sm">{t("account.native_otp.transport")}
+        <Select.Root value={chosenTransport} disabled={busy || !available.length} onValueChange={setTransport}>
+          <Select.Trigger aria-label={t("account.native_otp.transport")} placeholder={t("account.native_otp.no_transport")} style={{ width: "100%" }} />
+          <Select.Content position="popper">
+            {available.map((item) => <Select.Item key={item.id} value={item.id}>{item.id}</Select.Item>)}
+          </Select.Content>
+        </Select.Root>
+      </label>
       {kind === "telegram" && <Text size="2" color="gray">{t("account.native_otp.telegram_hint")}</Text>}
       {settings?.passwordBootstrapAllowed && <TextField.Root aria-label={t("account.native_otp.password")} type="password" autoComplete="current-password" value={password} disabled={busy} onChange={(e) => setPassword(e.target.value)} placeholder={t("account.native_otp.password")} />}
       <Button disabled={busy || !settings || !chosenTransport || !address || (settings.passwordBootstrapAllowed && !password)} onClick={startBinding}>{t("account.native_otp.bind")}</Button>
     </> : <>
       <Text>{t(stage === "authorize" ? "account.native_otp.verify_existing" : "account.native_otp.verify_new")}</Text>
       {stage === "authorize" && !challenge && <>
-        <select aria-label={t("account.native_otp.provider")} value={provider} disabled={busy} onChange={(e) => setProvider(e.target.value)}>{providers.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select>
+        <Select.Root value={provider} disabled={busy || !providers.length} onValueChange={setProvider}>
+          <Select.Trigger aria-label={t("account.native_otp.provider")} placeholder={t("account.native_otp.no_provider")} style={{ width: "100%" }} />
+          <Select.Content position="popper">
+            {providers.map((item) => <Select.Item key={item.id} value={item.id}>{item.displayName}</Select.Item>)}
+          </Select.Content>
+        </Select.Root>
         <Button disabled={busy || !provider} onClick={startVerification}>{t("account.native_otp.begin")}</Button>
       </>}
       {challenge && <>
