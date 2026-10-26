@@ -8,7 +8,7 @@
   "account": {
     "native_otp": {
       "title": "Trusted contact methods",
-      "description": "Bind your email or private Telegram user ID for native verification codes. Delivery reuses notification transport settings without changing alert recipients or disabling TOTP. Codes expire after 3 minutes; each recipient permits one send per minute.",
+      "description": "Bind your email or private Telegram user ID for native verification codes. Delivery reuses notification transport settings without changing alert recipients or disabling TOTP. Codes expire after 3 minutes. Until verification succeeds, each recipient permits one send per minute.",
       "email": "Email",
       "telegram_id": "Private Telegram user ID (positive integer)",
       "transport": "Delivery channel",
@@ -23,7 +23,7 @@
       "verify_existing": "Verify an existing trusted credential to authorize this operation.",
       "verify_new": "Enter the code sent to the new contact. Nothing is saved until verification succeeds.",
       "begin": "Start verification / send code",
-      "enter_code": "Six-digit verification code",
+      "enter_code": "Enter verification code",
       "verify": "Verify and continue",
       "cancel": "Cancel / start again",
       "saved": "Trusted contact methods updated"
@@ -1976,8 +1976,8 @@
     "upload_chunk_uploading": "Uploading",
     "upload_chunks": "Chunked upload",
     "uploading": "Uploading",
-    "fresh_2fa_prompt": "Enter a fresh, unused 6-digit 2FA code for this file operation. Enable 2FA in Account first if needed.",
-    "invalid_2fa": "A 6-digit 2FA code is required"
+    "fresh_2fa_prompt": "Enter a fresh, unused verification code for this file operation. Enable 2FA in Account first if needed.",
+    "invalid_2fa": "Enter verification code"
   },
   "adminNavigation": {
     "operations": "Monitoring & operations",

@@ -8,7 +8,7 @@
   "account": {
     "native_otp": {
       "title": "可信联系方式",
-      "description": "绑定用户邮箱或 TG 私聊 ID，用于原生通知验证码。复用通知渠道的发送配置，不会修改告警收件人，也不会关闭 TOTP。同一收件人每分钟最多发送一次，验证码 3 分钟有效。",
+      "description": "绑定用户邮箱或 TG 私聊 ID，用于原生通知验证码。复用通知渠道的发送配置，不会修改告警收件人，也不会关闭 TOTP。验证码 3 分钟有效；未完成验证前，同一收件人每分钟最多发送一次。",
       "email": "邮箱",
       "telegram_id": "TG 用户 ID（正整数）",
       "transport": "发送渠道",
@@ -23,7 +23,7 @@
       "verify_existing": "先验证现有可信凭据，授权这次操作。",
       "verify_new": "请输入发送到新联系方式的验证码，验证成功后才会保存。",
       "begin": "开始验证 / 发送验证码",
-      "enter_code": "六位验证码",
+      "enter_code": "输入验证码",
       "verify": "验证并继续",
       "cancel": "取消 / 重新开始",
       "saved": "可信联系方式已更新"
@@ -1976,8 +1976,8 @@
     "upload_destination": "目标",
     "upload_failed": "上传失败",
     "uploading": "上传中",
-    "fresh_2fa_prompt": "请输入一个全新、未使用的 6 位动态验证码以执行此文件操作。如未启用 2FA，请先在账户设置中启用。",
-    "invalid_2fa": "请输入 6 位动态验证码"
+    "fresh_2fa_prompt": "请输入一个全新、未使用的验证码以执行此文件操作。如未启用 2FA，请先在账户设置中启用。",
+    "invalid_2fa": "输入验证码"
   },
   "adminNavigation": {
     "events": "事件通知",
