@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential_pb";
 import { useTrustedVerification } from "@/hooks/useTrustedVerification";
+import { normalizeOTP, validOTP } from "@/utils/otpInput";
 
 export default function TrustedCredentialVerification({ purpose, resource, onAuthorized }: {
   purpose: CredentialPurpose;
@@ -21,9 +22,9 @@ export default function TrustedCredentialVerification({ purpose, resource, onAut
       <button type="button" className={button} disabled={flow.busy || !flow.provider} onClick={() => void flow.begin()}>{t("account.native_otp.begin")}</button>
     </> : <>
       <label className="grid gap-1 text-sm">{t("account.native_otp.enter_code")}
-        <input autoFocus className="rounded border border-neutral-500 bg-transparent p-2" type="text" autoComplete="one-time-code" inputMode="numeric" maxLength={6} value={flow.code} disabled={flow.busy} onChange={(event) => flow.setCode(event.target.value.replace(/[^0-9]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void flow.verify(); } }} />
+        <input autoFocus className="rounded border border-neutral-500 bg-transparent p-2" type="text" autoComplete="one-time-code" autoCapitalize="characters" spellCheck={false} inputMode={flow.format.alphanumeric ? "text" : "numeric"} maxLength={flow.format.length} value={flow.code} disabled={flow.busy} onChange={(event) => flow.setCode(normalizeOTP(event.target.value, flow.format))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void flow.verify(); } }} />
       </label>
-      <button type="button" className={button} disabled={flow.busy || flow.code.length !== 6} onClick={() => void flow.verify()}>{t("account.native_otp.verify")}</button>
+      <button type="button" className={button} disabled={flow.busy || !validOTP(flow.code, flow.format)} onClick={() => void flow.verify()}>{t("account.native_otp.verify")}</button>
       <button type="button" className={button} disabled={flow.busy} onClick={flow.reset}>{t("account.native_otp.cancel")}</button>
     </>}
   </div>;

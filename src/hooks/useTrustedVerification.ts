@@ -3,6 +3,7 @@ import type { JsonObject } from "@bufbuild/protobuf";
 import { CredentialPurpose, type TrustedCredentialProvider } from "@komari/proto/komari/credential/v1/credential_pb";
 import { trustedCredentialClient as client } from "@/api/connect/trustedCredential";
 import { requestTrustedPasskey } from "@/utils/trustedPasskey";
+import { otpFormat, validOTP } from "@/utils/otpInput";
 
 // Each mounted form owns one action/challenge. A completed token is passed
 // directly to that action and never cached or persisted for another request.
@@ -11,6 +12,7 @@ export function useTrustedVerification(purpose: CredentialPurpose, resource: str
   const [provider, setProvider] = useState("");
   const [challenge, setChallenge] = useState("");
   const [code, setCode] = useState("");
+  const [format, setFormat] = useState(otpFormat(undefined));
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const active = useRef<AbortController | null>(null);
@@ -56,17 +58,17 @@ export function useTrustedVerification(purpose: CredentialPurpose, resource: str
     }
     if (!result.challengeId) throw new Error("Missing verification challenge");
     pending.current = result.challengeId;
-    if (result.promptType === "otp") setChallenge(result.challengeId);
+    if (result.promptType === "otp") { setFormat(otpFormat(result.prompt)); setChallenge(result.challengeId); }
     else if (result.promptType === "webauthn") {
       try { await finish(result.challengeId, await requestTrustedPasskey(result.prompt, signal), signal); }
       catch (e) { cancelChallenge(); throw e; }
     } else { cancelChallenge(); throw new Error("Unsupported credential prompt"); }
   });
   const verify = () => run(async (signal) => {
-    if (!challenge || !/^[0-9]{6}$/.test(code)) throw new Error("Enter the six-digit verification code");
+    if (!challenge || !validOTP(code, format)) throw new Error("Enter the complete verification code");
     try { await finish(challenge, { code }, signal); }
     catch (e) { setCode(""); throw e; }
   });
   const reset = () => { active.current?.abort(); active.current = null; cancelChallenge(); setChallenge(""); setCode(""); setBusy(false); setError(""); };
-  return { providers, provider, setProvider, challenge, code, setCode, busy, error, begin, verify, reset };
+  return { providers, provider, setProvider, challenge, code, setCode, format, busy, error, begin, verify, reset };
 }

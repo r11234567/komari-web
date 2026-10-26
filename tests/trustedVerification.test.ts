@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import * as otpInput from "../src/utils/otpInput.ts";
 
 const source = ts.transpileModule(readFileSync(new URL("../src/hooks/useTrustedVerification.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -15,12 +16,13 @@ function harness(promptType = "otp") {
   const authorized: string[] = [];
   const client = {
     async listTrustedCredentialProviders(input: unknown) { calls.push({ method: "list", input }); return { providers: [{ id: promptType === "otp" ? "native:email_otp" : "plugin:komari-passkey", displayName: "Synthetic credential" }] }; },
-    async beginVerification(input: unknown) { calls.push({ method: "begin", input }); return { promptType, challengeId: "synthetic-challenge", prompt: {} }; },
+    async beginVerification(input: unknown) { calls.push({ method: "begin", input }); return { promptType, challengeId: "synthetic-challenge", prompt: { length: 8, charset: "alphanumeric" } }; },
     async completeVerification(input: unknown) { calls.push({ method: "complete", input }); return { authorization: { grantToken: "synthetic-single-use-grant" } }; },
     async cancelVerification(input: unknown) { calls.push({ method: "cancel", input }); return { cancelled: true }; },
   };
   const exports: any = {};
   vm.runInNewContext(source, { exports, AbortController, require(name: string) {
+    if (name === "@/utils/otpInput") return otpInput;
     if (name === "react") return {
       useState(initial: unknown) { const index = stateIndex++; if (!(index in states)) states[index] = initial; return [states[index], (value: unknown) => { states[index] = value; }]; },
       useRef(initial: unknown) { const index = refIndex++; if (!refs[index]) refs[index] = { current: initial }; return refs[index]; },
@@ -45,9 +47,9 @@ test("scoped native OTP delivers one completed token directly to the action", as
   assert.equal(h.calls[1].input.purpose, 3);
   assert.equal(h.calls[1].input.resource, 'workspace:["synthetic-agent","alice"]');
   assert.equal(h.calls[1].input.providerId, "native:email_otp");
-  h.render().setCode("123456"); await h.render().verify();
+  h.render().setCode("AB12CD34"); await h.render().verify();
   assert.deepEqual(h.authorized, ["synthetic-single-use-grant"]);
-  assert.equal(h.calls[2].input.proof.code, "123456");
+  assert.equal(h.calls[2].input.proof.code, "AB12CD34");
   assert.equal(h.render().code, ""); assert.equal(h.render().challenge, "");
   h.unmount();
 });
