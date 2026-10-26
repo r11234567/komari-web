@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bytesToGB, calibrationTargets, gbToBytes, trafficRequest, trafficResetPayload } from "../src/utils/trafficCalibration.ts";
+import { billableUsage, bytesToGB, calibrationTargets, calibrationTotalTarget, gbToBytes, trafficRequest, trafficResetPayload } from "../src/utils/trafficCalibration.ts";
 import type { CalibrationSnapshot } from "../src/utils/trafficCalibration.ts";
 
 test("provider decimal GB preserves two decimal places exactly", () => {
@@ -35,6 +35,19 @@ test("reset policy retains follow/disabled states and normalizes minute precisio
   assert.equal(trafficResetPayload("0", "00:00:15", "Asia/Shanghai").traffic_reset_time, "00:00:15");
   for (const day of ["-1", "32", "1.5", "NaN"]) assert.throws(() => trafficResetPayload(day, "00:00", "UTC"));
   for (const clock of ["24:00", "12:60", "12:30garbage"]) assert.throws(() => trafficResetPayload("1", clock, "UTC"));
+});
+
+test("provider total uses node counting basis and preserves untouched integer bytes", () => {
+  const snapshot = { effective: { up: 21_234_567_890, down: 1_234_567_890 } } as CalibrationSnapshot;
+  assert.equal(billableUsage(snapshot.effective, "sum"), 22_469_135_780);
+  assert.equal(billableUsage(snapshot.effective, "max"), snapshot.effective.up);
+  assert.equal(billableUsage(snapshot.effective, "min"), snapshot.effective.down);
+  assert.equal(billableUsage(snapshot.effective, "up"), snapshot.effective.up);
+  assert.equal(billableUsage(snapshot.effective, "down"), snapshot.effective.down);
+  assert.deepEqual(calibrationTotalTarget(snapshot, "sum", "22.47"), { target_total: 22_469_135_780, counting_type: "sum" });
+  assert.deepEqual(calibrationTotalTarget(snapshot, "max", "50.72"), { target_total: 50_720_000_000, counting_type: "max" });
+  assert.throws(() => calibrationTotalTarget(snapshot, "up", "1.234"));
+  assert.throws(() => billableUsage({ up: Number.MAX_SAFE_INTEGER, down: 1 }, "sum"));
 });
 
 test("API failures and cancellation remain failures, with full server message", async () => {

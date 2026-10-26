@@ -2,6 +2,8 @@
 // integer-byte conversion; never parseFloat/round a provider value silently.
 export const GB_BYTES = 1_000_000_000;
 export type TrafficUsage = { up: number; down: number };
+export type CountingType = "sum" | "max" | "min" | "up" | "down";
+export const countingTypeLabels: Record<CountingType, string> = { sum: "上传 + 下载", max: "上下行较大值", min: "上下行较小值", up: "仅上传", down: "仅下载" };
 export type TrafficPolicy = {
   traffic_reset_day: number | null;
   traffic_reset_time: string;
@@ -16,8 +18,12 @@ export type CalibrationSnapshot = {
   adjustment: TrafficUsage;
   effective: TrafficUsage;
   history_complete?: boolean;
+  calibration_warning?: string;
   history: Array<{
     calibration_id: string;
+    mode?: string;
+    billable_offset?: number;
+    target_total?: number;
     target: TrafficUsage;
     adjustment: TrafficUsage;
     operator?: string;
@@ -26,6 +32,7 @@ export type CalibrationSnapshot = {
 };
 export type CalibrationResponse = {
   available: boolean;
+  counting_type?: CountingType;
   reason?: string;
   snapshot?: CalibrationSnapshot;
 };
@@ -52,6 +59,24 @@ export function calibrationTargets(snapshot: CalibrationSnapshot, up: string, do
     target_up: up.trim() === bytesToGB(snapshot.effective.up) ? snapshot.effective.up : gbToBytes(up),
     target_down: down.trim() === bytesToGB(snapshot.effective.down) ? snapshot.effective.down : gbToBytes(down),
   };
+}
+
+export function billableUsage(value: TrafficUsage, kind: CountingType): number {
+  let result: number;
+  switch (kind) {
+    case "sum": result = value.up + value.down; break;
+    case "up": result = value.up; break;
+    case "down": result = value.down; break;
+    case "min": result = Math.min(value.up, value.down); break;
+    default: result = Math.max(value.up, value.down);
+  }
+  if (!Number.isSafeInteger(result) || result < 0) throw new Error("流量超出精确计费范围");
+  return result;
+}
+
+export function calibrationTotalTarget(snapshot: CalibrationSnapshot, kind: CountingType, total: string) {
+  const current = billableUsage(snapshot.effective, kind);
+  return { target_total: total.trim() === bytesToGB(current) ? current : gbToBytes(total), counting_type: kind };
 }
 
 export function trafficResetPayload(day: string, clock: string, timezone: string) {
