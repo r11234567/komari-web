@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Flex, Text, TextField } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
-import { fromJson } from "@bufbuild/protobuf";
-import { StructSchema } from "@bufbuild/protobuf/wkt";
 import { CredentialPurpose, type GetCredentialContactsResponse, type TrustedCredentialProvider } from "@komari/proto/komari/credential/v1/credential_pb";
 import { connectClients } from "@/api/connect/client";
 import { deleteContactResource, nativeContactResource, normalizeNativeContact, type ContactKind, type NativeContactDraft } from "@/utils/nativeContacts";
@@ -82,7 +80,7 @@ export default function NativeCredentialContacts() {
   });
   const verify = () => void run(async (signal) => {
     if (!action || !challenge || !/^[0-9]{6}$/.test(code)) throw new Error(t("account.native_otp.enter_code"));
-    const result = await client.completeVerification({ challengeId: challenge, proof: fromJson(StructSchema, { code }) }, options(signal));
+    const result = await client.completeVerification({ challengeId: challenge, proof: { code } }, options(signal));
     if (!result.authorization?.grantToken) throw new Error("Missing credential authorization");
     rememberChallenge("");
     if (stage === "authorize" && action.type === "bind") { await startDestination(action.draft, result.authorization.grantToken, signal); return; }
