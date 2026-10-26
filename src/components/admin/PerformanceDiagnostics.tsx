@@ -1,13 +1,11 @@
 import * as React from "react";
-import { create } from "@bufbuild/protobuf";
 import { durationFromMs } from "@bufbuild/protobuf/wkt";
 import {
   OperationState,
-  TwoFactorProofSchema,
 } from "@komari/proto/komari/common/v1/common_pb";
 import { RescueAction } from "@komari/proto/komari/rescue/v1/rescue_pb";
 import type { DiagnosticsReport } from "@komari/proto/komari/diag/v1/diag_pb";
-import { Badge, Button, Callout, Card, Flex, Grid, Text, TextArea, TextField } from "@radix-ui/themes";
+import { Badge, Button, Callout, Card, Flex, Grid, Text, TextArea } from "@radix-ui/themes";
 import { Activity, AlertTriangle, Cpu, HardDrive, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { connectUnary } from "@/api/connect/client";
@@ -46,7 +44,6 @@ const terminalStates = new Set([
 export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
   const { rescue } = useConnect();
   const [selected, setSelected] = React.useState<RescueAction>(RescueAction.DIAGNOSTICS);
-  const [twoFactor, setTwoFactor] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [output, setOutput] = React.useState("");
   const [report, setReport] = React.useState<DiagnosticsReport | null>(null);
@@ -62,7 +59,6 @@ export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
     setReport(null);
     setState(OperationState.UNSPECIFIED);
 
-    const action = diagnosticActions.find((a) => a.value === selected)!;
     try {
       const response = await connectUnary(
         { signal: controller.signal },
@@ -76,15 +72,10 @@ export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
               timeout: durationFromMs(3 * 60_000),
               maxOutputBytes: 512n * 1024n,
               idempotencyKey: crypto.randomUUID(),
-              twoFactor: create(TwoFactorProofSchema, {
-                code: action.noTwoFactor ? "" : twoFactor.trim(),
-                challengeId: "",
-              }),
             },
             { signal, timeoutMs },
           ),
       );
-      setTwoFactor("");
       if (response.session) {
         setState(response.session.state);
         const signal = AbortSignal.any([
@@ -119,7 +110,6 @@ export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
     }
   };
 
-  const selectedAction = diagnosticActions.find((a) => a.value === selected)!;
   const done = terminalStates.has(state) && state !== OperationState.UNSPECIFIED;
 
   return (
@@ -153,15 +143,6 @@ export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
             </Flex>
           ))}
         </Flex>
-
-        {!selectedAction.noTwoFactor && (
-          <TextField.Root
-            type="password"
-            placeholder="2FA 验证码"
-            value={twoFactor}
-            onChange={(e) => setTwoFactor(e.target.value)}
-          />
-        )}
 
         <Flex justify="end" gap="2">
           {output && (

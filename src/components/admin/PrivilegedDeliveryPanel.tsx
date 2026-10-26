@@ -3,6 +3,7 @@ import { create } from "@bufbuild/protobuf";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Badge, Button, Callout, Checkbox, Flex, Select, Text, TextField } from "@radix-ui/themes";
 import { toast } from "sonner";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import {
   PrivilegedConfigSchema, PrivilegedDeliveryState as State,
   type GetNodeConfigStateResponse, type PrivilegedRevision,
@@ -56,7 +57,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
   const [draft, setDraft] = React.useState(() => create(PrivilegedConfigSchema));
   const [editing, setEditing] = React.useState(false);
   const [reason, setReason] = React.useState("");
-  const [code, setCode] = React.useState("");
+  const [credentialAction, setCredentialAction] = React.useState<SensitiveAction | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [now, setNow] = React.useState(Date.now());
   const [reportedOS, setReportedOS] = React.useState("");
@@ -92,7 +93,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
   }, [agentId, history, read]);
   React.useEffect(() => {
     const controller = new AbortController();
-    setState(undefined); setEditing(false); setCode(""); setRevisions([]); setError("");
+    setState(undefined); setEditing(false); setCredentialAction(null); setRevisions([]); setError("");
     void load(controller.signal);
     const poll = window.setInterval(() => void load(controller.signal), 5_000);
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -101,7 +102,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
   const desired = state?.desired;
   const applied = state && appliedSnapshot(state);
   // An approval code belongs to one revision, never to the next poll result.
-  React.useEffect(() => { setCode(""); }, [desired?.revision, desired?.state]);
+  React.useEffect(() => { setCredentialAction(null); }, [desired?.revision, desired?.state]);
   const expiry = desired?.authorization?.expiresAt;
   const expiresAt = expiry ? timestampDate(expiry).getTime() : undefined;
   const expired = expiresAt !== undefined && expiresAt <= now;
@@ -121,23 +122,23 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
     [HostOperationPhase.RESTORED]: "失败后已恢复原服务", [HostOperationPhase.FAILED]: "主机操作失败",
   };
 
-  const confirm = async () => {
-    if (!desired || !code.trim() || busy) return;
+  const confirm = async (authorizationToken: string, signal: AbortSignal) => {
+    if (!desired || busy) throw new Error("配置状态已变化，请刷新后重试");
     setBusy(true);
     const controller = new AbortController();
     try {
-      const fresh = await read(controller.signal);
+      const fresh = await read(AbortSignal.any([controller.signal, signal]));
       if (currentAgent.current !== agentId) return;
       if (!confirmationStillCurrent(desired, fresh.desired, State.NEEDS_CONFIRMATION)) {
-        setState(fresh); setCode("");
-        toast.error("配置状态已变化，已刷新，请核对当前版本"); return;
+        setState(fresh); setCredentialAction(null);
+        toast.error("配置状态已变化，已刷新，请核对当前版本");
+        throw new Error("配置状态已变化，已刷新，请核对当前版本");
       }
-      await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
+      await connectUnary({ signal: AbortSignal.any([controller.signal, signal]) }, (signal, timeoutMs) =>
         connectClients.privilegedDelivery.confirmPrivilegedDelivery({ agentId, revision: desired.revision,
-          twoFactor: create(TwoFactorProofSchema, { code: code.trim() }) }, { signal, timeoutMs }));
+          twoFactor: create(TwoFactorProofSchema, { authorizationToken }) }, { signal, timeoutMs }));
       toast.success("已批准，等待机器应用");
-    } catch (err) { toast.error(err instanceof Error ? err.message : "确认失败"); }
-    finally { setBusy(false); setCode(""); await load(controller.signal); }
+    } finally { setBusy(false); await load(controller.signal); }
   };
   const save = async () => {
     if (!state || busy) return;
@@ -152,6 +153,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
     finally { setBusy(false); await load(controller.signal); }
   };
   return <Flex direction="column" gap="3" className="rounded-lg border p-4">
+    <SensitiveActionDialog request={credentialAction} onClose={() => setCredentialAction(null)} />
     <Text size="3" weight="bold">特权配置下发状态</Text>
     {error && <Callout.Root color="red"><Callout.Text>{error}</Callout.Text></Callout.Root>}
     {!state ? <Text>正在读取配置状态…</Text> : <>
@@ -182,9 +184,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
         </Callout.Text></Callout.Root>}
         {desired.errors.map((e, i) => <Text key={i} color="red">{e.message}</Text>)}
         {desired.state === State.NEEDS_CONFIRMATION && ready && <Flex gap="2" wrap="wrap">
-          <TextField.Root type="password" autoComplete="one-time-code" placeholder="面板 2FA 验证码"
-            value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void confirm(); }} />
-          <Button disabled={busy || !code.trim() || !!rescueInstallNeeded && !rescueInstallSupported} onClick={() => void confirm()}>确认此版本</Button>
+          <Button disabled={busy || !!rescueInstallNeeded && !rescueInstallSupported} onClick={() => setCredentialAction({ action: "privileged:confirm", targets: [agentId, desired.revision.toString()], title: `确认特权配置版本 ${desired.revision}`, execute: confirm })}>确认此版本</Button>
         </Flex>}
         {desired.state === State.NEEDS_MANUAL_AUTHORIZATION && <Callout.Root color="orange"><Callout.Text>
           <Flex direction="column" gap="2">

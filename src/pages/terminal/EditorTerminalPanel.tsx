@@ -32,8 +32,8 @@ const EditorTerminalPanel = ({ uuid, onClose }: EditorTerminalPanelProps) => {
     let mounted = true;
     void fetch("/api/me")
       .then((response) => response.json())
-      .then((data: { "2fa_enabled"?: boolean }) => {
-        if (mounted) setTwoFaEnabled(Boolean(data?.["2fa_enabled"]));
+      .then((data: { "2fa_enabled"?: boolean; trusted_2fa_enabled?: boolean }) => {
+        if (mounted) setTwoFaEnabled(Boolean(data?.trusted_2fa_enabled ?? data?.["2fa_enabled"]));
       })
       .catch(() => {});
     return () => {
