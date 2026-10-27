@@ -684,19 +684,20 @@ function EditButton({ node }: { node: NodeDetail }) {
   const privateRemarkRef = React.useRef<HTMLTextAreaElement>(null);
   const [hidden, setHidden] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [traffic_limit, setTrafficLimit] = useState(0);
+  const [trafficLimitText, setTrafficLimitText] = useState("0 GB");
   const [trafficLimitInvalid, setTrafficLimitInvalid] = useState(false);
   const [traffic_limit_type, setTrafficLimitType] = useState("sum");
 
   React.useEffect(() => {
     setHidden(node.hidden);
-    setTrafficLimit(node.traffic_limit || 0);
+    setTrafficLimitText(trafficQuotaInput(node.traffic_limit || 0));
     setTrafficLimitInvalid(false);
     setTrafficLimitType(node.traffic_limit_type || "sum");
   }, [node.hidden, node.traffic_limit, node.traffic_limit_type]);
 
   const save = async () => {
-    if (trafficLimitInvalid) return;
+    const parsedLimit = parseTrafficQuota(trafficLimitText);
+    if (parsedLimit === null) { setTrafficLimitInvalid(true); return; }
     try {
       setSaving(true);
       await fetch(`/api/admin/client/${node.uuid}/edit`, {
@@ -708,7 +709,7 @@ function EditButton({ node }: { node: NodeDetail }) {
           group: groupRef.current?.value,
           tags: tagsRef.current?.value,
           hidden,
-          traffic_limit,
+          traffic_limit: parsedLimit,
           traffic_limit_type,
         }),
         headers: {
@@ -848,15 +849,17 @@ function EditButton({ node }: { node: NodeDetail }) {
               bordless
               title={t("admin.nodeEdit.trafficLimit")}
               description="流量额度：1 GB = 1,000,000,000 字节；例如 550 GB。若提供商使用二进制单位，请明确输入 GiB。旧额度保留原始字节数，不自动缩减。"
-              defaultValue={trafficQuotaInput(traffic_limit || 0)}
+              value={trafficLimitText}
               showSaveButton={false}
               onChange={(e) => {
-                const parsed = parseTrafficQuota(e.currentTarget.value);
+                const text = e.currentTarget.value;
+                setTrafficLimitText(text);
+                const parsed = parseTrafficQuota(text);
                 setTrafficLimitInvalid(parsed === null);
-                if (parsed !== null) setTrafficLimit(parsed);
               }}
-              onBlur={(e) => {
-                if (!trafficLimitInvalid) e.currentTarget.value = trafficQuotaInput(traffic_limit);
+              onBlur={() => {
+                const parsed = parseTrafficQuota(trafficLimitText);
+                if (parsed !== null) setTrafficLimitText(trafficQuotaInput(parsed));
               }}
             ></SettingCardShortTextInput>
             {trafficLimitInvalid && <Text size="2" color="red" role="alert">请输入有效流量额度，例如 550 GB 或 512 GiB。</Text>}
