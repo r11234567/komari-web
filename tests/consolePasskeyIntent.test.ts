@@ -212,3 +212,11 @@ test("shared form reports its plugin click without consuming intent or navigatin
   assert.notEqual(h.storage.getItem(KEY), null);
   assert.equal(h.navigation.length, 0);
 });
+
+test("default-theme login popup stays inline and never requests a document handoff", () => {
+  const h = dialogHarness();
+  const form = findForm(h.render(), h.exports.LoginForm);
+  assert.ok(form);
+  assert.equal(form.props.passwordMode ?? "inline", "inline");
+  assert.deepEqual(h.navigation, []);
+});

@@ -110,7 +110,8 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
   const refresh = React.useCallback(() => {
     // Login does not render node data. A private site's guest must not poll
     // protected node reads and surface repeated 401 notices while entering OTP.
-    if (["/login", "/bind-login"].includes(window.location.pathname.replace(/\/$/, ""))) {
+    const path = window.location.pathname.replace(/\/$/, "");
+    if (path === "/login" || path.startsWith("/login/") || path === "/bind-login") {
       setIsLoading(false);
       return;
     }
