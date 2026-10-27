@@ -309,3 +309,9 @@ body, * {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
+
+/* Keep the themed unlock dialog above terminal/file editor portals. Radix
+   Themes owns the overlay, panel, focus handling and light/dark appearance. */
+.rt-DialogOverlay:has(.km-workspace-unlock) {
+  z-index: 200000;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Button, Dialog, Flex, IconButton, Text, TextField } from "@radix-ui/themes";
+import { Button, Dialog, Flex, IconButton, Select, Text, TextField } from "@radix-ui/themes";
 import { Gauge } from "lucide-react";
 import { toast } from "sonner";
 import { billableUsage, bytesToGB, calibrationTargets, calibrationTotalTarget, countingTypeLabels, trafficRequest, trafficResetPayload } from "@/utils/trafficCalibration";
@@ -119,10 +119,15 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
         <legend className="font-semibold">每月流量重置</legend>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className="text-sm">每月哪一天
-            <select aria-label="每月重置日" className="mt-1 block w-full rounded border bg-transparent p-2" value={day} onChange={(e) => setDay(e.target.value)}>
-              <option value="follow">跟随原有 Agent 设置</option><option value="0">不设置月度重置</option>
-              {Array.from({ length: 31 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1} 日</option>)}
-            </select>
+            <Select.Root value={day} disabled={loading || saving || !!error && !calibration} onValueChange={setDay}>
+              <Select.Trigger aria-label="每月重置日" mt="1" style={{ width: "100%" }} />
+              <Select.Content position="popper">
+                <Select.Item value="follow">跟随原有 Agent 设置</Select.Item>
+                <Select.Item value="0">不设置月度重置</Select.Item>
+                <Select.Separator />
+                {Array.from({ length: 31 }, (_, i) => <Select.Item key={i + 1} value={String(i + 1)}>{i + 1} 日</Select.Item>)}
+              </Select.Content>
+            </Select.Root>
           </label>
           <label className="text-sm">重置时分<TextField.Root aria-label="重置时分" className="mt-1" type="time" step={60} value={clock} onChange={(e) => setClock(e.target.value)} /></label>
           <label className="text-sm">UTC 偏移 / 时区<TextField.Root aria-label="UTC 偏移或时区" className="mt-1" list={listId} value={timezone} onChange={(e) => setTimezone(e.target.value)} /><datalist id={listId}>{utcOffsets.map((zone) => <option key={zone} value={zone} />)}</datalist></label>
@@ -148,9 +153,13 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
           </tbody></table>
           {allocatedDirections && <Text as="p" size="2" color="gray">当前按提供商总量校准，上下行校准值是记账分配，不能视为提供商分别测得的上下行流量。</Text>}
           <label className="block text-sm">校准方式
-            <select aria-label="流量校准方式" className="mt-1 block w-full rounded border bg-transparent p-2" value={entryMode} onChange={(e) => setEntryMode(e.target.value)}>
-              <option value="total">输入提供商本期已用总量</option><option value="directions">上传、下载分别校准</option>
-            </select>
+            <Select.Root value={entryMode} disabled={loading || saving || !snapshot} onValueChange={setEntryMode}>
+              <Select.Trigger aria-label="流量校准方式" mt="1" style={{ width: "100%" }} />
+              <Select.Content position="popper">
+                <Select.Item value="total">输入提供商本期已用总量</Select.Item>
+                <Select.Item value="directions">上传、下载分别校准</Select.Item>
+              </Select.Content>
+            </Select.Root>
           </label>
           {entryMode === "total" ? <>
             <label className="block text-sm">提供商本期计费已用总量（GB）<TextField.Root aria-label="提供商本期总量 GB" value={total} inputMode="decimal" onChange={(e) => setTotal(e.target.value)} /></label>
