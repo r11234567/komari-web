@@ -48,6 +48,10 @@ export const routes: RouteObject[] = [
     element: React.createElement(LoginPage),
   },
   {
+    path: "/login/verify",
+    element: React.createElement(lazy(() => import("./pages/login-verify"))),
+  },
+  {
     path: "/bind-login",
     element: React.createElement(lazy(() => import("./pages/bind-login"))),
   },

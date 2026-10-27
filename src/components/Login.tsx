@@ -30,7 +30,7 @@ type LoginDialogProps = {
 type LoginFormProps = {
   onLoginSuccess?: () => void;
   oauthReturnTo?: string;
-  passwordMode?: "inline" | "handoff" | "resume";
+  passwordMode?: "inline";
   onPasswordLoginStart?: () => void;
   onOAuthLoginStart?: () => void;
   onPasskeyLoginStart?: () => void;
@@ -287,7 +287,6 @@ const LoginDialogContent = ({
           </Flex>
         </Dialog.Description>
         <LoginForm
-          passwordMode="handoff"
           onPasskeyLoginStart={() => {
             markConsolePasskeyIntent(window.location.pathname + window.location.search);
           }}

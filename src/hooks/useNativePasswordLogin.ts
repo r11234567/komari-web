@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { clearPasswordLoginHandoff, readPasswordLoginHandoff, savePasswordLoginHandoff, type PasswordFactorProvider } from "@/utils/passwordLoginHandoff";
 import { connectClients } from "@/api/connect/client";
 import { requestTrustedPasskey } from "@/utils/trustedPasskey";
 import { otpFormat, validOTP } from "@/utils/otpInput";
 
 const client = connectClients.passwordLogin;
 
-export function useNativePasswordLogin(onAuthenticated: () => Promise<void> | void, mode: "inline" | "handoff" | "resume" = "inline") {
-  const [handoff] = useState(() => mode === "resume" ? readPasswordLoginHandoff() : null);
-  const [pending, setPending] = useState(Boolean(handoff));
-  const [providers, setProviders] = useState<PasswordFactorProvider[]>(handoff?.providers ?? []);
+export function useNativePasswordLogin(onAuthenticated: () => Promise<void> | void, mode: "inline" | "verify" = "inline") {
+  const [pending, setPending] = useState(mode === "verify");
+  const [providers, setProviders] = useState<{ id: string; displayName: string }[]>([]);
   const [provider, setProvider] = useState("");
   const [challenge, setChallenge] = useState("");
   const [code, setCode] = useState("");
@@ -22,8 +19,8 @@ export function useNativePasswordLogin(onAuthenticated: () => Promise<void> | vo
   const success = useRef(onAuthenticated); success.current = onAuthenticated;
   useEffect(() => () => {
     active.current?.abort();
-    if (ownsFlow.current) void client.cancelPasswordLogin({}).catch(() => {});
-  }, []);
+    if (mode === "inline" && ownsFlow.current) void client.cancelPasswordLogin({}).catch(() => {});
+  }, [mode]);
   const options = (signal: AbortSignal) => ({ signal, timeoutMs: 30_000 });
   const run = async (operation: (signal: AbortSignal) => Promise<void>) => {
     if (active.current) return false;
@@ -32,7 +29,7 @@ export function useNativePasswordLogin(onAuthenticated: () => Promise<void> | vo
     catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Login failed"); return false; }
     finally { if (active.current === controller) { active.current = null; setBusy(false); } }
   };
-  const authenticated = async () => { clearPasswordLoginHandoff(); ownsFlow.current = false; setPending(false); setChallenge(""); setCode(""); await success.current(); };
+  const authenticated = async () => { ownsFlow.current = false; setPending(false); setChallenge(""); setCode(""); await success.current(); };
   const beginSelectedFactor = async (providerId: string, signal: AbortSignal) => {
     const result = await client.beginLoginVerification({ providerId }, options(signal));
     if (signal.aborted) return;
@@ -55,14 +52,6 @@ export function useNativePasswordLogin(onAuthenticated: () => Promise<void> | vo
     const selected = result.providers.find((item) => item.id === "native:email_otp") ?? result.providers[0];
     setProvider(selected?.id ?? ""); setChallenge(""); setCode("");
     if (!selected) throw new Error("No available second factor");
-    if (mode === "handoff") {
-      if (!result.expiresAt) throw new Error("Missing login expiration");
-      savePasswordLoginHandoff(result.providers, timestampDate(result.expiresAt).getTime());
-      // The next document owns this server flow. Unmount must not cancel it.
-      ownsFlow.current = false;
-      window.location.assign("/login");
-      return;
-    }
     await beginSelectedFactor(selected.id, signal);
   });
   const beginFactor = () => run((signal) => beginSelectedFactor(provider, signal));
@@ -73,27 +62,22 @@ export function useNativePasswordLogin(onAuthenticated: () => Promise<void> | vo
     await authenticated();
   });
   const reset = () => run(async (signal) => {
-    await client.cancelPasswordLogin({}, options(signal)); clearPasswordLoginHandoff(); ownsFlow.current = false;
+    await client.cancelPasswordLogin({}, options(signal)); ownsFlow.current = false;
     setPending(false); setChallenge(""); setCode(""); setProviders([]); setProvider("");
   });
   useEffect(() => {
-    if (!handoff) return;
+    if (mode !== "verify") return;
     let disposed = false;
-    // Defer until effect setup settles: React StrictMode must not send two OTPs
-    // or consume/cancel the handoff during its development-only effect replay.
+    // StrictMode's initial effect replay settles before starting delivery.
+    // The server cookie restores the ceremony; an empty provider asks the
+    // server to resume its challenge or choose the configured default factor.
     void Promise.resolve().then(() => {
-      if (disposed) return;
-      clearPasswordLoginHandoff();
-      ownsFlow.current = true;
-      const selected = handoff.providers.find((item) => item.id === "native:email_otp") ?? handoff.providers[0];
-      setProvider(selected.id);
-      void run((signal) => beginSelectedFactor(selected.id, signal));
+      if (!disposed) void run((signal) => beginSelectedFactor("", signal));
     });
     return () => { disposed = true; };
-    // A handoff is restored once per document, never on provider/input renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handoff]);
-  return { pending, providers, provider, setProvider, challenge, code, setCode, format, busy, error, start, beginFactor, verify, reset };
+  }, [mode]);
+  return { canBeginFactor: mode === "verify" || Boolean(provider), pending, providers, provider, setProvider, challenge, code, setCode, format, busy, error, start, beginFactor, verify, reset };
 }
 
 export type NativePasswordLogin = ReturnType<typeof useNativePasswordLogin>;
