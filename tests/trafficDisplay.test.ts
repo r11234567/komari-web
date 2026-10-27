@@ -5,6 +5,10 @@ import type { TrafficAccounting } from "@komari/proto/komari/browser/v1/browser_
 import { formatTrafficGB, trafficAccountingView, trafficResetDescription, trafficResetInstant } from "../src/utils/trafficDisplay.ts";
 
 test("provider calibration and public/admin displays use identical decimal GB", () => {
+  assert.equal(formatTrafficGB(131_020_000_000), "131.02 GB");
+  assert.equal(formatTrafficGB(70_450_000_000), "70.45 GB");
+  assert.equal(formatTrafficGB(60_560_000_000), "60.56 GB");
+  assert.equal(formatTrafficGB(590_558_003_200), "590.56 GB");
   assert.equal(formatTrafficGB(50_720_000_000), "50.72 GB");
   assert.equal(formatTrafficGB(21_230_000_000), "21.23 GB");
   assert.equal(formatTrafficGB(55_720_000_000), "55.72 GB");
