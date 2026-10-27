@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { TrafficAccountingSchema } from "@komari/proto/komari/browser/v1/browser_pb";
+import type { TrafficAccounting } from "@komari/proto/komari/browser/v1/browser_pb";
 import { formatTrafficGB, trafficAccountingView, trafficResetDescription, trafficResetInstant } from "../src/utils/trafficDisplay.ts";
 
 test("provider calibration and public/admin displays use identical decimal GB", () => {
@@ -14,12 +13,13 @@ test("provider calibration and public/admin displays use identical decimal GB", 
 
 test("typed accounting preserves follow/disabled/custom policy and exact UTC instant", () => {
   assert.equal(trafficAccountingView(undefined), undefined);
-  const source = create(TrafficAccountingSchema, {
+  const source = {
+    $typeName: "komari.browser.v1.TrafficAccounting",
     resetDay: 31, resetTime: "12:45:00", resetTimezone: "UTC-05:30",
     nextReset: timestampFromDate(new Date("2026-11-30T18:15:00Z")),
     usedUpBytes: 50_720_000_000n, usedDownBytes: 5_000_000_000n,
     billableBytes: 55_720_000_000n, countingType: "sum", cycleAvailable: true,
-  });
+  } satisfies TrafficAccounting;
   const value = trafficAccountingView(source)!;
   assert.equal(value.billable, 55_720_000_000);
   assert.equal(value.cycleAvailable, true);
