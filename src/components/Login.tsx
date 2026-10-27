@@ -30,6 +30,7 @@ type LoginDialogProps = {
 type LoginFormProps = {
   onLoginSuccess?: () => void;
   oauthReturnTo?: string;
+  passwordMode?: "inline" | "handoff" | "resume";
   onPasswordLoginStart?: () => void;
   onOAuthLoginStart?: () => void;
   onPasskeyLoginStart?: () => void;
@@ -42,6 +43,7 @@ function oauthLoginURL(returnTo: string = "/admin/dashboard"): string {
 export const LoginForm = ({
   onLoginSuccess,
   oauthReturnTo,
+  passwordMode = "inline",
   onPasswordLoginStart,
   onOAuthLoginStart,
   onPasskeyLoginStart,
@@ -56,7 +58,7 @@ export const LoginForm = ({
     await refresh();
     if (onLoginSuccess) onLoginSuccess();
     else window.location.assign("/admin/dashboard");
-  });
+  }, passwordMode);
   const isLoading = login.busy;
   const fieldId = React.useId().replace(/:/g, "");
   const passwordLoginEnabled = !publicInfo?.disable_password_login;
@@ -128,6 +130,7 @@ export const LoginForm = ({
               />
             </label>
             {login.pending && <PasswordCredentialStep login={login} />}
+            {login.pending && login.error && <Button type="button" variant="soft" disabled={isLoading} onClick={() => void login.reset()}>{t("login.restart", "重新登录")}</Button>}
             {(errorMsg || login.error) && (
               <Text
                 as="div"
@@ -284,6 +287,7 @@ const LoginDialogContent = ({
           </Flex>
         </Dialog.Description>
         <LoginForm
+          passwordMode="handoff"
           onPasskeyLoginStart={() => {
             markConsolePasskeyIntent(window.location.pathname + window.location.search);
           }}
