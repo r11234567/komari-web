@@ -14,7 +14,12 @@ export default function LoginVerificationPage() {
   const location = useLocation();
   const returnTo = safeLoginReturnTo(new URLSearchParams(location.search).get("returnTo"));
   const login = useNativePasswordLogin(() => {
-    window.location.replace(returnTo);
+    const destination = new URL(returnTo, window.location.origin);
+    if (destination.origin === window.location.origin) {
+      window.location.replace(destination.href);
+    } else {
+      window.location.replace("/admin/dashboard");
+    }
   }, "verify");
 
   return <Flex align="center" justify="center" p="4" style={{ minHeight: "100vh" }}>

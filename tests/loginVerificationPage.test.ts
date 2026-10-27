@@ -9,14 +9,14 @@ const source = ts.transpileModule(readFileSync(new URL("../src/pages/login-verif
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 
-function harness(error = "", search = "") {
+function harness(error = "", search = "", normalizeReturnTo = safeLoginReturnTo) {
   const exports: any = {};
   const navigations: string[] = [];
   const imports: string[] = [];
   let authenticated: () => void;
   const login = { error, busy: false, reset: async () => true };
-  vm.runInNewContext(source, { exports, URLSearchParams,
-    window: { location: { replace: (path: string) => navigations.push(path) } },
+  vm.runInNewContext(source, { exports, URL, URLSearchParams,
+    window: { location: { origin: "https://panel.test", replace: (path: string) => navigations.push(path) } },
     require(name: string): any {
       imports.push(name);
       if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: any) => ({ type, props }), jsxs: (type: unknown, props: any) => ({ type, props }) };
@@ -24,7 +24,7 @@ function harness(error = "", search = "") {
       if (name === "react-router-dom") return { useLocation: () => ({ search }) };
       if (name === "react-i18next") return { useTranslation: () => ({ t: (_: string, fallback?: string) => fallback ?? _ }) };
       if (name === "@/contexts/PublicInfoContext") return { usePublicInfo: () => ({ publicInfo: { sitename: "Synthetic" } }) };
-      if (name === "@/utils/loginRedirect") return { safeLoginReturnTo };
+      if (name === "@/utils/loginRedirect") return { safeLoginReturnTo: normalizeReturnTo };
       if (name === "@/hooks/useNativePasswordLogin") return { useNativePasswordLogin: (success: () => void, mode: string) => {
         assert.equal(mode, "verify"); authenticated = success; return login;
       } };
@@ -54,7 +54,7 @@ test("dedicated page renders only factor controls even with missing or expired p
 });
 test("factor completion enters dashboard and only accepts allowed local return destinations", () => {
   for (const [search, expected] of [["", "/admin/dashboard"], ["?returnTo=https://evil.test", "/admin/dashboard"], ["?returnTo=%2Fadmin%2Fservers", "/admin/servers"]]) {
-    const h = harness("", search); h.complete(); assert.deepEqual(h.navigations, [expected]);
+    const h = harness("", search); h.complete(); assert.deepEqual(h.navigations, [`https://panel.test${expected}`]);
   }
 });
 test("restarting is explicit and cancels the old ceremony before opening password login", async () => {
@@ -62,4 +62,10 @@ test("restarting is explicit and cancels the old ceremony before opening passwor
   const restart = flatten(h.tree).find(n => n.type === "Button");
   await restart.props.onClick();
   assert.deepEqual(h.navigations, ["/login?returnTo=%2Fadmin%2Fdashboard"]);
+});
+
+test("final navigation independently rejects an off-origin destination", () => {
+  const h = harness("", "", () => "https://other.test/admin/dashboard");
+  h.complete();
+  assert.deepEqual(h.navigations, ["/admin/dashboard"]);
 });
