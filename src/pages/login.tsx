@@ -43,6 +43,7 @@ const LoginPageContent = () => {
             </Text>
           </Flex>
           <LoginForm
+            passwordMode="resume"
             oauthReturnTo={`${location.pathname}${location.search}`}
             onLoginSuccess={() => {
               // A full navigation guarantees the newly issued session cookie is
