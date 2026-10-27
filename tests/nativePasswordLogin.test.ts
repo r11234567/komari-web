@@ -12,7 +12,7 @@ function harness(immediate = false, legacy = false, failSend = false, mode = "in
   const states: unknown[] = [];
   const refs: { current: unknown }[] = [];
   let stateIndex = 0, refIndex = 0, effectIndex = 0, completed = 0;
-  const effects: Array<{ deps: unknown[]; cleanup?: () => void }> = [];
+  const effects: Array<{ deps: unknown[]; setup: () => (() => void) | undefined; cleanup?: () => void }> = [];
   let saved: any = resumed;
   const navigation: string[] = [];
   const calls: { method: string; input: any }[] = [];
@@ -23,7 +23,7 @@ function harness(immediate = false, legacy = false, failSend = false, mode = "in
     async cancelPasswordLogin(input: unknown) { calls.push({ method: "cancel", input }); return { cancelled: true }; },
   };
   const exports: any = {};
-  vm.runInNewContext(source, { exports, AbortController,
+  vm.runInNewContext(source, { exports, AbortController, Error,
     window: { location: { assign: (path: string) => navigation.push(path) } },
     require(name: string) {
     if (name === "@bufbuild/protobuf/wkt") return { timestampDate };
@@ -39,14 +39,14 @@ function harness(immediate = false, legacy = false, failSend = false, mode = "in
       useEffect(effect: () => (() => void) | undefined, deps: unknown[]) {
         const index = effectIndex++;
         if (effects[index]) return;
-        effects[index] = { deps, cleanup: effect() };
+        effects[index] = { deps, setup: effect, cleanup: effect() };
       },
     };
     if (name === "@/api/connect/client") return { connectClients: { passwordLogin: client } };
     if (name === "@/utils/trustedPasskey") return { requestTrustedPasskey: async () => { throw new Error("Unexpected browser call in OTP test"); } };
     throw new Error(`Unexpected test import ${name}`);
   } });
-  return { calls, navigation, get saved() { return saved; }, get completed() { return completed; }, render() { stateIndex = refIndex = effectIndex = 0; return exports.useNativePasswordLogin(async () => { completed++; }, mode); }, unmount() { effects.forEach(effect => effect.cleanup?.()); } };
+  return { calls, navigation, get saved() { return saved; }, get completed() { return completed; }, render() { stateIndex = refIndex = effectIndex = 0; return exports.useNativePasswordLogin(async () => { completed++; }, mode); }, replayEffects() { effects.forEach(effect => effect.cleanup?.()); effects.forEach(effect => { effect.cleanup = effect.setup(); }); }, unmount() { effects.forEach(effect => effect.cleanup?.()); } };
 }
 
 test("password confirmation waits for native OTP before completing login", async () => {
@@ -144,4 +144,13 @@ test("direct login with no handoff remains a normal password page", async () => 
   assert.equal(h.render().pending, false);
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(h.calls, []);
+});
+
+
+test("StrictMode effect replay sends exactly one OTP without canceling handoff", async () => {
+  const h = harness(false, false, false, "resume", { expiresAt: Date.now() + 170_000, providers: [{ id: "native:email_otp", displayName: "Email OTP" }] });
+  h.render(); h.replayEffects();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(h.calls.map(call => call.method), ["factor"]);
+  assert.equal(h.render().challenge, "synthetic-challenge");
 });
