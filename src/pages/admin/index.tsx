@@ -68,7 +68,8 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
-import { formatBytes, stringToBytes } from "@/utils/unitHelper";
+import { formatBytes } from "@/utils/unitHelper";
+import { parseTrafficQuota, trafficQuotaInput } from "@/utils/trafficQuota";
 import PriceTags from "@/components/PriceTags";
 import Loading from "@/components/loading";
 import Tips from "@/components/ui/tips";
@@ -684,15 +685,18 @@ function EditButton({ node }: { node: NodeDetail }) {
   const [hidden, setHidden] = useState(false);
   const [saving, setSaving] = useState(false);
   const [traffic_limit, setTrafficLimit] = useState(0);
+  const [trafficLimitInvalid, setTrafficLimitInvalid] = useState(false);
   const [traffic_limit_type, setTrafficLimitType] = useState("sum");
 
   React.useEffect(() => {
     setHidden(node.hidden);
     setTrafficLimit(node.traffic_limit || 0);
+    setTrafficLimitInvalid(false);
     setTrafficLimitType(node.traffic_limit_type || "sum");
   }, [node.hidden, node.traffic_limit, node.traffic_limit_type]);
 
   const save = async () => {
+    if (trafficLimitInvalid) return;
     try {
       setSaving(true);
       await fetch(`/api/admin/client/${node.uuid}/edit`, {
@@ -843,23 +847,26 @@ function EditButton({ node }: { node: NodeDetail }) {
             <SettingCardShortTextInput
               bordless
               title={t("admin.nodeEdit.trafficLimit")}
-              description={t("admin.nodeEdit.trafficLimit_description")}
-              defaultValue={formatBytes(traffic_limit || 0)}
+              description="流量额度：1 GB = 1,000,000,000 字节；例如 550 GB。若提供商使用二进制单位，请明确输入 GiB。旧额度保留原始字节数，不自动缩减。"
+              defaultValue={trafficQuotaInput(traffic_limit || 0)}
               showSaveButton={false}
               onChange={(e) => {
-                setTrafficLimit(stringToBytes(e.currentTarget.value));
+                const parsed = parseTrafficQuota(e.currentTarget.value);
+                setTrafficLimitInvalid(parsed === null);
+                if (parsed !== null) setTrafficLimit(parsed);
               }}
               onBlur={(e) => {
-                e.currentTarget.value = formatBytes(traffic_limit);
+                if (!trafficLimitInvalid) e.currentTarget.value = trafficQuotaInput(traffic_limit);
               }}
             ></SettingCardShortTextInput>
+            {trafficLimitInvalid && <Text size="2" color="red" role="alert">请输入有效流量额度，例如 550 GB 或 512 GiB。</Text>}
           </SettingCardCollapse>
         </div>
         <Flex gap="2" justify={"end"} className="mt-4">
           <Button
             type="submit"
             className="w-full"
-            disabled={saving}
+            disabled={saving || trafficLimitInvalid}
             onClick={save}
           >
             {saving
