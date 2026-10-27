@@ -3,6 +3,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { AgentSummary } from "@komari/proto/komari/browser/v1/browser_pb";
 import { connectUnary } from "../api/connect/client";
 import { useConnect } from "./ConnectContext";
+import { TRAFFIC_ACCOUNTING_CHANGED, trafficAccountingView, type TrafficAccountingView } from "@/utils/trafficDisplay";
 
 export type NodeBasicInfo = {
   /** 节点唯一标识符 */
@@ -48,6 +49,7 @@ export type NodeBasicInfo = {
   traffic_limit: number;
   /** 流量阈值类型 */
   traffic_limit_type: undefined | "sum" | "max" | "min" | "up" | "down";
+  trafficAccounting?: TrafficAccountingView;
   /** 过期时间 */
   expired_at: string;
   /** 创建时间 */
@@ -79,7 +81,9 @@ const NodeListContext =
 
 const sameNodeBasicInfo = (left: NodeBasicInfo, right: NodeBasicInfo) =>
   (Object.keys(right) as Array<keyof NodeBasicInfo>).every(
-    (key) => left[key] === right[key],
+    (key) => key === "trafficAccounting"
+      ? JSON.stringify(left[key]) === JSON.stringify(right[key])
+      : left[key] === right[key],
   );
 
 export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -159,6 +163,14 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
 
   React.useEffect(() => {
     refresh();
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener(TRAFFIC_ACCOUNTING_CHANGED, refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(TRAFFIC_ACCOUNTING_CHANGED, refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [refresh]);
 
   const contextValue = React.useMemo(
@@ -197,6 +209,7 @@ const agentSummaryToNode = (agent: AgentSummary): NodeBasicInfo => {
     currency: basic?.currency ?? "",
     group: basic?.group ?? "",
     traffic_limit: Number(basic?.trafficLimitBytes ?? 0n),
+    trafficAccounting: trafficAccountingView(agent.trafficAccounting),
     traffic_limit_type: (basic?.trafficLimitType ||
       undefined) as NodeBasicInfo["traffic_limit_type"],
     expired_at: basic?.expiresAt

@@ -15,6 +15,8 @@ import type { NodeBasicInfo } from "@/contexts/NodeListContext";
 import type { LiveData, Record } from "../types/LiveData";
 import { formatUptime } from "./Node";
 import { formatBytes } from "@/utils/unitHelper";
+import { formatTrafficGB } from "@/utils/trafficDisplay";
+import TrafficUsageSummary from "./TrafficUsageSummary";
 import UsageBar from "./UsageBar";
 import Flag from "./Flag";
 import PriceTags from "./PriceTags";
@@ -454,10 +456,10 @@ const NodeTable: React.FC<NodeTableProps> = ({ nodes, liveData, onlineSet }) => 
                     <label>↓{formatBytes(nodeData.network.down)}/s</label>
                   </TableCell>
                   <TableCell className="text-center min-w-[80px]">
-                    <label>↑{formatBytes(nodeData.network.totalUp)}</label>
+                    <label>↑{formatTrafficGB(nodeData.network.totalUp)}</label>
                   </TableCell>
                   <TableCell className="text-center min-w-[80px]">
-                    <label>↓{formatBytes(nodeData.network.totalDown)}</label>
+                    <label>↓{formatTrafficGB(nodeData.network.totalDown)}</label>
                   </TableCell>
                 </TableRow>
 
@@ -467,6 +469,7 @@ const NodeTable: React.FC<NodeTableProps> = ({ nodes, liveData, onlineSet }) => 
                     <TableCell colSpan={12} className="bg-accent-1">
                       <div className="expand-content">
                         <ExpandedNodeDetails node={node} nodeData={nodeData} />
+                        <TrafficUsageSummary uuid={node.uuid} />
                       </div>
                     </TableCell>
                   </TableRow>

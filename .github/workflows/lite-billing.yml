@@ -18,7 +18,7 @@ jobs:
           cache: npm
       - run: bash scripts/ci/run-audit-check.sh install npm ci --no-audit
       - name: Precision, DST preservation, finite expiry and HKD
-        run: bash scripts/ci/run-audit-check.sh billing node --test tests/billingFollowup.test.ts tests/trafficCalibration.test.ts
+        run: bash scripts/ci/run-audit-check.sh billing node --test tests/billingFollowup.test.ts tests/trafficCalibration.test.ts tests/trafficDisplay.test.ts
       - name: Typecheck
         if: ${{ !cancelled() }}
         run: bash scripts/ci/run-audit-check.sh types node node_modules/typescript/bin/tsc -b

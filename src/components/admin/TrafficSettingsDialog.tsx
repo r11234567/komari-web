@@ -4,6 +4,7 @@ import { Gauge } from "lucide-react";
 import { toast } from "sonner";
 import { billableUsage, bytesToGB, calibrationTargets, calibrationTotalTarget, countingTypeLabels, trafficRequest, trafficResetPayload } from "@/utils/trafficCalibration";
 import type { CalibrationResponse, CalibrationSnapshot, TrafficPolicy } from "@/utils/trafficCalibration";
+import { TRAFFIC_ACCOUNTING_CHANGED } from "@/utils/trafficDisplay";
 
 const utcOffsets = [...Array.from({ length: 27 }, (_, i) => {
   const hour = i - 12;
@@ -78,6 +79,7 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
       setNextReset(policy.next_reset);
       acceptCalibration(snapshot);
       toast.success("流量重置设置已保存");
+      window.dispatchEvent(new Event(TRAFFIC_ACCOUNTING_CHANGED));
     } catch (err: unknown) {
       if (!abort.signal.aborted) setError(err instanceof Error ? err.message : String(err));
     } finally { if (!abort.signal.aborted) setSaving(false); }
@@ -97,6 +99,7 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
       if (abort.signal.aborted) return;
       acceptCalibration(result);
       toast.success("已按提供商本期已用流量校准");
+      window.dispatchEvent(new Event(TRAFFIC_ACCOUNTING_CHANGED));
     } catch (err: unknown) {
       if (!abort.signal.aborted) setError(err instanceof Error ? err.message : String(err));
     } finally { if (!abort.signal.aborted) setSaving(false); }

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { billingRequest, expiryEditPayload, resetBillingCache, type BillingPolicy } from "@/utils/billing";
 import { TrafficSettingsDialog } from "@/components/admin/TrafficSettingsDialog";
+import TrafficUsageSummary from "@/components/TrafficUsageSummary";
 import {
   NodeDetailsProvider,
   useNodeDetails,
@@ -377,6 +378,7 @@ const SortableRow = ({
       </TableCell>
       <TableCell>
         <DetailView node={node} />
+        <TrafficUsageSummary uuid={node.uuid} />
       </TableCell>
       <TableCell>
         <Flex direction="column">
