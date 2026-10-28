@@ -186,9 +186,12 @@ export const TerminalSession = ({
         }
         sessionId = started.sessionId;
         connectionToken = workspaceState.grants.get(uuid)?.token;
-        if (!screenDeadline) {
-          const grant = workspaceState.grants.get(uuid);
-          if (grant) screenDeadline = window.setTimeout(() => { term.reset(); screenDeadline = 0; }, Math.max(0, grant.expiresAt - Date.now()));
+        const currentGrant = workspaceState.grants.get(uuid);
+        if (currentGrant) {
+          if (screenUser && screenUser !== currentGrant.systemUser) term.reset();
+          screenUser = currentGrant.systemUser;
+          window.clearTimeout(screenDeadline);
+          screenDeadline = window.setTimeout(() => { term.reset(); screenDeadline = 0; }, Math.max(0, currentGrant.expiresAt - Date.now()));
         }
         term.options.disableStdin = false;
         if (activeRef.current) term.focus();
@@ -231,6 +234,7 @@ export const TerminalSession = ({
       }
     };
     let screenDeadline = 0;
+    let screenUser = "";
     startRef.current = () => { void startSession(); };
     const unsubscribe = workspaceState.subscribe(() => {
       const grant = workspaceState.grants.get(uuid);

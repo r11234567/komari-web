@@ -206,7 +206,7 @@ export async function* watchRemoteSession(input: {
           // cumulatively ACKs this same cursor when resuming after a disconnect.
           afterSequence = response.event.sequence;
           acknowledger.accept(afterSequence);
-          if (response.event.event.case === "closed") return;
+          if (response.event.event.case === "closed") { forgetWorkspaceSession(input.sessionId); return; }
         }
       }
       return;

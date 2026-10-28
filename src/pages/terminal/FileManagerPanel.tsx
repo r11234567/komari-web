@@ -1,3 +1,4 @@
+import { workspaceState } from "@/api/connect/workspace";
 import WorkspaceSurface from "./WorkspaceSurface";
 import { Checkbox, DropdownMenu } from "@radix-ui/themes";
 import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from "react";
@@ -35,6 +36,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -140,6 +142,7 @@ const fileIcon = (file: RemoteFileInfo) => {
 };
 
 const FileManagerPanel = ({ uuid }: FileManagerPanelProps) => {
+  const workspaceRevision = useSyncExternalStore(workspaceState.subscribe, () => uuid ? workspaceState.revision(uuid) : 0, () => 0);
   const { t } = useTranslation();
   const fileService = useRemoteFileService(uuid ?? "");
   const [currentPath, setCurrentPath] = useState("");
@@ -301,6 +304,7 @@ const FileManagerPanel = ({ uuid }: FileManagerPanelProps) => {
     [fileService, t, uuid],
   );
   useEffect(() => {
+    if (uuid && workspaceRevision > 0 && !workspaceState.grants.has(uuid)) return;
     requestVersionRef.current += 1;
     const cachedPath = uuid ? pathCacheRef.current.get(uuid) : null;
     if (cachedPath) {
@@ -320,7 +324,7 @@ const FileManagerPanel = ({ uuid }: FileManagerPanelProps) => {
     setSelectedPath(null);
     setSearchResult(null);
     void loadDirectory("/");
-  }, [loadDirectory, uuid]);
+  }, [loadDirectory, uuid, workspaceRevision]);
 
   const refresh = useCallback(async () => {
     const targetPath = normalizeRemotePath(currentPath || "/");
