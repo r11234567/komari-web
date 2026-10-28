@@ -48,7 +48,9 @@ jobs:
               ;;
             theme-build) bash scripts/ci/run-audit-check.sh theme-build npm run build ;;
             system-build) bash scripts/ci/run-audit-check.sh system-build npm run build:system ;;
-            dependency-audit) bash scripts/ci/run-audit-check.sh dependency-audit npm run audit:security ;;
+            dependency-audit)
+              bash scripts/ci/run-audit-check.sh dependency-security npm run test:dependency-security
+              bash scripts/ci/run-audit-check.sh dependency-audit npm run audit:security ;;
             *) exit 2 ;;
           esac
       - name: Upload complete logs and available bundles
