@@ -120,6 +120,7 @@ export class WorkspaceState {
   install(grant: WorkspaceGrant) {
     const previous = this.grants.get(grant.agentId);
     if (previous && previous.token !== grant.token) previous.controller.abort();
+    if (!previous || previous.token !== grant.token) this.revisions.set(grant.agentId, this.revision(grant.agentId) + 1);
     this.grants.set(grant.agentId, grant);
     this.pending.get(grant.agentId)?.resolve(grant);
     this.pending.delete(grant.agentId);

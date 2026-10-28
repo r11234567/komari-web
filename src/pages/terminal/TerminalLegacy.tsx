@@ -317,6 +317,7 @@ const TerminalPage = () => {
   const sessionCommandQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const pendingFileRequestsRef = useRef(new Map<string, PendingFileRequest>());
   const resolvedSettingsRef = useRef<XtermjsSettings>(defaultXtermjsSettings);
+  const screenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedUuidRef = useRef<string | null>(null);
   const params = new URLSearchParams(window.location.search);
   const uuid = params.get("uuid");
@@ -522,6 +523,15 @@ const TerminalPage = () => {
     return () => controller.abort();
   }, [t, uuid]);
 
+  // The renderer belongs to the page, not to a short-lived authorization.
+  useEffect(() => () => {
+    terminalInstance.current?.dispose();
+    terminalInstance.current = null;
+    fitAddonRef.current = null;
+    if (screenTimerRef.current) clearTimeout(screenTimerRef.current);
+    screenTimerRef.current = null;
+  }, [uuid]);
+
   // WorkspaceBoundary owns fresh credential verification and account scope.
   useEffect(() => {
     if (!settingsResolved || !remoteAgentReady || uuid === null || !terminalRef.current) return;
@@ -549,17 +559,19 @@ const TerminalPage = () => {
       terminalOptions.allowTransparency = true;
     }
 
-    const term = new Terminal(terminalOptions);
-    const fitAddon = new FitAddon();
+    const existing = terminalInstance.current;
+    const term = existing ?? new Terminal(terminalOptions);
+    const fitAddon = fitAddonRef.current ?? new FitAddon();
     fitAddonRef.current = fitAddon;
     const webLinksAddon = new WebLinksAddon();
     const searchAddon = new SearchAddon();
 
-    term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
-    term.loadAddon(searchAddon);
-
-    term.open(terminalRef.current);
+    if (!existing) {
+      term.loadAddon(fitAddon);
+      term.loadAddon(webLinksAddon);
+      term.loadAddon(searchAddon);
+      term.open(terminalRef.current);
+    }
     terminalInstance.current = term;
 
     const customCssStyle = document.createElement("style");
@@ -602,6 +614,10 @@ const TerminalPage = () => {
         });
         if (disposed) return;
         sessionIdRef.current = started.sessionId;
+        if (!screenTimerRef.current) {
+          const grant = workspaceState.grants.get(uuid);
+          if (grant) screenTimerRef.current = setTimeout(() => { term.reset(); screenTimerRef.current = null; }, Math.max(0, grant.expiresAt - Date.now()));
+        }
         setSessionConnected(true);
         resizeTerminal();
         for await (const response of watchRemoteSession({ sessionId: started.sessionId, signal: sessionController.signal })) {
@@ -639,7 +655,7 @@ const TerminalPage = () => {
         }
       } catch (error) {
         setSessionConnected(false);
-        if (!disposed && !sessionController.signal.aborted) {
+        if (!disposed && !sessionController.signal.aborted && workspaceState.grants.has(uuid)) {
           term.write(`\r\n${error instanceof Error ? error.message : String(error)}\r\n`);
         }
       }
@@ -801,7 +817,7 @@ const TerminalPage = () => {
       }
       pendingFileRequestsRef.current.clear();
       if (closingSession) {
-        void closeRemoteSession({ sessionId: closingSession, reason: "browser page closed", signal: AbortSignal.timeout(10_000) });
+        void closeRemoteSession({ sessionId: closingSession, reason: "tab_closed", signal: AbortSignal.timeout(10_000) }).catch(() => {});
       }
       resizeObserver?.disconnect();
       if (firstBinaryTimeout !== null) {
@@ -811,17 +827,14 @@ const TerminalPage = () => {
       host?.removeEventListener("beforeinput", handleBeforeInput, true);
       host?.removeEventListener("cut", handleCut, true);
       termDataDisposable.dispose();
-      term.dispose();
       if (customCssStyle.parentNode) {
         customCssStyle.parentNode.removeChild(customCssStyle);
       }
       if (initializedUuidRef.current === uuid) {
         initializedUuidRef.current = null;
       }
-      terminalInstance.current = null;
       sessionIdRef.current = null;
       sessionControllerRef.current = null;
-      fitAddonRef.current = null;
       window.removeEventListener("resize", handleResize);
       document.removeEventListener("contextmenu", handleContextMenu);
     };

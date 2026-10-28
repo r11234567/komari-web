@@ -29,7 +29,7 @@ test("workspace: polling does not renew idle and lock cancels active operations"
   assert.equal(value.controller.signal.aborted, true);
   assert.equal(state.grants.size, 0);
   assert.equal(state.pending.has("a"), false);
-  assert.equal(state.revision("a"), 1);
+  assert.equal(state.revision("a"), 2);
   state.cancel("a");
 });
 
@@ -74,7 +74,7 @@ test("workspace: SJC expiry/cancel never locks FRA or automatically prompts", as
   assert.equal(state.promptAgent, "SJC");
   state.cancel("SJC");
   assert.equal(await state.authorize("FRA"), fra);
-  assert.equal(state.revision("FRA"), 0);
+  assert.equal(state.revision("FRA"), 1);
   assert.equal(state.promptAgent, undefined);
 });
 

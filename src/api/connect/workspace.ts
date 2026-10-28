@@ -47,6 +47,11 @@ export function rememberWorkspaceSession(sessionId: string, agentId: string) {
   if (!grant || !workspaceState.valid(grant)) throw new Error("Workspace locked");
   sessions.set(sessionId, grant);
 }
+export const forgetWorkspaceSession = (sessionId: string) => { sessions.delete(sessionId); };
+export function workspaceSessionValid(sessionId: string) {
+  const grant = sessions.get(sessionId);
+  return Boolean(grant && workspaceState.valid(grant) && workspaceState.grants.get(grant.agentId)?.token === grant.token);
+}
 export function workspaceSessionAccess(sessionId: string, signal: AbortSignal) {
   const grant = sessions.get(sessionId);
   if (!grant || !workspaceState.valid(grant) || workspaceState.grants.get(grant.agentId)?.token !== grant.token) throw new Error("Workspace locked");

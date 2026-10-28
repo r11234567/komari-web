@@ -1,4 +1,4 @@
-import { workspaceAccess, rememberWorkspaceSession, workspaceSessionAccess } from "./workspace";
+import { workspaceAccess, rememberWorkspaceSession, workspaceSessionAccess, workspaceSessionValid, forgetWorkspaceSession } from "./workspace";
 import { durationFromMs } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { Execution, ExecutionEvent } from "@komari/proto/komari/exec/v1/exec_pb";
@@ -212,6 +212,7 @@ export async function* watchRemoteSession(input: {
       return;
     } catch (error) {
       if (input.signal.aborted) return;
+      if (!workspaceSessionValid(input.sessionId)) return;
       const cause = acknowledgementError ?? error;
       if (!deadline.aborted && !reconnectableStreamError(cause)) throw cause;
       await waitToReconnect(input.signal);
@@ -227,6 +228,7 @@ export async function closeRemoteSession(input: {
   reason: string;
   signal: AbortSignal;
 }): Promise<SessionClosed | undefined> {
+  if (!workspaceSessionValid(input.sessionId)) { forgetWorkspaceSession(input.sessionId); return; }
   const response = await connectUnary(
     { signal: input.signal, timeoutMs: 10_000 },
     (signal, timeoutMs) => connectClients.webssh.closeSession({
@@ -234,5 +236,6 @@ export async function closeRemoteSession(input: {
       reason: input.reason,
     }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
   );
+  forgetWorkspaceSession(input.sessionId);
   return response.closed;
 }

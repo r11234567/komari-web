@@ -91,9 +91,12 @@ const readResponseBytes = async (response: Response, limit: number) => {
 };
 
 export const useRemoteFileService = (uuid: string): RemoteFileService => {
-  const controller = useMemo(() => new AbortController(), [uuid]);
-  useEffect(() => () => controller.abort(), [controller]);
-  const callOptions = useMemo(() => ({ signal: controller.signal }), [controller]);
+  const lifetime = useMemo(() => ({ agentId: uuid, controller: new AbortController() }), [uuid]);
+  useEffect(() => {
+    if (lifetime.controller.signal.aborted) lifetime.controller = new AbortController();
+    return () => lifetime.controller.abort();
+  }, [lifetime]);
+  const callOptions = useMemo(() => ({ get signal() { return lifetime.controller.signal; } }), [lifetime]);
   const list = useCallback(
     async (path: string) => {
       const response = await connectClients.file.listDirectory({
@@ -128,7 +131,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
 
   const read = useCallback(
     async (path: string) => {
-      const access = await workspaceAccess(uuid, controller.signal);
+      const access = await workspaceAccess(uuid, lifetime.controller.signal);
       const response = await fetch(fileDownloadUrl(uuid, path, true), {
         signal: access.signal,
         credentials: "include",
@@ -168,7 +171,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         content_type: response.headers.get("Content-Type") || "",
       } satisfies RemoteFileReadResult;
     },
-    [uuid, controller],
+    [uuid, lifetime],
   );
 
   const mkdir = useCallback(

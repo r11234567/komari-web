@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Terminal } from "@xterm/xterm";
 import type { ITerminalOptions } from "@xterm/xterm";
@@ -72,7 +72,7 @@ export const TerminalSession = ({
   optionsRef.current = options;
   const { t } = useTranslation();
 
-  const workspaceRevision = useSyncExternalStore(workspaceState.subscribe, () => workspaceState.revision(uuid), () => 0);
+  const startRef = useRef<(() => void) | null>(null);
   const [manualPasteOpen, setManualPasteOpen] = useState(false);
   const [manualPasteText, setManualPasteText] = useState("");
 
@@ -137,7 +137,8 @@ export const TerminalSession = ({
       }
     };
 
-    const commands = createTerminalCommandQueue({
+    let commands: ReturnType<typeof createTerminalCommandQueue> | undefined;
+    const createCommands = () => createTerminalCommandQueue({
       signal: sessionController.signal,
       input: (sequence, data) => sendRemoteSessionInput({
         sessionId: sessionId!, sequence, data, signal: sessionController.signal,
@@ -149,20 +150,24 @@ export const TerminalSession = ({
         term.options.disableStdin = true;
         const message = error instanceof Error ? error.message : String(error);
         term.write(`\r\n${message}\r\n`);
-        sessionController.abort();
+        commands?.dispose();
       },
     });
     const send = (data: string | Uint8Array) => {
       if (disposed || !sessionId) return;
-      commands.input(typeof data === "string" ? new TextEncoder().encode(data) : data);
+      commands?.input(typeof data === "string" ? new TextEncoder().encode(data) : data);
     };
     pendingSendRef.current = send;
 
     let starting = false;
+    let connectionToken: string | undefined;
 
     const startSession = async () => {
-      if (disposed || starting || sessionId) return;
+      if (disposed || starting || sessionId || !activeRef.current) return;
+      const grant = workspaceState.grants.get(uuid);
+      if ((!grant || !workspaceState.valid(grant)) && workspaceState.revision(uuid) > 0) return;
       starting = true;
+      commands = createCommands();
       try {
         fit();
         const started = await createRemoteSession({
@@ -180,6 +185,11 @@ export const TerminalSession = ({
           return;
         }
         sessionId = started.sessionId;
+        connectionToken = workspaceState.grants.get(uuid)?.token;
+        if (!screenDeadline) {
+          const grant = workspaceState.grants.get(uuid);
+          if (grant) screenDeadline = window.setTimeout(() => { term.reset(); screenDeadline = 0; }, Math.max(0, grant.expiresAt - Date.now()));
+        }
         term.options.disableStdin = false;
         if (activeRef.current) term.focus();
 
@@ -203,7 +213,7 @@ export const TerminalSession = ({
           term.write(`\r\n${msg}\r\n`);
         }
       } finally {
-        commands.dispose();
+        commands?.dispose();
         starting = false;
         if (!disposed) {
           if (sessionId) {
@@ -215,9 +225,18 @@ export const TerminalSession = ({
           }
           sessionId = null;
           term.options.disableStdin = true;
+          const current = workspaceState.grants.get(uuid);
+          if (current && workspaceState.valid(current) && current.token !== connectionToken) void startSession();
         }
       }
     };
+    let screenDeadline = 0;
+    startRef.current = () => { void startSession(); };
+    const unsubscribe = workspaceState.subscribe(() => {
+      const grant = workspaceState.grants.get(uuid);
+      if (!grant || !workspaceState.valid(grant)) term.options.disableStdin = true;
+      else void startSession();
+    });
     void startSession();
 
     term.onData((data) => {
@@ -226,7 +245,7 @@ export const TerminalSession = ({
 
     term.onResize(({ rows, cols }) => {
       if (!sessionId || disposed) return;
-      commands.resize(rows, cols);
+      commands?.resize(rows, cols);
     });
 
     const copySelection = async () => {
@@ -331,9 +350,12 @@ export const TerminalSession = ({
 
     return () => {
       disposed = true;
+      startRef.current = null;
+      unsubscribe();
+      window.clearTimeout(screenDeadline);
       pendingSendRef.current = null;
       apiRef.current = null;
-      commands.dispose();
+      commands?.dispose();
       sessionController.abort();
       if (sessionId) {
         void closeRemoteSession({
@@ -346,7 +368,7 @@ export const TerminalSession = ({
       onApiChangeRef.current(null);
       term.dispose();
     };
-  }, [t, uuid, workspaceRevision]);
+  }, [t, uuid]);
 
   useEffect(() => {
     const api = apiRef.current;
@@ -366,6 +388,7 @@ export const TerminalSession = ({
 
   useEffect(() => {
     if (active) {
+      startRef.current?.();
       requestAnimationFrame(() => {
         apiRef.current?.fit();
         apiRef.current?.terminal.focus();
