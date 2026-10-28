@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Badge, Box, Button, Code, Dialog, Flex, Text, TextField } from "@radix-ui/themes";
-import { lockWorkspace, trackWorkspaceActivity, unlockWorkspace, workspaceState } from "@/api/connect/workspace";
+import { trackWorkspaceActivity, unlockWorkspace, workspaceState } from "@/api/connect/workspace";
 import TrustedCredentialVerification from "@/components/TrustedCredentialVerification";
 import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential_pb";
 import { workspaceCredentialResource } from "@/api/connect/trustedCredential";
@@ -11,7 +11,7 @@ function UnlockDialog({ agentId }: { agentId: string }) {
   });
   const [targetUser, setTargetUser] = useState("");
   const usernameId = useId();
-  return <Dialog.Root open onOpenChange={(open) => { if (!open) workspaceState.cancel(agentId); }}>
+  return <Dialog.Root open modal={false} onOpenChange={(open) => { if (!open) workspaceState.cancel(agentId); }}>
     <Dialog.Content maxWidth="480px" className="km-workspace-unlock">
       <Dialog.Title>解锁终端与文件工作台</Dialog.Title>
       <Dialog.Description size="2" color="gray">
@@ -48,17 +48,9 @@ function UnlockDialog({ agentId }: { agentId: string }) {
 export default function WorkspaceBoundary({ children }: { children: ReactNode }) {
   useSyncExternalStore(workspaceState.subscribe, () => workspaceState.version, () => 0);
   useEffect(trackWorkspaceActivity, []);
-  const pending = workspaceState.pending.keys().next().value as string | undefined;
+  const pending = workspaceState.promptAgent;
   return <>
-    <div inert={Boolean(pending)}>{children}</div>
-    {!pending && workspaceState.knownAgents.size > 0 && <details className="fixed bottom-2 right-2 rounded border border-neutral-600 bg-[#252526] p-2 text-xs text-neutral-200" style={{ zIndex: 100020 }}>
-      <summary>工作台账号 / 锁定</summary>
-      {[...workspaceState.knownAgents].map((agentId) => <div key={agentId} className="mt-2 flex max-w-[360px] items-center gap-2">
-        <span className="truncate">{agentId}：{workspaceState.grants.get(agentId)?.systemUser ?? "已锁定"}</span>
-        <button className="shrink-0 text-blue-300" onClick={() => lockWorkspace(agentId)}>解锁 / 切换账号</button>
-        {workspaceState.grants.has(agentId) && <button className="shrink-0" onClick={() => lockWorkspace(agentId, false)}>锁定</button>}
-      </div>)}
-    </details>}
-    {pending && <UnlockDialog key={pending} agentId={pending} />}
+    {children}
+    {pending && workspaceState.pending.has(pending) && <UnlockDialog key={pending} agentId={pending} />}
   </>;
 }

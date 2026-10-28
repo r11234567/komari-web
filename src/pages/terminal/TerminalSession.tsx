@@ -25,7 +25,8 @@ import {
   terminalKeyAction,
 } from "@/utils/terminalClipboard";
 import { createTerminalCommandQueue } from "@/utils/terminalTransport";
-import { workspaceState, setActiveWorkspace } from "@/api/connect/workspace";
+import { workspaceState } from "@/api/connect/workspace";
+import WorkspaceSurface from "./WorkspaceSurface";
 import { writeClipboardText } from "@/utils/clipboard";
 import {
   DEFAULT_TERMINAL_OPTIONS,
@@ -379,12 +380,10 @@ export const TerminalSession = ({
   };
 
   return (
-    <>
+    <WorkspaceSurface agentId={uuid} active={active}>
       <div
         ref={hostRef}
         data-workspace-agent={uuid}
-        onFocusCapture={() => setActiveWorkspace(uuid)}
-        onPointerDown={() => setActiveWorkspace(uuid)}
         className="km-terminal-session relative h-full w-full overflow-hidden bg-[#000000]"
         style={style}
         onPaste={(event) => {
@@ -436,7 +435,7 @@ export const TerminalSession = ({
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
-    </>
+    </WorkspaceSurface>
   );
 };
 

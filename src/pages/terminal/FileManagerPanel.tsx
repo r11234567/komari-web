@@ -1,3 +1,4 @@
+import WorkspaceSurface from "./WorkspaceSurface";
 import { Checkbox, DropdownMenu } from "@radix-ui/themes";
 import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from "react";
 import {
@@ -1148,4 +1149,6 @@ const FileManagerPanel = ({ uuid }: FileManagerPanelProps) => {
   );
 };
 
-export default FileManagerPanel;
+export default function ScopedFileManagerPanel(props: FileManagerPanelProps) {
+  return <WorkspaceSurface agentId={props.uuid ?? ""}><FileManagerPanel {...props} /></WorkspaceSurface>;
+}

@@ -1,5 +1,5 @@
-import { useCallback, useMemo } from "react";
-import { ensureWorkspace } from "@/api/connect/workspace";
+import { useCallback, useEffect, useMemo } from "react";
+import { workspaceAccess } from "@/api/connect/workspace";
 import { connectClients } from "@/api/connect/client";
 import { EntryKind, type FileEntry } from "@komari/proto/komari/file/v1/file_pb";
 import {
@@ -91,42 +91,46 @@ const readResponseBytes = async (response: Response, limit: number) => {
 };
 
 export const useRemoteFileService = (uuid: string): RemoteFileService => {
+  const controller = useMemo(() => new AbortController(), [uuid]);
+  useEffect(() => () => controller.abort(), [controller]);
+  const callOptions = useMemo(() => ({ signal: controller.signal }), [controller]);
   const list = useCallback(
     async (path: string) => {
       const response = await connectClients.file.listDirectory({
         agentId: uuid,
         path,
-      });
+      }, callOptions);
       return (response.listing?.entries ?? []).map(mapFileEntryToInfo);
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   const roots = useCallback(async () => {
     const response = await connectClients.file.listRoots({
       agentId: uuid,
-    });
+    }, callOptions);
     return response.roots.map(mapFileEntryToInfo);
-  }, [uuid]);
+  }, [uuid, callOptions]);
 
   const stat = useCallback(
     async (path: string) => {
       const response = await connectClients.file.statFile({
         agentId: uuid,
         path,
-      });
+      }, callOptions);
       if (!response.entry) {
         throw new Error("File not found");
       }
       return mapFileEntryToInfo(response.entry);
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   const read = useCallback(
     async (path: string) => {
-      await ensureWorkspace(uuid);
+      const access = await workspaceAccess(uuid, controller.signal);
       const response = await fetch(fileDownloadUrl(uuid, path, true), {
+        signal: access.signal,
         credentials: "include",
         cache: "no-store",
         headers: { Accept: "application/octet-stream" },
@@ -164,7 +168,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         content_type: response.headers.get("Content-Type") || "",
       } satisfies RemoteFileReadResult;
     },
-    [uuid],
+    [uuid, controller],
   );
 
   const mkdir = useCallback(
@@ -174,9 +178,9 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         path,
         kind: EntryKind.DIRECTORY,
         mode,
-      });
+      }, callOptions);
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   const search = useCallback(
@@ -187,7 +191,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         query,
         content,
         maxResults: 200,
-      });
+      }, callOptions);
       return {
         matches: response.matches.map((m) => ({
           path: m.path,
@@ -198,7 +202,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         limited: response.limited,
       };
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   const remove = useCallback(
@@ -207,9 +211,9 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         agentId: uuid,
         path,
         recursive: true,
-      });
+      }, callOptions);
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   const move = useCallback(
@@ -219,9 +223,9 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         source,
         destination,
         overwrite: true,
-      });
+      }, callOptions);
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   const copy = useCallback(
@@ -232,9 +236,9 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         destination,
         recursive: true,
         overwrite: true,
-      });
+      }, callOptions);
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   const chmod = useCallback(
@@ -243,9 +247,9 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         agentId: uuid,
         path,
         mode,
-      });
+      }, callOptions);
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   const chown = useCallback(
@@ -255,9 +259,9 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         path,
         owner,
         group,
-      });
+      }, callOptions);
     },
-    [uuid],
+    [uuid, callOptions],
   );
 
   return useMemo(

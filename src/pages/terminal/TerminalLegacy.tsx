@@ -1,3 +1,4 @@
+import WorkspaceSurface from "./WorkspaceSurface";
 import { useEffect, useRef, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 import { workspaceState } from "@/api/connect/workspace";
@@ -844,7 +845,7 @@ const TerminalPage = () => {
     <TerminalContext.Provider
       value={{ terminal: terminalInstance.current, sendCommand }}
     >
-      <Theme appearance="dark" className="km-page-terminal" data-workspace-agent={uuid ?? undefined}>
+      <WorkspaceSurface agentId={uuid ?? ""}><Theme appearance="dark" className="km-page-terminal" data-workspace-agent={uuid ?? undefined}>
         <Toaster theme="dark" />
         {settingsResolutionError ? (
           <div className="absolute left-4 top-4 z-30 max-w-[32rem]">
@@ -961,7 +962,7 @@ const TerminalPage = () => {
             </form>
           </Dialog.Content>
         </Dialog.Root>
-      </Theme>
+      </Theme></WorkspaceSurface>
 
     </TerminalContext.Provider>
   );
