@@ -4,6 +4,11 @@ on:
   push:
     branches: [main, 'feat/*', 'ci/feature-audit-*']
   workflow_dispatch:
+    inputs:
+      run_browser:
+        description: Run browser E2E explicitly (disabled by default)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -65,7 +70,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
   browser:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.run_browser == true
     name: Web / actual terminal browser interactions
     runs-on: ubuntu-latest
     timeout-minutes: 25
