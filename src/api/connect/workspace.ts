@@ -38,7 +38,7 @@ export async function unlockWorkspace(agentId: string, systemUser: string, autho
 }
 export function lockWorkspace(agentId: string, reopen = false) {
   const grant = workspaceState.invalidate(agentId);
-  peers?.lock(agentId);
+  if (grant) peers?.lock(agentId, grant.token);
   if (grant) void client.lockWorkspace({ grantToken: grant.token }).catch(() => {});
   for (const [id, session] of sessions) { if (session.agentId === agentId) sessions.delete(id); }
   if (reopen) void ensureWorkspace(agentId).catch(() => {});

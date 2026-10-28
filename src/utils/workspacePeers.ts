@@ -7,7 +7,7 @@ interface Channel {
   close(): void;
 }
 type WireGrant = Omit<WorkspaceGrant, 'controller'>;
-type Message = { sender: string; kind: 'hello' | 'grant' | 'consumers' | 'lock'; agentId?: string; grant?: WireGrant; agents?: string[] };
+type Message = { sender: string; kind: 'hello' | 'grant' | 'consumers' | 'lock'; agentId?: string; token?: string; grant?: WireGrant; agents?: string[] };
 
 // Same-origin tabs share only in-memory, machine-scoped capabilities. No token
 // goes into persistent browser storage; every server request still verifies its
@@ -15,6 +15,7 @@ type Message = { sender: string; kind: 'hello' | 'grant' | 'consumers' | 'lock';
 export class WorkspacePeers {
   private id = crypto.randomUUID();
   private applying = false;
+  private revoked = new Set<string>();
   private sent = new Map<string, string>();
   private peers = new Map<string, { at: number; agents: string[] }>();
   private unsubscribe: () => void;
@@ -33,7 +34,14 @@ export class WorkspacePeers {
   hasConsumer(agentId: string) {
     return [...this.peers.values()].some(peer => this.now() - peer.at < 45_000 && peer.agents.includes(agentId));
   }
-  lock(agentId: string) { this.channel.postMessage({ sender: this.id, kind: 'lock', agentId }); }
+  lock(agentId: string, token: string) {
+    this.block(token);
+    this.channel.postMessage({ sender: this.id, kind: 'lock', agentId, token });
+  }
+  private block(token: string) {
+    if (this.revoked.size >= 512) this.revoked.delete(this.revoked.values().next().value!);
+    this.revoked.add(token);
+  }
   private announce = () => {
     this.channel.postMessage({ sender: this.id, kind: 'consumers', agents: this.state.consumingAgents() });
   };
@@ -64,13 +72,17 @@ export class WorkspacePeers {
       this.sent.delete(message.agentId); this.publish(); this.announce(); return;
     }
     if (message.kind === 'lock') {
-      if (typeof message.agentId === 'string') this.state.invalidate(message.agentId);
+      if (typeof message.agentId !== 'string' || typeof message.token !== 'string') return;
+      this.block(message.token);
+      if (this.state.grants.get(message.agentId)?.token === message.token) this.state.invalidate(message.agentId);
       return;
     }
     if (message.kind !== 'grant') return;
     const grant = message.grant;
     if (!grant || typeof grant.agentId !== 'string' || !this.state.knownAgents.has(grant.agentId) || typeof grant.systemUser !== 'string' || grant.systemUser.length > 128 || typeof grant.token !== 'string' || grant.token.length > 256 || !Number.isFinite(grant.expiresAt) || !Number.isFinite(grant.idleExpiresAt) || grant.expiresAt <= this.now() || grant.idleExpiresAt <= this.now()) return;
+    if (this.revoked.has(grant.token)) return;
     const previous = this.state.grants.get(grant.agentId);
+    if (previous && previous.token !== grant.token && previous.expiresAt >= grant.expiresAt) return;
     if (previous?.token === grant.token && previous.idleExpiresAt >= grant.idleExpiresAt) return;
     this.applying = true;
     try { this.state.install({ ...grant, controller: previous?.token === grant.token ? previous.controller : new AbortController() }); }
