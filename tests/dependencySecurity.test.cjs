@@ -37,6 +37,6 @@ test('existing clone, array, symbol and custom merge behavior remains compatible
  assert.deepEqual(merge(left,right),{options:{one:true,two:true},items:[1,2],[symbol]:{left:true,right:true}});
  assert.deepEqual(merge.all([{a:1},{b:2}]),{a:1,b:2});
  assert.deepEqual(merge(left,right,{arrayMerge:(_,source)=>source}).items,[2]);
- assert.deepEqual(merge({value:1},{value:2},{customMerge: key=>key==='value' ? (a,b)=>a+b : undefined}),{value:3});
+ assert.deepEqual(merge({value:{n:1}},{value:{n:2}},{customMerge: key=>key==='value' ? (a,b)=>({n:a.n+b.n}) : undefined}),{value:{n:3}});
  assert.equal(left.items.length,1);
 });
