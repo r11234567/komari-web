@@ -4,6 +4,11 @@ on:
   push:
     branches: [main, 'feat/*', 'ci/feature-audit-*']
   workflow_dispatch:
+    inputs:
+      run_browser:
+        description: Run browser E2E explicitly (disabled by default)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -48,7 +53,9 @@ jobs:
               ;;
             theme-build) bash scripts/ci/run-audit-check.sh theme-build npm run build ;;
             system-build) bash scripts/ci/run-audit-check.sh system-build npm run build:system ;;
-            dependency-audit) bash scripts/ci/run-audit-check.sh dependency-audit npm run audit:security ;;
+            dependency-audit)
+              bash scripts/ci/run-audit-check.sh dependency-security npm run test:dependency-security
+              bash scripts/ci/run-audit-check.sh dependency-audit npm run audit:security ;;
             *) exit 2 ;;
           esac
       - name: Upload complete logs and available bundles
@@ -63,7 +70,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
   browser:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.run_browser == true
     name: Web / actual terminal browser interactions
     runs-on: ubuntu-latest
     timeout-minutes: 25
