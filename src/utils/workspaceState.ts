@@ -123,6 +123,12 @@ export class WorkspaceState {
     const previous = this.grants.get(grant.agentId);
     if (previous && previous.token !== grant.token) previous.controller.abort();
     if (!previous || previous.token !== grant.token) this.revisions.set(grant.agentId, this.revision(grant.agentId) + 1);
+    // Existing terminal/file sessions retain this object. A renewal must update
+    // their deadline too, without changing the grant's cancellation scope.
+    if (previous?.token === grant.token) {
+      Object.assign(previous, { idleExpiresAt: Math.max(previous.idleExpiresAt, grant.idleExpiresAt) });
+      grant = previous;
+    }
     this.grants.set(grant.agentId, grant);
     this.pending.get(grant.agentId)?.resolve(grant);
     this.pending.delete(grant.agentId);

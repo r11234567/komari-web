@@ -7,8 +7,8 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import TerminalSession from '../../src/pages/terminal/TerminalSession.tsx';
 import WorkspaceBoundary from '../../src/pages/terminal/WorkspaceBoundary.tsx';
-import { workspaceState } from '../../src/api/connect/workspace.ts';
-import { terminals, starts } from './peripherals.ts';
+import { rememberWorkspaceSession, workspaceSessionAccess, workspaceSessionValid, workspaceState } from '../../src/api/connect/workspace.ts';
+import { terminals, starts, failures } from './peripherals.ts';
 
 // No real panel, production credentials, operating-system shell or browser.
 const dom = new JSDOM('<html><body></body></html>', { url: 'https://unit.invalid/', pretendToBeVisual: true });
@@ -64,4 +64,32 @@ test('real WorkspaceBoundary: cancellation never reveals another machine or make
   } finally {
     await act(async () => { workspaceState.cancel('fourth-machine'); await assert.rejects(other); root.unmount(); }); host.remove();
   }
+});
+
+test('real TerminalSession: failed creation does not immediately retry or consume credential capacity', async () => {
+  const host = document.createElement('div'); document.body.appendChild(host);
+  const root = createRoot(host);
+  const before = starts.length;
+  failures.add('unavailable');
+  workspaceState.install(grant('unavailable', 'unavailable-first'));
+  try {
+    await act(async () => { root.render(session('unavailable')); });
+    // Drain effects/microtasks again: a self-restarting create would not settle.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    assert.deepEqual(starts.slice(before), ['unavailable']);
+    assert.equal(workspaceState.pending.has('unavailable'), false);
+  } finally { failures.delete('unavailable'); await act(async () => root.unmount()); host.remove(); }
+});
+
+test('actual session binding rejects a delayed create from an old grant and retains renewed deadlines', () => {
+  const original = grant('binding', 'binding-old');
+  workspaceState.install(original);
+  rememberWorkspaceSession('old-session', 'binding', original.token);
+  workspaceState.install({ ...original, idleExpiresAt: original.idleExpiresAt + 10_000 });
+  assert.equal(workspaceSessionValid('old-session'), true);
+  assert.equal(workspaceSessionAccess('old-session', new AbortController().signal).signal.aborted, false);
+  workspaceState.install(grant('binding', 'binding-new'));
+  assert.throws(() => rememberWorkspaceSession('delayed-session', 'binding', original.token), /Workspace locked/);
+  assert.equal(workspaceSessionValid('old-session'), false);
+  assert.throws(() => workspaceSessionAccess('old-session', new AbortController().signal), /Workspace locked/);
 });

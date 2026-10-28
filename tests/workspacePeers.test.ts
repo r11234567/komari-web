@@ -27,3 +27,42 @@ test('workspace peers: same-machine grants/renewals cross windows, other machine
   assert.equal(second.grants.get('SJC')?.controller.signal.aborted,false);
  } finally { controller.abort();release();a.dispose();b.dispose(); }
 });
+
+test('workspace peers: delayed lock cannot revoke a newer grant and revoked grants cannot be replayed', async () => {
+ const state = new WorkspaceState();
+ const name = `workspace-unit-${crypto.randomUUID()}`;
+ const receiver = new BroadcastChannel(name);
+ const sender = new BroadcastChannel(name);
+ const peer = new WorkspacePeers(state, receiver);
+ const now = Date.now();
+ const fresh = {agentId:'SJC',systemUser:'alice',token:'new-sjc',expiresAt:now+30*60_000,idleExpiresAt:now+3*60_000};
+ state.knownAgents.add('SJC'); state.knownAgents.add('FRA');
+ state.install({...fresh,controller:new AbortController()});
+ state.install({...fresh,agentId:'FRA',token:'fra-unrelated',controller:new AbortController()});
+ // Wait for actual delivery through the receiving channel, after the real
+ // WorkspacePeers handler, rather than sleeping and assuming it ran.
+ const deliver = async (message: Record<string, unknown>) => {
+  const id = crypto.randomUUID();
+  await new Promise<void>((resolve,reject) => {
+   const timer = setTimeout(() => {receiver.removeEventListener('message',received);reject(new Error('channel delivery timed out'));},2000);
+   const received = (event: MessageEvent) => {
+    if (event.data.sender !== id) return;
+    clearTimeout(timer);receiver.removeEventListener('message',received);resolve();
+   };
+   receiver.addEventListener('message',received);
+   sender.postMessage({...message,sender:id});
+  });
+ };
+ try {
+  await deliver({kind:'lock',agentId:'SJC',token:'old-sjc'});
+  assert.equal(state.grants.get('SJC')?.token,'new-sjc');
+  await deliver({kind:'grant',grant:{...fresh,token:'old-sjc',expiresAt:fresh.expiresAt+1000}});
+  assert.equal(state.grants.get('SJC')?.token,'new-sjc','revoked old token must not win by a later timestamp');
+  await deliver({kind:'lock',agentId:'SJC',token:'new-sjc'});
+  assert.equal(state.grants.has('SJC'),false);
+  await deliver({kind:'grant',grant:fresh});
+  assert.equal(state.grants.has('SJC'),false,'late grant must not resurrect revoked authorization');
+  assert.equal(state.grants.get('FRA')?.controller.signal.aborted,false);
+  assert.equal(state.promptAgent,undefined);
+ } finally {peer.dispose();sender.close();}
+});

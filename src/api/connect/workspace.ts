@@ -48,9 +48,9 @@ export async function workspaceAccess(agentId: string, signal: AbortSignal) {
   signal.throwIfAborted();
   return { headers: { "X-Komari-Workspace-Grant": grant.token }, signal: AbortSignal.any([signal, grant.controller.signal]) };
 }
-export function rememberWorkspaceSession(sessionId: string, agentId: string) {
+export function rememberWorkspaceSession(sessionId: string, agentId: string, expectedToken: string) {
   const grant = workspaceState.grants.get(agentId);
-  if (!grant || !workspaceState.valid(grant)) throw new Error("Workspace locked");
+  if (!grant || grant.token !== expectedToken || !workspaceState.valid(grant)) throw new Error("Workspace locked");
   sessions.set(sessionId, grant);
 }
 export const forgetWorkspaceSession = (sessionId: string) => { sessions.delete(sessionId); };

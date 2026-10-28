@@ -25,7 +25,7 @@ import {
   terminalKeyAction,
 } from "@/utils/terminalClipboard";
 import { createTerminalCommandQueue } from "@/utils/terminalTransport";
-import { workspaceState } from "@/api/connect/workspace";
+import { ensureWorkspace, workspaceState } from "@/api/connect/workspace";
 import WorkspaceSurface from "./WorkspaceSurface";
 import { writeClipboardText } from "@/utils/clipboard";
 import {
@@ -169,6 +169,11 @@ export const TerminalSession = ({
       starting = true;
       commands = createCommands();
       try {
+        const authorized = await ensureWorkspace(uuid, sessionController.signal);
+        // Capture before create: a failed create must not become a hot retry
+        // loop merely because connectionToken was never initialized.
+        connectionToken = authorized.token;
+        if (screenUser && screenUser !== authorized.systemUser) term.reset();
         fit();
         const started = await createRemoteSession({
           agentId: uuid,
@@ -229,7 +234,7 @@ export const TerminalSession = ({
           sessionId = null;
           term.options.disableStdin = true;
           const current = workspaceState.grants.get(uuid);
-          if (current && workspaceState.valid(current) && current.token !== connectionToken) void startSession();
+          if (connectionToken && current && workspaceState.valid(current) && current.token !== connectionToken) void startSession();
         }
       }
     };

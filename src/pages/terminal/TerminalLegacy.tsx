@@ -317,6 +317,7 @@ const TerminalPage = () => {
   const sessionCommandQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const pendingFileRequestsRef = useRef(new Map<string, PendingFileRequest>());
   const resolvedSettingsRef = useRef<XtermjsSettings>(defaultXtermjsSettings);
+  const screenUserRef = useRef("");
   const screenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedUuidRef = useRef<string | null>(null);
   const params = new URLSearchParams(window.location.search);
@@ -527,6 +528,7 @@ const TerminalPage = () => {
   useEffect(() => () => {
     terminalInstance.current?.dispose();
     terminalInstance.current = null;
+    screenUserRef.current = "";
     fitAddonRef.current = null;
     if (screenTimerRef.current) clearTimeout(screenTimerRef.current);
     screenTimerRef.current = null;
@@ -573,6 +575,9 @@ const TerminalPage = () => {
       term.open(terminalRef.current);
     }
     terminalInstance.current = term;
+    const account = workspaceState.grants.get(uuid)?.systemUser;
+    if (account && screenUserRef.current && screenUserRef.current !== account) term.reset();
+    if (account) screenUserRef.current = account;
 
     const customCssStyle = document.createElement("style");
     customCssStyle.id = "xtermjs-custom-css";

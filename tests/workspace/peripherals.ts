@@ -1,6 +1,7 @@
 import { workspaceAccess, rememberWorkspaceSession, workspaceSessionAccess, forgetWorkspaceSession } from '../../src/api/connect/workspace';
 export const terminals: Terminal[] = [];
 export const starts: string[] = [];
+export const failures = new Set<string>();
 export class Terminal {
   options: Record<string, unknown>;
   rows = 24; cols = 80; text = ''; disposed = false;
@@ -17,11 +18,15 @@ export class FitAddon { fit() {} }
 export class SearchAddon {}
 export class WebLinksAddon {}
 export async function createRemoteSession(input: { agentId: string; signal: AbortSignal }) {
-  await workspaceAccess(input.agentId, input.signal);
+  const access = await workspaceAccess(input.agentId, input.signal);
   input.signal.throwIfAborted();
   const sessionId = input.agentId + ':' + starts.length;
   starts.push(input.agentId);
-  rememberWorkspaceSession(sessionId, input.agentId);
+  if (failures.has(input.agentId)) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+    throw new Error('synthetic create unavailable');
+  }
+  rememberWorkspaceSession(sessionId, input.agentId, access.headers['X-Komari-Workspace-Grant']);
   return { sessionId };
 }
 export async function* watchRemoteSession(input: { sessionId: string; signal: AbortSignal }): AsyncIterable<never> {

@@ -134,3 +134,19 @@ test("workspace: cleanup waits 60 seconds after final consumer and cancels on re
   state.collectUnused((agent) => revoked.push(agent));
   assert.deepEqual(revoked, ["SJC"]);
 });
+
+test("workspace: renewal updates existing session references without replacing their cancellation scope", async () => {
+  let now = 0;
+  const state = new WorkspaceState(() => now);
+  const original = grant("SJC", now);
+  state.install(original);
+  now = 120_000;
+  await state.touch("SJC", async (value) => ({ ...value, idleExpiresAt: now + 180_000 }));
+  now = 180_001;
+  assert.equal(state.grants.get("SJC"), original);
+  assert.equal(state.valid(original), true, "terminal's retained grant must receive the renewed deadline");
+  assert.equal(original.idleExpiresAt, 300_000);
+  assert.equal(state.revision("SJC"), 1);
+  state.invalidate("SJC");
+  assert.equal(original.controller.signal.aborted, true);
+});

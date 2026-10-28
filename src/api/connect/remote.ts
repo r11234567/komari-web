@@ -115,7 +115,7 @@ export async function createRemoteSession(input: {
     }, { signal, timeoutMs, headers: access.headers }),
   );
   if (!response.started) throw new Error("Connect terminal did not return a session");
-  rememberWorkspaceSession(response.started.sessionId, input.agentId);
+  rememberWorkspaceSession(response.started.sessionId, input.agentId, access.headers["X-Komari-Workspace-Grant"]);
   return response.started;
 }
 
