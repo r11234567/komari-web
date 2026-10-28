@@ -2,6 +2,7 @@ import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { WorkspaceService, type WorkspaceAuthorization } from "@komari/proto/komari/workspace/v1/workspace_pb";
+import { WorkspacePeers } from "../../utils/workspacePeers";
 import { WorkspaceState, type WorkspaceGrant } from "../../utils/workspaceState";
 
 export const workspaceState = new WorkspaceState();
@@ -12,6 +13,7 @@ const client = createClient(WorkspaceService, createConnectTransport({
   fetch: (input, init) => fetch(input, { ...init, credentials: "same-origin" }),
 }));
 const sessions = new Map<string, WorkspaceGrant>();
+let peers: WorkspacePeers | undefined;
 
 
 function fromAuthorization(value: WorkspaceAuthorization, previous?: WorkspaceGrant): WorkspaceGrant {
@@ -20,7 +22,10 @@ function fromAuthorization(value: WorkspaceAuthorization, previous?: WorkspaceGr
     expiresAt: timestampDate(value.expiresAt).getTime(), idleExpiresAt: timestampDate(value.idleExpiresAt).getTime(),
     controller: previous?.controller ?? new AbortController() };
 }
-export const ensureWorkspace = (agentId: string, signal?: AbortSignal) => workspaceState.authorize(agentId, signal);
+export const ensureWorkspace = (agentId: string, signal?: AbortSignal) => {
+  peers?.request(agentId);
+  return workspaceState.authorize(agentId, signal);
+};
 export async function unlockWorkspace(agentId: string, systemUser: string, authorizationToken: string, signal?: AbortSignal) {
   const pending = workspaceState.pending.get(agentId);
   const boundSignal = pending ? AbortSignal.any([pending.controller.signal, ...(signal ? [signal] : [])]) : signal;
@@ -33,6 +38,7 @@ export async function unlockWorkspace(agentId: string, systemUser: string, autho
 }
 export function lockWorkspace(agentId: string, reopen = false) {
   const grant = workspaceState.invalidate(agentId);
+  peers?.lock(agentId);
   if (grant) void client.lockWorkspace({ grantToken: grant.token }).catch(() => {});
   for (const [id, session] of sessions) { if (session.agentId === agentId) sessions.delete(id); }
   if (reopen) void ensureWorkspace(agentId).catch(() => {});
@@ -59,6 +65,11 @@ export function workspaceSessionAccess(sessionId: string, signal: AbortSignal) {
 }
 
 export function trackWorkspaceActivity() {
+  if (typeof BroadcastChannel !== "undefined") peers = new WorkspacePeers(workspaceState, new BroadcastChannel("komari-workspace-v1"));
+  const release = (agentId: string) => {
+    if (peers?.hasConsumer(agentId)) workspaceState.invalidate(agentId);
+    else lockWorkspace(agentId);
+  };
   const activity = (event: Event) => {
     if (!event.isTrusted || document.visibilityState !== "visible" || !document.hasFocus()) return;
     const agentId = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-workspace-agent]")?.dataset.workspaceAgent : undefined;
@@ -74,14 +85,15 @@ export function trackWorkspaceActivity() {
   };
   const events = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart"];
   events.forEach((name) => document.addEventListener(name, activity, { capture: true, passive: true }));
-  const timer = window.setInterval(() => { workspaceState.expire(); workspaceState.collectUnused((agent) => lockWorkspace(agent)); }, 1000);
+  const timer = window.setInterval(() => { workspaceState.expire(); workspaceState.collectUnused(release); }, 1000);
   const visibility = () => workspaceState.expire();
   document.addEventListener("visibilitychange", visibility);
   return () => {
     events.forEach((name) => document.removeEventListener(name, activity, true));
     document.removeEventListener("visibilitychange", visibility);
     window.clearInterval(timer);
-    for (const agent of workspaceState.grants.keys()) lockWorkspace(agent, false);
+    for (const agent of workspaceState.grants.keys()) release(agent);
+    peers?.dispose(); peers = undefined;
     for (const agent of workspaceState.pending.keys()) workspaceState.cancel(agent);
   };
 }

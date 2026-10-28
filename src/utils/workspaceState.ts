@@ -81,11 +81,13 @@ export class WorkspaceState {
     void this.authorize(agentId, undefined, true).catch(() => {});
     this.emit();
   }
+  consumingAgents() { return [...this.consumers].filter(([, entry]) => entry.count > 0).map(([agentId]) => agentId); }
   retain(agentId: string) {
     const entry = this.consumers.get(agentId) ?? { count: 0 };
     entry.count++;
     entry.releasedAt = undefined;
     this.consumers.set(agentId, entry);
+    this.emit();
     let released = false;
     return () => {
       if (released) return;

@@ -27,6 +27,7 @@ export async function createRemoteSession(input: { agentId: string; signal: Abor
 export async function* watchRemoteSession(input: { sessionId: string; signal: AbortSignal }): AsyncIterable<never> {
   const access = workspaceSessionAccess(input.sessionId, input.signal);
   if (access.signal.aborted) return;
+  yield* [];
   await new Promise<void>((resolve) => access.signal.addEventListener('abort', () => resolve(), { once: true }));
 }
 export async function sendRemoteSessionInput() {}
