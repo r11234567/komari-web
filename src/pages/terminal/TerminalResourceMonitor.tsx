@@ -106,7 +106,7 @@ const TerminalResourceMonitor = ({
   onRemove,
 }: TerminalResourceMonitorProps) => {
   const { t } = useTranslation();
-  const { live_data } = useLiveData();
+  const { live_data, showCallout } = useLiveData();
   const { nodeList } = useNodeList(false) ?? { nodeList: [] };
   const [samples, setSamples] = useState<Record<string, ResourceSample>>({});
   const [loadError, setLoadError] = useState(false);
@@ -141,9 +141,16 @@ const TerminalResourceMonitor = ({
       return;
     }
 
+    if (!live_data || !showCallout) {
+      setSamples({});
+      setLoadError(!showCallout);
+      return;
+    }
+
     const next: Record<string, ResourceSample> = {};
     for (const uuid of selectedServers) {
-      const record = live_data?.data?.data?.[uuid];
+      const record = live_data.data.data[uuid];
+      if (!record) continue;
       next[uuid] = {
         online: live_data?.data?.online?.includes(uuid) ?? Boolean(record),
         cpuUsage: normalizePercent(record?.cpu?.usage ?? 0),
@@ -157,14 +164,14 @@ const TerminalResourceMonitor = ({
     setSamples((previous) => {
       const previousKeys = Object.keys(previous);
       const changed =
-        previousKeys.length !== selectedServers.length ||
+        previousKeys.length !== Object.keys(next).length ||
         previousKeys.some(
           (uuid) => !next[uuid] || !sameSample(previous[uuid], next[uuid]),
         );
       return changed ? next : previous;
     });
     setLoadError(false);
-  }, [live_data, nodeByUuid, serverKey]);
+  }, [live_data, showCallout, nodeByUuid, serverKey]);
 
   useEffect(() => {
     if (!position) return;

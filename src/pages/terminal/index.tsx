@@ -10,7 +10,7 @@ import { DEFAULT_TERMINAL_FONT_FAMILY } from "./terminalDefaults";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useXtermjsSettings } from "@/hooks/useXtermjsSettings";
 import TerminalLegacy from "./TerminalLegacy";
-import WorkspaceBoundary from "./WorkspaceBoundary";
+import TerminalPageBoundary from "./TerminalPageBoundary";
 
 const FileEditorDialog = lazy(() => import("./FileEditorDialog"));
 
@@ -213,9 +213,9 @@ const TerminalWorkbench = () => {
 
 export const TerminalPage = () => {
   if (!isWorkbenchEnabled()) {
-    return <WorkspaceBoundary><TerminalLegacy /></WorkspaceBoundary>;
+    return <TerminalPageBoundary><TerminalLegacy /></TerminalPageBoundary>;
   }
-  return <WorkspaceBoundary><TerminalWorkbench /></WorkspaceBoundary>;
+  return <TerminalPageBoundary><TerminalWorkbench /></TerminalPageBoundary>;
 };
 
 export default TerminalPage;

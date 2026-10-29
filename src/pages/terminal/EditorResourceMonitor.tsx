@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ArrowDown, ArrowUp, Gauge } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNodeList } from "@/contexts/NodeListContext";
@@ -59,30 +59,27 @@ interface EditorResourceMonitorProps {
 
 const EditorResourceMonitor = ({ uuid }: EditorResourceMonitorProps) => {
   const { t } = useTranslation();
-  const { live_data } = useLiveData();
+  const { live_data, showCallout } = useLiveData();
   const { nodeList } = useNodeList(false) ?? { nodeList: [] };
-  const [sample, setSample] = useState<ResourceSample | null>(null);
 
   const node = useMemo(
     () => (nodeList ?? []).find((item) => item.uuid === uuid),
     [nodeList, uuid],
   );
 
-  useEffect(() => {
-    if (!uuid) {
-      setSample(null);
-      return;
-    }
-    const record = live_data?.data?.data?.[uuid];
-    setSample({
-      online: live_data?.data?.online?.includes(uuid) ?? Boolean(record),
+  const sample = useMemo<ResourceSample | null>(() => {
+    if (!uuid || !live_data || !showCallout) return null;
+    const record = live_data.data.data[uuid];
+    if (!record) return null;
+    return {
+      online: live_data.data.online.includes(uuid),
       cpuUsage: normalizePercent(record?.cpu?.usage ?? 0),
       ramUsed: record?.ram?.used ?? 0,
       diskUsed: record?.disk?.used ?? 0,
       networkDown: record?.network?.down ?? 0,
       networkUp: record?.network?.up ?? 0,
-    });
-  }, [live_data, node, uuid]);
+    };
+  }, [live_data, showCallout, uuid]);
 
   return (
     <section className="shrink-0 border-t border-[#2b2b2b] bg-[#181818]" aria-label={t("terminal.resource_monitor.title", "资源小窗")}>
