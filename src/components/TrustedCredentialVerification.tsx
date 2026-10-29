@@ -18,7 +18,7 @@ export default function TrustedCredentialVerification({ purpose, resource, onAut
         <Text size="2" weight="medium">{t("account.native_otp.provider")}</Text>
         <Select.Root value={flow.provider} disabled={flow.busy || !flow.providers.length} onValueChange={flow.setProvider}>
           <Select.Trigger aria-label={t("account.native_otp.provider")} placeholder={t("account.native_otp.no_provider")} style={{ width: "100%" }} />
-          <Select.Content position="popper" style={{ zIndex: 200010 }}>
+          <Select.Content position="popper" style={{ zIndex: 200030 }}>
             {flow.providers.map((provider) => <Select.Item key={provider.id} value={provider.id}>{provider.displayName}</Select.Item>)}
           </Select.Content>
         </Select.Root>
