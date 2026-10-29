@@ -61,7 +61,7 @@ test('file-only workspace verifies above the editor portal with themed interacti
   const beginRequest=credentialCalls.find(c=>c.method==='begin')!.request as {resource:string};
   assert.equal(beginRequest.resource,'workspace:'+JSON.stringify(['synthetic-node','alice']));
   assert.equal(document.querySelector('.km-workspace-unlock'),null,'completed dialog still blocks editor');
- }finally{await act(async()=>root.unmount());host.remove();editor.remove();}
+ }finally{await act(async()=>{root.unmount();workspaceState.cancel('synthetic-node');});host.remove();editor.remove();}
 });
 
 test('terminal page shares a single real live provider with editor portal and preserves actual offline status',async()=>{
