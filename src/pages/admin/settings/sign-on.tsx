@@ -8,6 +8,7 @@ import { updateSettingsWithToast, useSettings } from "@/lib/api";
 import { Button, Text } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
+import AgentCredentialLifecycle from "@/components/admin/AgentCredentialLifecycle";
 import React from "react";
 import { Link } from "react-router-dom";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
@@ -180,6 +181,7 @@ function SignOnSettingsBody() {
         handleSave: handleOidcSave,
         t,
       })}
+      <AgentCredentialLifecycle />
       <SettingCardLabel>API</SettingCardLabel>
       <ApiCard />
     </>
