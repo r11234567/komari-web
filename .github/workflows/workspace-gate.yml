@@ -21,12 +21,12 @@ jobs:
         run: bash scripts/ci/run-audit-check.sh workspace node --test tests/workspaceState.test.ts
       - name: Install pinned component DOM on CI only
         run: bash scripts/ci/run-audit-check.sh workspace-dom npm install --no-save --package-lock=false --ignore-scripts --no-audit jsdom@26.1.0
-      - name: Actual file-only unlock portal, themed OTP and shared live metrics
+      - name: Actual unlock portal, live metrics and collected-session lock screen
         run: bash scripts/ci/run-audit-check.sh workspace-components node --import ./tests/workspace-ui/setup.mjs --import ./tests/workspace-ui/register.mjs --test --test-reporter=tap tests/workspace-ui/components.test.ts
       - name: Require observed component passes without skips
         if: ${{ !cancelled() }}
         run: bash scripts/ci/run-audit-check.sh workspace-evidence python3 scripts/ci/check-workspace-components.py
-      - name: Missing portal and missing live provider must fail real components
+      - name: Missing portal, provider or collected-session lock must fail real components
         if: ${{ !cancelled() }}
         run: bash scripts/ci/run-audit-check.sh workspace-negative bash scripts/ci/test-workspace-components-negative.sh
       - name: Typecheck Connect integration

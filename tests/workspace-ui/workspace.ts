@@ -1,5 +1,5 @@
 import { WorkspaceState } from '../../src/utils/workspaceState';
-export const workspaceState = new WorkspaceState();
+export const workspaceState = new WorkspaceState(() => Date.now());
 export const unlockCalls: { agent: string; user: string; token: string }[] = [];
 export function trackWorkspaceActivity() { return () => {}; }
 export async function unlockWorkspace(agent: string, user: string, token: string, signal?: AbortSignal) {
