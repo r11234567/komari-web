@@ -31,6 +31,9 @@ mode=sys.argv[1];log=Path('ci-artifacts/workspace-broken-'+mode+'.log').read_tex
 expected='unlock remains in original stacking context' if mode=='portal' else 'terminal route omitted or duplicated live stream'
 assert expected in log, 'negative control failed for unrelated reason'
 assert re.search(r'^not ok [0-9]+ - ',log,re.M), 'missing actual assertion failure'
+assert re.search(r'^# pass 1$',log,re.M) and re.search(r'^# fail 1$',log,re.M), 'negative control also broke unrelated test'
+for label in ['cancelled','skipped']:
+ assert re.search(r'^# '+label+r' 0$',log,re.M), 'negative control '+label
 print('Observed intended runtime failure with disabled '+mode+'; complete logs retained.')
 PY
 done
