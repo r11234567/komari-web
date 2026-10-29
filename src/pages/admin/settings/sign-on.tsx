@@ -8,6 +8,7 @@ import { updateSettingsWithToast, useSettings } from "@/lib/api";
 import { Button, Text } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
+import AgentCredentialLifecycle from "@/components/admin/AgentCredentialLifecycle";
 import React from "react";
 import { Link } from "react-router-dom";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
@@ -43,6 +44,12 @@ import { renderProviderInputs } from "@/utils/renderProviders";
 import { toast } from "sonner";
 
 function SignOnSettingsBody() {
+  // Machine authorization management must remain reachable even if an
+  // unrelated OAuth provider catalogue is empty or temporarily unavailable.
+  return <><AgentCredentialLifecycle /><SignOnProviderSettings /></>;
+}
+
+function SignOnProviderSettings() {
   const { t } = useTranslation();
   const { settings, loading, error } = useSettings();
   const [providerDefs, setProviderDefs] = React.useState<any>({});
