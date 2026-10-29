@@ -10,6 +10,7 @@ import i18next from 'i18next';
 import TerminalPageBoundary from '../../src/pages/terminal/TerminalPageBoundary.tsx';
 import EditorResourceMonitor from '../../src/pages/terminal/EditorResourceMonitor.tsx';
 import TerminalResourceMonitor from '../../src/pages/terminal/TerminalResourceMonitor.tsx';
+import WorkspaceSurface from '../../src/pages/terminal/WorkspaceSurface.tsx';
 import {AgentStatus} from '@komari/proto/komari/browser/v1/browser_pb';
 import {workspaceState,unlockCalls} from './workspace.ts';
 import {credentialCalls} from './trusted.ts';
@@ -60,7 +61,7 @@ test('file-only workspace verifies above the editor portal with themed interacti
   const beginRequest=credentialCalls.find(c=>c.method==='begin')!.request as {resource:string};
   assert.equal(beginRequest.resource,'workspace:'+JSON.stringify(['synthetic-node','alice']));
   assert.equal(document.querySelector('.km-workspace-unlock'),null,'completed dialog still blocks editor');
- }finally{await act(async()=>root.unmount());host.remove();editor.remove();}
+ }finally{await act(async()=>{root.unmount();workspaceState.cancel('synthetic-node');});host.remove();editor.remove();}
 });
 
 test('terminal page shares a single real live provider with editor portal and preserves actual offline status',async()=>{
@@ -89,4 +90,47 @@ test('terminal page shares a single real live provider with editor portal and pr
  const source=readFileSync(new URL('../../src/pages/terminal/index.tsx',import.meta.url),'utf8');
  assert.match(source,/<TerminalPageBoundary><TerminalWorkbench \/><\/TerminalPageBoundary>/);
  assert.match(source,/<TerminalPageBoundary><TerminalLegacy \/><\/TerminalPageBoundary>/);
+});
+
+test('collected workspace reopens with an explicit lock screen instead of an inert black terminal',async(t)=>{
+ let now=Date.now();t.mock.method(Date,'now',()=>now);
+ const agent='collected-node',other='unrelated-node';
+ const makeGrant=(agentId:string,token:string)=>({agentId,token,systemUser:'alice',expiresAt:now+1800000,idleExpiresAt:now+180000,controller:new AbortController()});
+ const original=makeGrant(agent,'before-close'),sibling=makeGrant(other,'sibling');
+ workspaceState.install(original);workspaceState.install(sibling);
+ const host=document.createElement('div');document.body.appendChild(host);const root=createRoot(host);
+ const surface=()=>h(Theme,null,h(WorkspaceSurface,{agentId:agent},h('div',{'data-terminal-screen':true,style:{background:'black'}},'')));
+ const revoked:string[]=[];
+ const collect=()=>workspaceState.collectUnused(id=>{revoked.push(id);workspaceState.invalidate(id);});
+ try{
+  await act(async()=>root.render(surface()));
+  assert.equal(host.textContent?.includes('工作台已锁定'),false);
+  await act(async()=>root.render(null));
+  now+=59999;await act(async()=>collect());
+  assert.deepEqual(revoked,[]);assert.equal(original.controller.signal.aborted,false);
+  await act(async()=>root.render(surface()));
+  now+=2;await act(async()=>collect());
+  assert.deepEqual(revoked,[],'reopening before cleanup must cancel collection');
+  assert.equal(host.textContent?.includes('工作台已锁定'),false);
+  await act(async()=>root.render(null));
+  now+=60000;await act(async()=>collect());
+  assert.deepEqual(revoked,[agent]);assert.equal(original.controller.signal.aborted,true);
+  assert.equal(workspaceState.knownAgents.has(agent),false,'exercise real collection, not ordinary expiry');
+  assert.equal(workspaceState.promptAgent,undefined,'cleanup must remain silent');
+  await act(async()=>root.render(surface()));
+  assert.ok(host.textContent?.includes('工作台已锁定'),'collected workspace reopened as black screen without lock');
+  assert.ok(host.querySelector('[inert]'),'collected terminal accepts interaction');
+  await assert.rejects(workspaceState.authorize(agent),/Workspace locked/);
+  assert.equal(workspaceState.promptAgent,undefined,'reopen must not automatically start 2FA');
+  const unlock=Array.from(host.querySelectorAll('button')).find(b=>b.textContent==='解锁此机器');assert.ok(unlock);
+  await act(async()=>unlock.click());
+  assert.equal(workspaceState.promptAgent,agent);assert.equal(workspaceState.pending.has(agent),true);
+  await act(async()=>workspaceState.install(makeGrant(agent,'after-explicit-unlock')));
+  assert.equal(host.textContent?.includes('工作台已锁定'),false);
+  assert.equal(host.querySelector('[inert]'),null);
+  assert.equal(workspaceState.grants.get(other),sibling);assert.equal(sibling.controller.signal.aborted,false);
+ }finally{
+  await act(async()=>{workspaceState.cancel(agent);root.unmount();});host.remove();
+  workspaceState.invalidate(agent);workspaceState.invalidate(other);
+ }
 });
