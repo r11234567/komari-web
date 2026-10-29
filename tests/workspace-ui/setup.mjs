@@ -5,6 +5,13 @@ for(const key of ['window','document','navigator','HTMLElement','Element','Node'
 }
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true,requestAnimationFrame:(fn)=>setTimeout(()=>fn(0),0),cancelAnimationFrame:clearTimeout,BroadcastChannel:undefined});
 Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
+// JSDOM has no layout engine; these tests do not resize Radix scroll areas.
+// Keep actual dialog, select and focus behavior; only omit layout observation.
+globalThis.ResizeObserver=class {
+ observe() {}
+ unobserve() {}
+ disconnect() {}
+};
 
 globalThis.workspaceTestDOM=dom;
 
