@@ -11,6 +11,7 @@ registerHooks({
   if(specifier.startsWith('@/'))specifier=new URL('src/'+specifier.slice(2),root).href;
   if(specifier.startsWith('.')||specifier.startsWith('file:')){
    const url=specifier.startsWith('file:')?new URL(specifier):new URL(specifier,context.parentURL);
+   if(url.href.replace(/\.(tsx?|jsx?)$/, '')===new URL('src/contexts/ConnectContext',root).href)return{url:new URL('./connect.ts',import.meta.url).href,shortCircuit:true};
    const path=fileURLToPath(url);
    for(const suffix of ['', '.ts','.tsx']){
     if(existsSync(path+suffix)&&/\.(ts|tsx)$/.test(path+suffix))return{url:pathToFileURL(path+suffix).href,shortCircuit:true};
