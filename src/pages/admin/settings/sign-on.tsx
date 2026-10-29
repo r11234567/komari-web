@@ -44,6 +44,12 @@ import { renderProviderInputs } from "@/utils/renderProviders";
 import { toast } from "sonner";
 
 function SignOnSettingsBody() {
+  // Machine authorization management must remain reachable even if an
+  // unrelated OAuth provider catalogue is empty or temporarily unavailable.
+  return <><AgentCredentialLifecycle /><SignOnProviderSettings /></>;
+}
+
+function SignOnProviderSettings() {
   const { t } = useTranslation();
   const { settings, loading, error } = useSettings();
   const [providerDefs, setProviderDefs] = React.useState<any>({});
@@ -181,7 +187,6 @@ function SignOnSettingsBody() {
         handleSave: handleOidcSave,
         t,
       })}
-      <AgentCredentialLifecycle />
       <SettingCardLabel>API</SettingCardLabel>
       <ApiCard />
     </>
