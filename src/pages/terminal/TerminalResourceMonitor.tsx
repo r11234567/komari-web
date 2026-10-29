@@ -62,14 +62,6 @@ const usageColor = (percent: number) => {
   return "#3cb371";
 };
 
-const sameSample = (left: ResourceSample, right: ResourceSample) =>
-  left.online === right.online &&
-  left.cpuUsage === right.cpuUsage &&
-  left.ramUsed === right.ramUsed &&
-  left.diskUsed === right.diskUsed &&
-  left.networkDown === right.networkDown &&
-  left.networkUp === right.networkUp;
-
 const UsageRow = ({
   label,
   detail,
@@ -108,8 +100,7 @@ const TerminalResourceMonitor = ({
   const { t } = useTranslation();
   const { live_data, showCallout } = useLiveData();
   const { nodeList } = useNodeList(false) ?? { nodeList: [] };
-  const [samples, setSamples] = useState<Record<string, ResourceSample>>({});
-  const [loadError, setLoadError] = useState(false);
+  const loadError = !showCallout;
   const [position, setPosition] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -133,45 +124,23 @@ const TerminalResourceMonitor = ({
     [nodeList],
   );
 
-  useEffect(() => {
-    const selectedServers = serverKey ? serverKey.split("|") : [];
-    if (selectedServers.length === 0) {
-      setSamples({});
-      setLoadError(false);
-      return;
-    }
-
-    if (!live_data || !showCallout) {
-      setSamples({});
-      setLoadError(!showCallout);
-      return;
-    }
-
+  const samples = useMemo<Record<string, ResourceSample>>(() => {
+    if (!live_data || !showCallout || !serverKey) return {};
     const next: Record<string, ResourceSample> = {};
-    for (const uuid of selectedServers) {
+    for (const uuid of serverKey.split("|")) {
       const record = live_data.data.data[uuid];
       if (!record) continue;
       next[uuid] = {
-        online: live_data?.data?.online?.includes(uuid) ?? Boolean(record),
-        cpuUsage: normalizePercent(record?.cpu?.usage ?? 0),
-        ramUsed: record?.ram?.used ?? 0,
-        diskUsed: record?.disk?.used ?? 0,
-        networkDown: record?.network?.down ?? 0,
-        networkUp: record?.network?.up ?? 0,
+        online: live_data.data.online.includes(uuid),
+        cpuUsage: normalizePercent(record.cpu?.usage ?? 0),
+        ramUsed: record.ram?.used ?? 0,
+        diskUsed: record.disk?.used ?? 0,
+        networkDown: record.network?.down ?? 0,
+        networkUp: record.network?.up ?? 0,
       };
     }
-
-    setSamples((previous) => {
-      const previousKeys = Object.keys(previous);
-      const changed =
-        previousKeys.length !== Object.keys(next).length ||
-        previousKeys.some(
-          (uuid) => !next[uuid] || !sameSample(previous[uuid], next[uuid]),
-        );
-      return changed ? next : previous;
-    });
-    setLoadError(false);
-  }, [live_data, showCallout, nodeByUuid, serverKey]);
+    return next;
+  }, [live_data, showCallout, serverKey]);
 
   useEffect(() => {
     if (!position) return;

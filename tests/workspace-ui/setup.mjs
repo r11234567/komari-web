@@ -7,3 +7,10 @@ Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true,requestAnimationFrame:(f
 Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
 
 globalThis.workspaceTestDOM=dom;
+
+// Fail at the first React render loop rather than filling logs until job timeout.
+const reportError=console.error;
+console.error=(...args)=>{
+ if(args.some(value=>String(value).includes('Maximum update depth exceeded')))throw new Error('React render loop: '+args.join(' '));
+ reportError(...args);
+};
