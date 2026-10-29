@@ -19,7 +19,7 @@ registerHooks({
   return next(specifier,context);
  },
  load(url,context,next){
-  if(url.startsWith(root.href)&&/\.(ts|tsx)$/.test(url))return{format:'module',shortCircuit:true,source:ts.transpileModule(readFileSync(fileURLToPath(url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,verbatimModuleSyntax:true}}).outputText};
+  if(url.startsWith(root.href)&&/\.(ts|tsx)$/.test(url))return{format:'module',shortCircuit:true,source:ts.transpileModule(readFileSync(fileURLToPath(url),'utf8'),{fileName:fileURLToPath(url),compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,verbatimModuleSyntax:true}}).outputText};
   return next(url,context);
  },
 });
