@@ -90,7 +90,9 @@
   },
   "overrides": {
     "source-map-js": "^1.2.2",
-    "dompurify": "^3.4.17"
+    "dompurify": "^3.4.17",
+    "minimatch": "11.0.1",
+    "glob": "14.0.2"
   },
   "workspaces": [
     "vendor/deepmerge"

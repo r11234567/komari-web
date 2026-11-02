@@ -417,6 +417,8 @@ export const TerminalSession = ({
       ...DEFAULT_TERMINAL_OPTIONS,
       ...options,
       fontSize: options?.fontSize ?? fontSize,
+      // Appearance updates must preserve the live attachment/lock decision.
+      disableStdin: api.terminal.options.disableStdin,
       theme: {
         ...api.terminal.options.theme,
         ...options?.theme,
