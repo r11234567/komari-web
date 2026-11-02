@@ -178,7 +178,7 @@ export async function* watchRemoteSession(input: {
   sessionId: string;
   afterSequence?: bigint;
   signal: AbortSignal;
-}): AsyncIterable<{ event?: SessionEvent }> {
+}): AsyncIterable<{ event?: SessionEvent; agentAttached?: boolean }> {
   let afterSequence = input.afterSequence ?? 0n;
   while (!input.signal.aborted) {
     const deadline = AbortSignal.timeout(DEFAULT_STREAM_DEADLINE_MS);
@@ -200,6 +200,8 @@ export async function* watchRemoteSession(input: {
         sessionId: input.sessionId,
         afterSequence,
       }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs: DEFAULT_STREAM_DEADLINE_MS })) {
+        // Empty startup/heartbeat observations do not advance the replay cursor.
+        if (!response.event) { yield response; continue; }
         if (response.event) {
           yield response;
           // Advance only after the consumer accepted this event. WatchSession
