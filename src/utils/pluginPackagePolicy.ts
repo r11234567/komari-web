@@ -5,6 +5,13 @@ export const pluginPackageTargets = (review: PluginPackage) => [
   review.permissionsHash, review.currentDigest,
 ];
 
+export function pluginPackageSource(source: string): { kind: "existing" | "direct" | "chunked" | "catalog"; detail: string } {
+  if (source === "Existing installation snapshot") return { kind: "existing", detail: "" };
+  if (source === "Direct upload") return { kind: "direct", detail: "" };
+  if (source.startsWith("Chunked upload: ")) return { kind: "chunked", detail: source.slice("Chunked upload: ".length) };
+  return { kind: "catalog", detail: source };
+}
+
 export function pluginPermissionChanges(current?: PluginPermissions, candidate?: PluginPermissions) {
   const fields = [
     ["node", "Node compatibility"], ["allowSystemRpc", "System RPC"],
