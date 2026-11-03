@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Checkbox, Flex, Heading, Table, Text, TextField } from "@radix-ui/themes";
+import { Badge, Button, Card, Checkbox, DropdownMenu, Flex, Heading, Table, Text, TextField } from "@radix-ui/themes";
 import { timestampDate, timestampFromDate } from "@bufbuild/protobuf/wkt";
 import type { ApiToken, ListApiTokensResponse } from "@komari/proto/komari/admin/v1/api_token_pb";
 import type { AgentSummary } from "@komari/proto/komari/browser/v1/browser_pb";
@@ -65,7 +65,7 @@ export default function ApiTokenManager() {
 
   return <Card className="km-setting-card" size="3"><Flex direction="column" gap="4">
     <Heading size="4">API Tokens</Heading>
-    <Text size="2" color="gray">每个用途单独创建 Token，选择权限与节点，设置有效期；密钥只展示一次。当前提供节点与指标读取权限，远控、文件、账号和授权管理需要人工验证。</Text>
+    <Text size="2" color="gray">每个用途单独创建 Token，选择读取权限与节点，设置有效期；密钥只展示一次。</Text>
     {error && <Text role="alert" color="red">{error}</Text>}
     {data?.legacyApiKeyEnabled && <Card><Flex direction="column" gap="2">
       <Text color="orange">旧全局 API Key 仍启用，保留原管理员权限。请迁移调用方后停用。</Text>
@@ -84,7 +84,13 @@ export default function ApiTokenManager() {
     </Flex>
     <Flex gap="3" wrap="wrap">{API_TOKEN_SCOPES.map(scope => <label key={scope.value}><Flex gap="2" align="center"><Checkbox checked={scopes.includes(scope.value)} disabled={!!action} onCheckedChange={value => setScopes(toggle(scopes, scope.value, value === true))} /><Text size="2">{scope.label}</Text></Flex></label>)}</Flex>
     <label><Flex gap="2" align="center"><Checkbox checked={allAgents} disabled={!!action} onCheckedChange={value => setAllAgents(value === true)} /><Text size="2">全部节点，包含未来新增节点</Text></Flex></label>
-    {!allAgents && <Flex gap="3" wrap="wrap">{nodes.map(node => <label key={node.agentId}><Flex gap="2" align="center"><Checkbox disabled={!!action} checked={agentIds.includes(node.agentId)} onCheckedChange={value => setAgentIds(toggle(agentIds, node.agentId, value === true))} /><Text size="2">{node.name || node.agentId}</Text></Flex></label>)}</Flex>}
+    {!allAgents && <DropdownMenu.Root><DropdownMenu.Trigger>
+      <Button variant="surface" disabled={!!action || loading} style={{ alignSelf: "flex-start" }} aria-label="选择 Token 可读取的节点">{agentIds.length ? `已选择 ${agentIds.length} 个节点` : "选择节点"}<DropdownMenu.TriggerIcon /></Button>
+    </DropdownMenu.Trigger><DropdownMenu.Content style={{ minWidth: 240, maxHeight: 320, overflowY: "auto" }}>
+      {nodes.map(node => <DropdownMenu.CheckboxItem key={node.agentId} disabled={!!action} checked={agentIds.includes(node.agentId)} onSelect={event => event.preventDefault()} onCheckedChange={value => setAgentIds(toggle(agentIds, node.agentId, value))}>{node.name || node.agentId}</DropdownMenu.CheckboxItem>)}
+      {agentIds.filter(id => !nodes.some(node => node.agentId === id)).map(id => <DropdownMenu.CheckboxItem key={id} disabled={!!action} checked onSelect={event => event.preventDefault()} onCheckedChange={value => setAgentIds(toggle(agentIds, id, value))}>{id}</DropdownMenu.CheckboxItem>)}
+      {!nodes.length && !agentIds.length && <DropdownMenu.Item disabled>暂无节点</DropdownMenu.Item>}
+    </DropdownMenu.Content></DropdownMenu.Root>}
     <label><Text as="div" size="2">允许的来源网段（可选，逗号分隔 CIDR）</Text><TextField.Root value={cidrs} placeholder="203.0.113.10/32, 2001:db8::/32" disabled={!!action} onChange={event => setCidrs(event.target.value)} /></label>
     {replaces && <Text color="orange" size="2">正在轮换 {replaces}：新密钥创建成功时旧 Token 立即撤销。需要平滑迁移时，请先新建 Token，迁移后再撤销旧 Token。</Text>}
     <Flex gap="2"><Button disabled={loading || !!action} onClick={create}>{replaces ? "验证并轮换" : "验证并创建"}</Button>{replaces && <Button variant="soft" onClick={() => setReplaces("")}>取消轮换</Button>}<Button variant="soft" disabled={loading || !!action} onClick={() => void reload()}>刷新</Button></Flex>

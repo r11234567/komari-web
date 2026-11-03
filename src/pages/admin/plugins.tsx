@@ -137,8 +137,11 @@ export default function PluginsPage() {
     const task = createChunkUploadTask("/api/admin/upload");
     uploadTaskRef.current = task;
     try {
-      await task.upload("plugin", file, setUploadProgress);
-      toast.success(t("plugin.package_review.staged", "Package staged; review and 2FA approval required"));
+      const result = await task.upload<PluginInfo & { requires_approval: boolean }>("plugin", file, setUploadProgress);
+      const needsApproval = result?.requires_approval !== false;
+      if (result && needsApproval) setPendingApproval(result);
+      toast.success(t(needsApproval ? "plugin.package_review.staged" : "plugin.package_review.updated"));
+      refreshNavigation();
       setUploadDialogOpen(false);
       setUploadProgress(0);
       await loadList();
@@ -232,6 +235,7 @@ export default function PluginsPage() {
           <Heading size="4">{t("plugin.title", "Plugins")}</Heading>
         </Flex>
         <Flex gap="2">
+          <PluginPackageManager compact refreshKey={packageRevision} onChanged={async () => { refreshNavigation(); await loadList(); }} />
           <Button
             onClick={() => setUploadDialogOpen(true)}
             disabled={uploading}
@@ -245,9 +249,6 @@ export default function PluginsPage() {
           </Button>
         </Flex>
       </Flex>
-
-      <PluginPackageManager refreshKey={packageRevision} onChanged={async () => { refreshNavigation(); await loadList(); }} />
-
       <TextField.Root value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("plugin.market_search", "Search plugins...")}>
         <TextField.Slot><Search size={14} /></TextField.Slot>
       </TextField.Root>

@@ -290,7 +290,7 @@ export default function PluginMarketPage() {
     const key = `${plugin.source_id}:${plugin.short}`;
     setInstalling(key);
     try {
-      const payload = await request("/api/admin/plugin/market/install", {
+      const payload = await request<PluginInfo & { requires_approval: boolean }>("/api/admin/plugin/market/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -298,10 +298,10 @@ export default function PluginMarketPage() {
           short: plugin.short,
         }),
       });
-      toast.success(
-        payload.message ||
-          t("plugin.market_install_success", "Plugin installed"),
-      );
+      const needsApproval = payload.data?.requires_approval !== false;
+      if (payload.data && needsApproval) setPendingApproval(payload.data);
+      toast.success(t(needsApproval ? "plugin.package_review.staged" : "plugin.package_review.updated"));
+      refreshNavigation();
       await loadCatalog();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -436,6 +436,7 @@ export default function PluginMarketPage() {
           <Heading size="4">{t("plugin.market", "Plugin Market")}</Heading>
         </Flex>
         <Flex gap="2">
+          <PluginPackageManager compact refreshKey={installing === null ? 0 : 1} onChanged={async () => { refreshNavigation(); await loadCatalog(); }} />
           <Button variant="soft" onClick={() => setSourcesOpen(true)}>
             <Settings2 size={14} />
             {t("market.manage_sources", "Manage sources")}
@@ -450,9 +451,6 @@ export default function PluginMarketPage() {
           </IconButton>
         </Flex>
       </Flex>
-
-      <PluginPackageManager refreshKey={installing === null ? 0 : 1} onChanged={async () => { refreshNavigation(); await loadCatalog(); }} />
-
       <Separator size="4" />
 
       <Callout.Root color="amber" size="1">
