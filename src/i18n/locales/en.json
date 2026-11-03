@@ -807,7 +807,23 @@
     },
     "market_update_required": "Komari update required",
     "saving_and_reloading": "Saving and reloading...",
-    "save_and_reload": "Save and reload"
+    "save_and_reload": "Save and reload",
+    "package_review": {
+      "title": "Package approval and history",
+      "description": "Uploads and updates are staged without running code. Every activation, rollback or approval requires fresh 2FA bound to this exact package. The approved old version stays available while a new package waits.",
+      "trust": "Approved plugins remain trusted code, including same-origin scripts. Package approval controls updates; it is not a sandbox.",
+      "empty": "No staged or retained packages.",
+      "source": "Source",
+      "created": "Staged",
+      "approved": "Last authorized",
+      "permissions": "Permissions and runtime limits (current → candidate)",
+      "defaults": "Default capabilities remain: plugin configuration, plugin-owned RPC, and files in the plugin directory. Zero special permissions still requires package approval.",
+      "activate": "Verify 2FA and activate / roll back",
+      "revoke": "Verify 2FA and revoke",
+      "discard": "Verify 2FA and discard",
+      "staged": "Package staged; review and 2FA approval required",
+      "content_changed": "The package differs from the installed version. Matching version numbers or permissions do not mean the code is unchanged."
+    }
   },
   "pprof": {
     "capture_duration": "CPU and trace capture duration",

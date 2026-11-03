@@ -807,7 +807,23 @@
     "market_category": "插件分类",
     "market_update_required": "需要更新 Komari",
     "save_and_reload": "保存并重载",
-    "saving_and_reloading": "保存并重载中..."
+    "saving_and_reloading": "保存并重载中...",
+    "package_review": {
+      "title": "插件包审批与记录",
+      "description": "上传和升级只暂存，不执行代码。每次启用、回滚或授权都需要绑定此包的新鲜 2FA 验证；等待新包审批时，已授权旧版本继续可用。",
+      "trust": "获批插件仍是受信代码，可能包含同源脚本。包审批控制安装和更新，不等于恶意代码沙箱。",
+      "empty": "暂无待审批或保留的插件包。",
+      "source": "来源",
+      "created": "暂存时间",
+      "approved": "最近授权",
+      "permissions": "权限及运行限制（当前 → 候选）",
+      "defaults": "默认能力仍包括：读取自身配置、注册插件 RPC、读写插件目录。即使没有特殊权限，也必须审批代码包。",
+      "activate": "2FA 验证并启用／回滚",
+      "revoke": "2FA 验证并撤销授权",
+      "discard": "2FA 验证并丢弃此包",
+      "staged": "插件包已暂存，请审查并完成 2FA 授权",
+      "content_changed": "此包与当前安装版本不同；版本号或权限相同，不代表代码未变。"
+    }
   },
   "pprof": {
     "capture_duration": "CPU 与 trace 采集时长",
