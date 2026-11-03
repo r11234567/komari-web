@@ -20,6 +20,8 @@ export default defineConfig({
   },
   resolve: {
     alias: [
+      { find: "@/api/connect/workspace", replacement: fileURLToPath(new URL("./fixtures/workspace.ts", import.meta.url)) },
+      { find: "@/api/connect/trustedCredential", replacement: fileURLToPath(new URL("./fixtures/trusted.ts", import.meta.url)) },
       { find: "@/api/connect/remote", replacement: fileURLToPath(new URL("./fixtures/remote.ts", import.meta.url)) },
       { find: "@", replacement: fileURLToPath(new URL("../../src", import.meta.url)) },
     ],

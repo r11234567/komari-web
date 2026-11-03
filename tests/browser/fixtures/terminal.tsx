@@ -6,17 +6,18 @@ import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import TerminalSession from "../../../src/pages/terminal/TerminalSession";
 import { state } from "./state";
+import WorkspaceBoundary from "../../../src/pages/terminal/WorkspaceBoundary";
+import { installFixtureGrant } from "./workspace";
+import en from "../../../src/i18n/locales/en.json";
 
 await i18next.use(initReactI18next).init({
   lng: "en", fallbackLng: "en", initImmediate: false,
-  resources: { en: { translation: {
-    common: { confirm: "Confirm", cancel: "Cancel" },
-    terminal: { "2fa_title": "Two-factor verification" },
-  } } },
+  resources: { en: { translation: en } },
 });
+if (new URLSearchParams(location.search).get("twofa") !== "1") installFixtureGrant("synthetic-agent");
 createRoot(document.getElementById("root")!).render(
   <Theme>
-    <div style={{ width: "900px", height: "500px" }}>
+    <WorkspaceBoundary><div style={{ width: "900px", height: "500px" }}>
       <TerminalSession
         uuid="synthetic-agent"
         active
@@ -24,9 +25,8 @@ createRoot(document.getElementById("root")!).render(
         disconnectMessage="Synthetic session closed"
         onApiChange={(api) => {
           state.api = api;
-          if (api) api.terminal.write("Clipboard sample\r\n", () => { state.ready = true; });
         }}
       />
-    </div>
+    </div></WorkspaceBoundary>
   </Theme>,
 );

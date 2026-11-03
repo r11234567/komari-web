@@ -20,34 +20,49 @@ test.afterEach(async ({ page }, testInfo) => {
   });
 });
 
+async function beginCredential(scope) {
+  await scope.getByRole('button', { name: 'Start verification / send code', exact: true }).click();
+  await expect(scope.getByPlaceholder('000000')).toBeVisible();
+}
+async function beginWorkspace(page) {
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.locator('input[autocomplete="username"]').fill('alice');
+  await dialog.getByRole('button', { name: '验证并解锁', exact: true }).click();
+  await beginCredential(dialog);
+  return dialog;
+}
+
 for (const submit of ['button', 'Enter']) {
   test(`fresh 2FA confirmation starts the actual terminal session via ${submit}`, async ({ page }) => {
     await page.goto('/tests/browser/fixtures/terminal.html?twofa=1');
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
+    const dialog = await beginWorkspace(page);
     await expect.poll(() => page.evaluate(() => window.terminalAudit.creates.length)).toBe(0);
     await dialog.getByPlaceholder('000000').fill('123456');
-    if (submit === 'button') await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
+    if (submit === 'button') await dialog.getByRole('button', { name: 'Verify and continue', exact: true }).click();
     else await dialog.getByPlaceholder('000000').press('Enter');
     await expect.poll(() => page.evaluate(() => window.terminalAudit.creates.length), {
       message: 'Confirming fresh 2FA must call createRemoteSession, not only close its dialog',
     }).toBe(1);
-    await expect.poll(() => page.evaluate(() => window.terminalAudit.creates[0]?.twoFactorCode)).toBe('123456');
+    await expect.poll(() => page.evaluate(() => window.terminalAudit.unlocks)).toEqual([{ agentId: 'synthetic-agent', systemUser: 'alice' }]);
+    await expect.poll(() => page.evaluate(() => window.terminalAudit.verifications[0]?.resource)).toBe('workspace:'+JSON.stringify(['synthetic-agent','alice']));
+    expect(await page.evaluate(() => window.terminalAudit.creates[0]?.twoFactorCode)).toBeUndefined();
   });
 }
 
 test('rejected terminal OTP can be corrected without recreating the tab', async ({ page }) => {
   await page.goto('/tests/browser/fixtures/terminal.html?twofa=1');
-  const dialog = page.getByRole('dialog');
+  const dialog = await beginWorkspace(page);
   await dialog.getByPlaceholder('000000').fill('000000');
-  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => window.terminalAudit.creates.length)).toBe(1);
+  await dialog.getByRole('button', { name: 'Verify and continue', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.terminalAudit.proofs.length)).toBe(1);
+  expect(await page.evaluate(() => window.terminalAudit.creates.length)).toBe(0);
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Confirm', exact: true })).toBeEnabled();
   await dialog.getByPlaceholder('000000').fill('123456');
-  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Verify and continue', exact: true })).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Verify and continue', exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect.poll(() => page.evaluate(() => window.terminalAudit.creates.length)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.terminalAudit.creates.length)).toBe(1);
 });
 
 for (const status of [200, 404]) {
@@ -57,20 +72,23 @@ for (const status of [200, 404]) {
       sso_id: '', sso_type: '', '2fa_enabled': true,
     } }));
     await page.route('**/api/admin/2fa/verify', route => {
-      expect(route.request().headers()['x-2fa-code']).toBe('123456');
+      expect(route.request().headers()['x-komari-credential-authorization']).toBe('synthetic-scoped-proof');
+      expect(route.request().headers()['x-2fa-code']).toBeUndefined();
       return route.fulfill({ status, json: { message: status === 200 ? 'ok' : 'not found' } });
     });
     await page.goto('/tests/browser/fixtures/account.html');
     const gate = page.locator('.km-account-2fa-gate');
+    await beginCredential(gate);
     await gate.getByPlaceholder('000000').fill('123456');
-    await gate.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await gate.getByRole('button', { name: 'Verify and continue', exact: true }).click();
     if (status === 404) {
-      await expect(gate.getByRole('button', { name: 'Confirm', exact: true })).toBeEnabled();
+      await expect(gate.getByRole('button', { name: 'Start verification / send code', exact: true })).toBeEnabled();
       await expect(gate).toBeVisible();
       await expect(page.locator('.km-account-password-form')).toHaveCount(0);
     } else {
       await expect(gate).toHaveCount(0);
-      await expect(page.locator('#password_2fa')).toHaveValue('');
+      await expect(page.locator('.km-account-password-form')).toBeVisible();
+      await expect(page.locator('input[autocomplete="one-time-code"]')).toHaveCount(0);
     }
   });
 }
