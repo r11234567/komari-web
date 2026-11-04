@@ -176,6 +176,9 @@ export const TerminalSession = ({
       if (disposed || starting || sessionId || !activeRef.current) return;
       const grant = workspaceState.grants.get(uuid);
       if ((!grant || !workspaceState.valid(grant)) && workspaceState.revision(uuid) > 0) return;
+      // A stream failure/normal exit must not silently create a different PTY
+      // on the next grant touch, focus, or tab activation.
+      if (connectionToken && grant?.token === connectionToken) return;
       starting = true;
       startupAt.current = performance.now();
       setStartupSeconds(0);
@@ -225,8 +228,15 @@ export const TerminalSession = ({
           signal: sessionController.signal,
         })) {
           if (disposed) continue;
+          if (response.reconnecting) {
+            term.options.disableStdin = true;
+            startupAt.current = performance.now();
+            setStartupSeconds(0);
+            setStartupPhase("reconnecting");
+            continue;
+          }
           if (!response.event) {
-            if (response.agentAttached) term.options.disableStdin = false;
+            term.options.disableStdin = !response.agentAttached;
             setStartupPhase(current => observeTerminalStartup(current, response));
             continue;
           }
@@ -382,9 +392,13 @@ export const TerminalSession = ({
       if (activeRef.current) term.focus();
     });
 
+    let fitFrame = 0;
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => fit())
+        ? new ResizeObserver(() => {
+          cancelAnimationFrame(fitFrame);
+          fitFrame = requestAnimationFrame(fit);
+        })
         : null;
     resizeObserver?.observe(host);
 
@@ -405,6 +419,7 @@ export const TerminalSession = ({
         }).catch(() => {});
       }
       resizeObserver?.disconnect();
+      cancelAnimationFrame(fitFrame);
       onApiChangeRef.current(null);
       term.dispose();
     };
@@ -442,20 +457,24 @@ export const TerminalSession = ({
     display: active ? "block" : "none",
     padding: `${padding}px`,
     background: transparentBackground ? "transparent" : (options?.theme?.background ?? "#000000"),
+    boxSizing: "border-box",
   };
 
   return (
     <WorkspaceSurface agentId={uuid} active={active}>
       {active && startupPhase !== "ready" && startupPhase !== "closed" && <div role="status" className="pointer-events-none absolute left-3 top-2 z-10 rounded bg-black/80 px-3 py-2 text-xs text-neutral-300">
-        {startupPhase === "authorizing" ? "等待解锁此机器" : startupPhase === "creating" ? "正在请求终端" : startupPhase === "waiting-agent" ? "等待节点建立终端" : "节点终端已启动，等待首屏输出"}
-        {startupPhase !== "authorizing" && ` · ${startupSeconds} 秒`}
-        {startupSeconds >= 10 && startupPhase !== "authorizing" && <div className="mt-1 text-neutral-400">连接尚未完成，授权时限正常生效；可关闭此标签取消。</div>}
+        {t(startupPhase === "reconnecting" ? "terminal.startup_reconnecting" : startupPhase === "authorizing" ? "terminal.startup_authorizing" : startupPhase === "creating" ? "terminal.startup_creating" : startupPhase === "waiting-agent" ? "terminal.startup_waiting_agent" : "terminal.startup_waiting_output")}
+        {startupPhase !== "authorizing" && ` · ${t("terminal.startup_seconds", { count: startupSeconds })}`}
+        {startupSeconds >= 10 && startupPhase !== "authorizing" && <div className="mt-1 text-neutral-400">{t("terminal.startup_slow_hint")}</div>}
       </div>}
       <div
-        ref={hostRef}
         data-workspace-agent={uuid}
         className="km-terminal-session relative h-full w-full overflow-hidden bg-[#000000]"
         style={style}
+      >
+      <div
+        ref={hostRef}
+        className="h-full w-full overflow-hidden"
         onPaste={(event) => {
           const text = event.clipboardData?.getData("text/plain");
           if (text) {
@@ -464,6 +483,7 @@ export const TerminalSession = ({
           }
         }}
       />
+      </div>
 
       {/* Manual Paste Fallback Dialog */}
       <Dialog.Root open={manualPasteOpen} onOpenChange={setManualPasteOpen}>

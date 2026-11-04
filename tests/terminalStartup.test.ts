@@ -14,7 +14,15 @@ test("cold terminal heartbeats distinguish attachment from real output without c
   assert.equal(phase, "waiting-output");
   phase = observeTerminalStartup(phase, { outputBytes: 2 });
   assert.equal(phase, "ready");
-  assert.equal(observeTerminalStartup(phase, { agentAttached: false }), "ready");
+  phase = observeTerminalStartup(phase, { agentAttached: false });
+  assert.equal(phase, "reconnecting");
+  assert.equal(observeTerminalStartup(phase, { agentAttached: false }), "reconnecting");
+  assert.equal(observeTerminalStartup(phase, { agentAttached: true }), "ready");
   phase = observeTerminalStartup(phase, { closed: true });
   assert.equal(observeTerminalStartup(phase, { agentAttached: true }), "closed");
+});
+
+test("a cold terminal still waits for first output after its Agent transport returns", () => {
+  assert.equal(observeTerminalStartup("waiting-output", { agentAttached: false }), "waiting-agent");
+  assert.equal(observeTerminalStartup("waiting-agent", { agentAttached: true }), "waiting-output");
 });

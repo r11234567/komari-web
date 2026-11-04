@@ -7,16 +7,22 @@ import { connectClients, connectUnary } from "./client";
 import { createTerminalEventAcknowledger } from "../../utils/terminalTransport";
 import { DEFAULT_STREAM_DEADLINE_MS } from "./deadline";
 
-const reconnectableStreamError = (error: unknown) =>
-  error instanceof ConnectError &&
-  [Code.Canceled, Code.DeadlineExceeded, Code.Unavailable].includes(error.code);
+export const reconnectableStreamError = (error: unknown) =>
+  (error instanceof TypeError && /fetch|network|load/i.test(error.message)) ||
+  (error instanceof ConnectError && (
+    [Code.Canceled, Code.DeadlineExceeded, Code.Unavailable].includes(error.code) ||
+    (error.code === Code.Unknown && /^(network error|failed to fetch|networkerror|load failed)/i.test(error.rawMessage))
+  ));
 
 const waitToReconnect = (signal: AbortSignal) => new Promise<void>((resolve) => {
-  const timer = window.setTimeout(resolve, 500);
-  signal.addEventListener("abort", () => {
-    window.clearTimeout(timer);
+  const finish = () => {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", finish);
     resolve();
-  }, { once: true });
+  };
+  const timer = setTimeout(finish, 500);
+  signal.addEventListener("abort", finish, { once: true });
+  if (signal.aborted) finish();
 });
 
 export async function createRemoteExecutions(input: {
@@ -119,19 +125,34 @@ export async function createRemoteSession(input: {
   return response.started;
 }
 
+// Commands have a stable server-side sequence. Retrying that exact command is
+// safe even when the response was lost; never generate a new sequence or shell.
+async function retrySessionCommand<T>(signal: AbortSignal, operation: () => Promise<T>): Promise<T> {
+  const until = Date.now() + 30_000;
+  for (;;) {
+    signal.throwIfAborted();
+    try {
+      return await operation();
+    } catch (error) {
+      if (signal.aborted || !reconnectableStreamError(error) || Date.now() >= until) throw error;
+      await waitToReconnect(signal);
+    }
+  }
+}
+
 export const sendRemoteSessionInput = (input: {
   sessionId: string;
   sequence: bigint;
   data: Uint8Array;
   signal: AbortSignal;
-}) => connectUnary(
+}) => retrySessionCommand(input.signal,()=>connectUnary(
   { signal: input.signal, timeoutMs: 10_000 },
   (signal, timeoutMs) => connectClients.webssh.sendSessionCommand({
     sessionId: input.sessionId,
     sequence: input.sequence,
     command: { case: "input", value: input.data },
   }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
-);
+));
 
 export const sendRemoteSessionResize = (input: {
   sessionId: string;
@@ -139,14 +160,14 @@ export const sendRemoteSessionResize = (input: {
   rows: number;
   columns: number;
   signal: AbortSignal;
-}) => connectUnary(
+}) => retrySessionCommand(input.signal,()=>connectUnary(
   { signal: input.signal, timeoutMs: 10_000 },
   (signal, timeoutMs) => connectClients.webssh.sendSessionCommand({
     sessionId: input.sessionId,
     sequence: input.sequence,
     command: { case: "resize", value: { rows: input.rows, columns: input.columns } },
   }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
-);
+));
 
 export const sendRemoteFileCommand = (input: {
   sessionId: string;
@@ -178,7 +199,7 @@ export async function* watchRemoteSession(input: {
   sessionId: string;
   afterSequence?: bigint;
   signal: AbortSignal;
-}): AsyncIterable<{ event?: SessionEvent; agentAttached?: boolean }> {
+}): AsyncIterable<{ event?: SessionEvent; agentAttached?: boolean; reconnecting?: boolean }> {
   let afterSequence = input.afterSequence ?? 0n;
   while (!input.signal.aborted) {
     const deadline = AbortSignal.timeout(DEFAULT_STREAM_DEADLINE_MS);
@@ -217,6 +238,7 @@ export async function* watchRemoteSession(input: {
       if (!workspaceSessionValid(input.sessionId)) return;
       const cause = acknowledgementError ?? error;
       if (!deadline.aborted && !reconnectableStreamError(cause)) throw cause;
+      yield { reconnecting: true };
       await waitToReconnect(input.signal);
     } finally {
       acknowledger.dispose();

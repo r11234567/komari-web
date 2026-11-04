@@ -1,15 +1,16 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 
 // Exercise the real TerminalSession component against an isolated synthetic
 // transport. This harness never connects to a real panel or managed machine.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(),tailwindcss()],
   optimizeDeps: {
     // Scan the harness, not the product's virtual @komari-entry. Late
     // optimization reloads the page and destroys in-flight test contexts.
-    entries: ["tests/browser/fixtures/terminal.html", "tests/browser/fixtures/account.html", "tests/browser/fixtures/management.html"],
+    entries: ["tests/browser/fixtures/terminal.html", "tests/browser/fixtures/account.html", "tests/browser/fixtures/management.html", "tests/browser/fixtures/workbench.html", "tests/browser/fixtures/transport.html"],
     noDiscovery: true,
     include: [
       "react", "react-dom", "react-dom/client", "@radix-ui/themes",

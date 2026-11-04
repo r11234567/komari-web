@@ -33,3 +33,13 @@
   .xterm-viewport::-webkit-scrollbar-thumb:hover {
   background-color: var(--xterm-scrollbar-thumb-hover, #777777);
 }
+.km-page-terminal {
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+}
+
+.km-terminal-shell,
+.km-terminal-session {
+  box-sizing: border-box;
+}

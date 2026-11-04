@@ -3,7 +3,7 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Theme } from "@radix-ui/themes"
+import { Theme, useThemeContext } from "@radix-ui/themes"
 import { ThemeContext as AppThemeContext } from "@/contexts/ThemeContext"
 import { useSystemTheme } from "@/hooks/useSystemTheme"
 
@@ -40,8 +40,10 @@ function DropdownMenuContent({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   const { appearance, color } = React.useContext(AppThemeContext);
   const resolvedAppearance = useSystemTheme(appearance);
+  const parentTheme = useThemeContext();
   return (
     <DropdownMenuPrimitive.Portal>
+      <Theme asChild hasBackground={false} appearance={parentTheme?.appearance ?? resolvedAppearance} accentColor={parentTheme?.accentColor ?? color}>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
@@ -51,10 +53,9 @@ function DropdownMenuContent({
         )}
         {...props}
       >
-        <Theme appearance={resolvedAppearance} accentColor={color}>
           {children}
-        </Theme>
       </DropdownMenuPrimitive.Content>
+      </Theme>
     </DropdownMenuPrimitive.Portal>
   )
 }
@@ -237,7 +238,10 @@ function DropdownMenuSubContent({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
   const { appearance, color } = React.useContext(AppThemeContext);
   const resolvedAppearance = useSystemTheme(appearance);
+  const parentTheme = useThemeContext();
   return (
+    <DropdownMenuPrimitive.Portal>
+    <Theme asChild hasBackground={false} appearance={parentTheme?.appearance ?? resolvedAppearance} accentColor={parentTheme?.accentColor ?? color}>
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
@@ -246,10 +250,10 @@ function DropdownMenuSubContent({
       )}
       {...props}
     >
-      <Theme appearance={resolvedAppearance} accentColor={color}>
         {children}
-      </Theme>
     </DropdownMenuPrimitive.SubContent>
+    </Theme>
+    </DropdownMenuPrimitive.Portal>
   )
 }
 

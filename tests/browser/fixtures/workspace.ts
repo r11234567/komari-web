@@ -3,6 +3,7 @@ import { state } from "./state";
 export const workspaceState = new WorkspaceState();
 export const ensureWorkspace = (agentId: string, signal?: AbortSignal) => workspaceState.authorize(agentId, signal);
 export const trackWorkspaceActivity = () => () => {};
+export function lockWorkspace(agentId:string) {workspaceState.invalidate(agentId)}
 export async function unlockWorkspace(agentId: string, systemUser: string, token: string, signal?: AbortSignal) {
   signal?.throwIfAborted();
   if (token !== "synthetic-scoped-proof") throw new Error("Synthetic transport: missing workspace proof");

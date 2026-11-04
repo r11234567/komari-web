@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { Theme } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
+import "../../../src/global.css";
+import "../../../src/pages/terminal/Terminal.css";
 import "@xterm/xterm/css/xterm.css";
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";

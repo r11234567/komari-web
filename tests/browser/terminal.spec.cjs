@@ -28,7 +28,7 @@ async function beginWorkspace(page) {
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await dialog.locator('input[autocomplete="username"]').fill('alice');
-  await dialog.getByRole('button', { name: '验证并解锁', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Verify and unlock', exact: true }).click();
   await beginCredential(dialog);
   return dialog;
 }
