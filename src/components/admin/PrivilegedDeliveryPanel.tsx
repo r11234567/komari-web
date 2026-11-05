@@ -30,6 +30,7 @@ const labels: Record<State, string> = {
 const settingLabels = [
   ["remoteControlEnabled", "远程控制"], ["websshEnabled", "WebSSH"],
   ["executionEnabled", "远程执行"], ["enableGpu", "基础 GPU 采集"],
+  ["rootExecutionAllowed", "允许 WebSSH 和远程执行使用 root"],
   ["rescueHelperEnabled", "救援辅助程序"],
 ] as const;
 const modeLabels: Record<PrivilegeMode, string> = {
@@ -203,9 +204,10 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
       {editing && <Flex direction="column" gap="2">
         <Text size="2" color="gray">救援组件以独立 root 服务运行。开启救援不会修改下方的 Agent 目标身份，可与普通远程控制同时启用。</Text>
         {settingLabels.map(([key, label]) => <Flex key={key} gap="2">
-          <Checkbox disabled={(key === "websshEnabled" || key === "executionEnabled") && !draft.remoteControlEnabled} checked={draft[key]} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
+          <Checkbox disabled={(key === "websshEnabled" || key === "executionEnabled" || key === "rootExecutionAllowed") && !draft.remoteControlEnabled} checked={draft[key] ?? false} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
           <Text>{label}</Text>
         </Flex>)}
+        <Text size="1" color="gray">root 会话权限与 Agent 服务身份分别设置。远程执行默认使用 komari，每次使用 root 需单独选择，且 Agent 须具备切换用户的系统权限。</Text>
         <Select.Root value={String(draft.requiredPrivilegeMode)} onValueChange={(value) => setDraft((s) => ({ ...s, requiredPrivilegeMode: Number(value) }))}>
           <Select.Trigger aria-label="目标服务身份" /><Select.Content>
             {Object.entries(modeLabels).map(([value, label]) => <Select.Item key={value} value={value}>{label}</Select.Item>)}

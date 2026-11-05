@@ -27,7 +27,7 @@ export default function SensitiveActionDialog({ request, onClose }: { request: S
   }, [request]);
   return <Dialog.Root open={Boolean(request)} onOpenChange={(open) => { if (!open) onClose(); }}>
     <Dialog.Content maxWidth="440px">
-      <Dialog.Title>{request?.title ?? t("login.two_factor")}</Dialog.Title>
+      <Dialog.Title style={{ overflowWrap: "anywhere" }}>{request?.title ?? t("login.two_factor")}</Dialog.Title>
       <Dialog.Description>{t("login.two_factor")}</Dialog.Description>
       {error && <Text role="alert" color="red">{error}</Text>}
       {scope && scope.request === request && <TrustedCredentialVerification key={scope.resource} purpose={CredentialPurpose.SENSITIVE_OPERATION} resource={scope.resource} onAuthorized={async (token, signal) => {

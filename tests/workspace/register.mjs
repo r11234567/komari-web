@@ -1,5 +1,6 @@
 // CI component units, not browser E2E: execute real React effects/state while
 // replacing only the PTY/network and canvas peripherals with isolated fixtures.
+import './setup.mjs';
 import { registerHooks } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';

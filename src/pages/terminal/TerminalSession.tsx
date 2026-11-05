@@ -25,6 +25,7 @@ import {
   terminalKeyAction,
 } from "@/utils/terminalClipboard";
 import { createTerminalCommandQueue } from "@/utils/terminalTransport";
+import { observeTerminalStartup, type TerminalStartupPhase } from "@/utils/terminalStartup";
 import { ensureWorkspace, workspaceState } from "@/api/connect/workspace";
 import WorkspaceSurface from "./WorkspaceSurface";
 import { writeClipboardText } from "@/utils/clipboard";
@@ -75,6 +76,15 @@ export const TerminalSession = ({
   const startRef = useRef<(() => void) | null>(null);
   const [manualPasteOpen, setManualPasteOpen] = useState(false);
   const [manualPasteText, setManualPasteText] = useState("");
+  const [startupPhase, setStartupPhase] = useState<TerminalStartupPhase>("authorizing");
+  const [startupSeconds, setStartupSeconds] = useState(0);
+  const startupAt = useRef(0);
+
+  useEffect(() => {
+    if (!active || startupPhase === "ready" || startupPhase === "closed") return;
+    const timer = window.setInterval(() => setStartupSeconds(Math.max(0, Math.floor((performance.now() - startupAt.current) / 1000))), 1000);
+    return () => window.clearInterval(timer);
+  }, [active, startupPhase]);
 
   const pendingSendRef = useRef<((data: string | Uint8Array) => void) | null>(null);
 
@@ -166,10 +176,20 @@ export const TerminalSession = ({
       if (disposed || starting || sessionId || !activeRef.current) return;
       const grant = workspaceState.grants.get(uuid);
       if ((!grant || !workspaceState.valid(grant)) && workspaceState.revision(uuid) > 0) return;
+      // A stream failure/normal exit must not silently create a different PTY
+      // on the next grant touch, focus, or tab activation.
+      if (connectionToken && grant?.token === connectionToken) return;
       starting = true;
+      startupAt.current = performance.now();
+      setStartupSeconds(0);
+      setStartupPhase("authorizing");
       commands = createCommands();
       try {
         const authorized = await ensureWorkspace(uuid, sessionController.signal);
+        if (disposed || sessionController.signal.aborted) return;
+        startupAt.current = performance.now();
+        setStartupSeconds(0);
+        setStartupPhase("creating");
         // Capture before create: a failed create must not become a hot retry
         // loop merely because connectionToken was never initialized.
         connectionToken = authorized.token;
@@ -198,18 +218,38 @@ export const TerminalSession = ({
           window.clearTimeout(screenDeadline);
           screenDeadline = window.setTimeout(() => { term.reset(); screenDeadline = 0; }, Math.max(0, currentGrant.expiresAt - Date.now()));
         }
-        term.options.disableStdin = false;
+        // CreateSession only queues work. It is not evidence that the Agent
+        // has opened a PTY, nor that a login shell has produced output.
+        setStartupPhase("waiting-agent");
         if (activeRef.current) term.focus();
 
         for await (const response of watchRemoteSession({
           sessionId: started.sessionId,
           signal: sessionController.signal,
         })) {
-          if (disposed || !response.event) continue;
+          if (disposed) continue;
+          if (response.reconnecting) {
+            term.options.disableStdin = true;
+            startupAt.current = performance.now();
+            setStartupSeconds(0);
+            setStartupPhase("reconnecting");
+            continue;
+          }
+          if (!response.event) {
+            term.options.disableStdin = !response.agentAttached;
+            setStartupPhase(current => observeTerminalStartup(current, response));
+            continue;
+          }
           const event = response.event;
           if (event.event.case === "output") {
+            if (event.event.value.byteLength > 0) {
+              term.options.disableStdin = false;
+              const outputBytes = event.event.value.byteLength;
+              setStartupPhase(current => observeTerminalStartup(current, { outputBytes }));
+            }
             term.write(event.event.value);
           } else if (event.event.case === "closed") {
+            setStartupPhase("closed");
             sessionId = null;
             term.write(`\r\n${disconnectMessageRef.current}\r\n`);
             break;
@@ -224,6 +264,7 @@ export const TerminalSession = ({
         commands?.dispose();
         starting = false;
         if (!disposed) {
+          setStartupPhase("closed");
           if (sessionId) {
             void closeRemoteSession({
               sessionId,
@@ -351,9 +392,13 @@ export const TerminalSession = ({
       if (activeRef.current) term.focus();
     });
 
+    let fitFrame = 0;
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => fit())
+        ? new ResizeObserver(() => {
+          cancelAnimationFrame(fitFrame);
+          fitFrame = requestAnimationFrame(fit);
+        })
         : null;
     resizeObserver?.observe(host);
 
@@ -374,6 +419,7 @@ export const TerminalSession = ({
         }).catch(() => {});
       }
       resizeObserver?.disconnect();
+      cancelAnimationFrame(fitFrame);
       onApiChangeRef.current(null);
       term.dispose();
     };
@@ -386,6 +432,8 @@ export const TerminalSession = ({
       ...DEFAULT_TERMINAL_OPTIONS,
       ...options,
       fontSize: options?.fontSize ?? fontSize,
+      // Appearance updates must preserve the live attachment/lock decision.
+      disableStdin: api.terminal.options.disableStdin,
       theme: {
         ...api.terminal.options.theme,
         ...options?.theme,
@@ -409,15 +457,24 @@ export const TerminalSession = ({
     display: active ? "block" : "none",
     padding: `${padding}px`,
     background: transparentBackground ? "transparent" : (options?.theme?.background ?? "#000000"),
+    boxSizing: "border-box",
   };
 
   return (
     <WorkspaceSurface agentId={uuid} active={active}>
+      {active && startupPhase !== "ready" && startupPhase !== "closed" && <div role="status" className="pointer-events-none absolute left-3 top-2 z-10 rounded bg-black/80 px-3 py-2 text-xs text-neutral-300">
+        {t(startupPhase === "reconnecting" ? "terminal.startup_reconnecting" : startupPhase === "authorizing" ? "terminal.startup_authorizing" : startupPhase === "creating" ? "terminal.startup_creating" : startupPhase === "waiting-agent" ? "terminal.startup_waiting_agent" : "terminal.startup_waiting_output")}
+        {startupPhase !== "authorizing" && ` · ${t("terminal.startup_seconds", { count: startupSeconds })}`}
+        {startupSeconds >= 10 && startupPhase !== "authorizing" && <div className="mt-1 text-neutral-400">{t("terminal.startup_slow_hint")}</div>}
+      </div>}
       <div
-        ref={hostRef}
         data-workspace-agent={uuid}
         className="km-terminal-session relative h-full w-full overflow-hidden bg-[#000000]"
         style={style}
+      >
+      <div
+        ref={hostRef}
+        className="h-full w-full overflow-hidden"
         onPaste={(event) => {
           const text = event.clipboardData?.getData("text/plain");
           if (text) {
@@ -426,6 +483,7 @@ export const TerminalSession = ({
           }
         }}
       />
+      </div>
 
       {/* Manual Paste Fallback Dialog */}
       <Dialog.Root open={manualPasteOpen} onOpenChange={setManualPasteOpen}>
