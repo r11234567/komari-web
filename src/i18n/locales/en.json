@@ -1337,6 +1337,8 @@
       "private_site": "Private site",
       "private_site_description": "Set the site to private. Once enabled, data can only be accessed after logging in.",
       "rate_limit_enabled": "Request rate limiting",
+      "ssrf_protection_enabled": "Enable SSRF protection",
+      "ssrf_protection_enabled_description": "Block private, local and other non-public destinations for theme and plugin market downloads, remote theme imports and updates, including redirect targets. Turning this off skips address checks.",
       "rate_limit_enabled_description": "Limit request frequency per agent, account and visitor address, rejecting excess requests with HTTP 429. Coalescing of expensive historical reads is always active and is not affected by this switch.",
       "script_domain": "Agent connection address",
       "script_domain_description": "Define the connection address for the installation script panel, convenient for users with multiple domains, and will not affect access to other domains. Leave empty to use the current domain.",

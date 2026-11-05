@@ -1262,6 +1262,8 @@
       "private_site": "私有站點",
       "private_site_description": "將站點設定為私有，開啟後資料都需要登陸後才能獲取。",
       "script_domain": "Agent 連線地址",
+      "ssrf_protection_enabled": "啟用 SSRF 防護",
+      "ssrf_protection_enabled_description": "開啟後，主題與外掛市集下載、主題遠端匯入及更新會封鎖內網、本機與其他非公網位址，包括重新導向目標。關閉後略過位址檢查。",
       "script_domain_description": "為安裝指令碼定義面板的連線地址，方便多個域名的使用者，並不會影響其他域名的訪問。留空使用當前域名。",
       "send_ip_addr_to_guest": "向訪客顯示部分IP地址",
       "send_ip_addr_to_guest_description": "未登入的情況下可以透過 common:getNodes 檢視部分IP地址資訊，形如 9.*.*.* / fe80:*:*:*:*:*:*:*。用於部分主題展示IP。",

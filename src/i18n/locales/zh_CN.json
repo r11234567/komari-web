@@ -1337,6 +1337,8 @@
       "private_site": "私有站点",
       "private_site_description": "将站点设置为私有，开启后数据都需要登陆后才能获取。",
       "rate_limit_enabled": "请求限流",
+      "ssrf_protection_enabled": "启用 SSRF 防护",
+      "ssrf_protection_enabled_description": "开启后，主题市场和插件市场下载、主题远程导入和更新会拦截内网、本地及其他非公网地址，包括重定向目标。关闭后不进行此地址检查。",
       "rate_limit_enabled_description": "开启后按 agent、账号与访客地址限制请求频率，超出部分返回 HTTP 429。高成本历史读取的合并始终生效，与本开关无关。",
       "script_domain": "Agent 连接地址",
       "script_domain_description": "为安装脚本定义面板的连接地址，方便多个域名的用户，并不会影响其他域名的访问。留空使用当前域名。",
