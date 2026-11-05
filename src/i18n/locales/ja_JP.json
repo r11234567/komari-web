@@ -445,6 +445,10 @@
     "title": "法的通知とコンプライアンスガイド"
   },
   "exec": {
+    "runAsRoot": "root として実行",
+    "defaultUser": "既定では komari として実行",
+    "executeAsRoot": "root として実行",
+    "rootNotAllowed": "選択したすべてのノードで root 実行が許可され、利用可能である必要があります。",
     "allCompleted": "すべてのタスクが完了しました",
     "command": "コマンドを実行",
     "commandPlaceholder": "whoami（Shift+Enter で改行）",

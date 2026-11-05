@@ -467,6 +467,10 @@
     "title": "Legal Notice and Compliance Guide"
   },
   "exec": {
+    "runAsRoot": "Run as root",
+    "defaultUser": "Runs as komari by default",
+    "executeAsRoot": "Execute as root",
+    "rootNotAllowed": "Root execution is not approved or available on every selected node.",
     "allCompleted": "All tasks executed successfully",
     "command": "Execute command",
     "commandPlaceholder": "whoami (use Shift+Enter to start a new line)",

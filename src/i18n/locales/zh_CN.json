@@ -467,6 +467,10 @@
     "title": "法律声明与合规指引"
   },
   "exec": {
+    "runAsRoot": "以 root 身份执行",
+    "defaultUser": "默认以 komari 执行",
+    "executeAsRoot": "以 root 执行",
+    "rootNotAllowed": "所选节点中有节点尚未获准或无法使用 root 执行。",
     "allCompleted": "所有任务执行完成",
     "command": "执行命令",
     "commandPlaceholder": "whoami（使用 Shift+Enter 换行）",

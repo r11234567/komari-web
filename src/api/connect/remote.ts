@@ -28,6 +28,7 @@ const waitToReconnect = (signal: AbortSignal) => new Promise<void>((resolve) => 
 export async function createRemoteExecutions(input: {
   agentIds: string[];
   command: string;
+  runAsRoot?: boolean;
   authorizationToken: string;
   timeoutMs?: number;
   maxOutputBytes?: bigint;
@@ -39,6 +40,7 @@ export async function createRemoteExecutions(input: {
     (signal, timeoutMs) => connectClients.execution.createExecution({
       agentIds: input.agentIds,
       command: input.command,
+      runAsRoot: input.runAsRoot ?? false,
       timeout: durationFromMs(input.timeoutMs ?? 5 * 60_000),
       maxOutputBytes: input.maxOutputBytes ?? BigInt(1 << 20),
       idempotencyKey: input.idempotencyKey,

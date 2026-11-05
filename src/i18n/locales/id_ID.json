@@ -445,6 +445,10 @@
     "title": "Pemberitahuan Hukum dan Panduan Kepatuhan"
   },
   "exec": {
+    "runAsRoot": "Jalankan sebagai root",
+    "defaultUser": "Secara bawaan dijalankan sebagai komari",
+    "executeAsRoot": "Jalankan sebagai root",
+    "rootNotAllowed": "Eksekusi root belum diizinkan atau tersedia pada semua node yang dipilih.",
     "allCompleted": "Semua tugas telah selesai dieksekusi",
     "command": "Perintah",
     "commandPlaceholder": "whoami (gunakan Shift+Enter untuk baris baru)",
