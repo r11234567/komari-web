@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import type { TrafficAccounting } from "@komari/proto/komari/browser/v1/browser_pb";
-import { formatTrafficGB, trafficAccountingView, trafficResetDescription, trafficResetInstant } from "../src/utils/trafficDisplay.ts";
+import { formatTrafficGB, trafficAccountingView, trafficResetDescription, trafficResetInstant, trafficResetRemaining } from "../src/utils/trafficDisplay.ts";
 
 test("provider calibration and public/admin displays use identical decimal GB", () => {
   assert.equal(formatTrafficGB(131_020_000_000), "131.02 GB");
@@ -39,4 +39,13 @@ test("reset instant uses configured timezone, not the browser timezone", () => {
   assert.equal(trafficResetInstant("2026-11-05T00:00:00Z", "UTC+05:45"), "2026-11-05 05:45 UTC+05:45");
   assert.equal(trafficResetInstant("2026-11-05T00:00:00Z", "UTC-03:30"), "2026-11-04 20:30 UTC-03:30");
   assert.equal(trafficResetInstant("", "UTC"), "");
+});
+
+test("reset remaining computes human countdown accurately", () => {
+  const base = new Date("2026-11-08T12:00:00Z");
+  assert.equal(trafficResetRemaining("2026-11-30T18:15:00Z", base), "22 天 6 小时后");
+  assert.equal(trafficResetRemaining("2026-11-08T15:30:00Z", base), "3 小时 30 分钟后");
+  assert.equal(trafficResetRemaining("2026-11-08T12:05:00Z", base), "5 分钟后");
+  assert.equal(trafficResetRemaining("2026-11-08T11:00:00Z", base), "");
+  assert.equal(trafficResetRemaining("", base), "");
 });
