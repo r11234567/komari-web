@@ -203,3 +203,48 @@ export const applyMetricEwma = <TSeries extends { dataKey: string }>(
   }
   return smoothed;
 };
+
+export type TranslationFunction = any;
+
+export const formatChartTitle = (
+  chart: { id?: string; title: string },
+  t?: TranslationFunction,
+) => {
+  const normalizedTitle = chart.title?.trim().toLowerCase();
+  const normalizedId = chart.id?.trim().toLowerCase();
+  const titleKeyMap: Record<string, string> = {
+    cpu: "chart.titles.cpu",
+    memory: "chart.titles.memory",
+    disk: "chart.titles.disk",
+    network: "chart.titles.network",
+    latency: "chart.titles.latency",
+    ping: "chart.titles.latency",
+    gpu: "chart.titles.gpu",
+  };
+
+  const key =
+    (normalizedTitle && titleKeyMap[normalizedTitle]) ||
+    (normalizedId && titleKeyMap[normalizedId]);
+  if (key && t) {
+    return t(key, chart.title);
+  }
+  return chart.title;
+};
+
+export const getMetricLabel = (
+  metricKey: string,
+  definitions?: ReadonlyMap<string, { description?: string; name?: string }>,
+  t?: TranslationFunction,
+  fallbackLabel?: string,
+) => {
+  if (t) {
+    const systemMetricKey = `settings.metrics.system.${metricKey}.name`;
+    const systemName = t(systemMetricKey);
+    if (systemName && systemName !== systemMetricKey) {
+      return systemName;
+    }
+  }
+  if (fallbackLabel) return fallbackLabel;
+  const def = definitions?.get(metricKey);
+  return def?.description || def?.name || metricKey;
+};

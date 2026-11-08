@@ -349,7 +349,7 @@ const MiniPingChart = ({
                   dot={item.pointCount <= 30}
                   isAnimationActive={false}
                   strokeWidth={2}
-                  connectNulls={false}
+                  connectNulls
                   type="linear"
                   hide={hiddenLines[item.dataKey] === true}
                 />

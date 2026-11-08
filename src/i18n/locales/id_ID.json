@@ -230,7 +230,15 @@
     "udp_connections": "UDP",
     "usage": "Penggunaan",
     "valid": "Sampel valid",
-    "volatility": "Volatilitas"
+    "volatility": "Volatilitas",
+    "titles": {
+      "cpu": "CPU",
+      "disk": "Disk",
+      "gpu": "GPU",
+      "latency": "Latensi",
+      "memory": "Memori",
+      "network": "Jaringan"
+    }
   },
   "color": {
     "amber": "Kuning Muda",

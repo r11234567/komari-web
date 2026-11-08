@@ -230,7 +230,15 @@
     "udp_connections": "UDP",
     "usage": "使用率",
     "valid": "有効サンプル",
-    "volatility": "変動"
+    "volatility": "変動",
+    "titles": {
+      "cpu": "CPU",
+      "disk": "ディスク",
+      "gpu": "GPU",
+      "latency": "遅延",
+      "memory": "メモリ",
+      "network": "ネットワーク"
+    }
   },
   "color": {
     "amber": "アンバー",

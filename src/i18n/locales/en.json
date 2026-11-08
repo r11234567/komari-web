@@ -252,7 +252,15 @@
     "udp_connections": "UDP",
     "usage": "Usage",
     "valid": "Valid",
-    "volatility": "Vol"
+    "volatility": "Vol",
+    "titles": {
+      "cpu": "CPU",
+      "disk": "Disk",
+      "gpu": "GPU",
+      "latency": "Latency",
+      "memory": "Memory",
+      "network": "Network"
+    }
   },
   "color": {
     "amber": "Amber",

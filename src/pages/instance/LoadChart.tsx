@@ -86,6 +86,8 @@ import {
   pingMetricStatKey,
   pingTaskId,
   pingTaskName,
+  formatChartTitle,
+  getMetricLabel,
   type MetricChartRow,
 } from "@/utils/metricSeries";
 import { formatBytes } from "@/utils/unitHelper";
@@ -488,7 +490,7 @@ const formatSeriesLabel = (
 ) => {
   const tagLabel = formatTags(metricKey, tags, pingTaskMap, t);
   if (metricKey === PING_LATENCY_METRIC && tagLabel) return tagLabel;
-  const metricLabel = getMetricLabel(metricKey, definitions);
+  const metricLabel = resolveMetricLabel(metricKey, definitions, t);
   return tagLabel ? `${metricLabel} ${tagLabel}` : metricLabel;
 };
 
@@ -534,15 +536,11 @@ const getMetricKind = (metricKey: string, unit?: string): MetricKind => {
   return "raw";
 };
 
-const getMetricLabel = (
+const resolveMetricLabel = (
   metricKey: string,
-  definitions: Map<string, MetricDefinition>,
-) => {
-  const fallback = fallbackCatalogMap.get(metricKey);
-  if (fallback) return fallback.label;
-  const def = definitions.get(metricKey);
-  return def?.description || def?.name || metricKey;
-};
+  definitions?: Map<string, MetricDefinition>,
+  t?: ReturnType<typeof useTranslation>["t"],
+) => getMetricLabel(metricKey, definitions, t, fallbackCatalogMap.get(metricKey)?.label);
 
 const chartSizeClass: Record<ChartSize, string> = {
   small: "lg:col-span-1",
@@ -672,13 +670,14 @@ const buildRowsFromRealtime = (
           const key = `${metricKey}:${metricTagsKey(tagged.tags)}`;
           let item = seriesIndex.get(key);
           if (!item) {
+            const metricLabel = resolveMetricLabel(metricKey, undefined, t);
             const tagLabel = formatTags(metricKey, tagged.tags, pingTaskMap, t);
             const stableKey = metricSeriesKey(metricKey, tagged.tags);
             item = {
               dataKey: metricSeriesDataKey(metricKey, tagged.tags),
               stableKey,
               metricKey,
-              label: tagLabel ? `${metric.label} ${tagLabel}` : metric.label,
+              label: tagLabel ? `${metricLabel} ${tagLabel}` : metricLabel,
               color: metricSeriesColor(renderSeries.length),
               kind: metric.kind,
               unit: metric.unit,
@@ -700,7 +699,7 @@ const buildRowsFromRealtime = (
           dataKey: metricSeriesDataKey(metricKey),
           stableKey,
           metricKey,
-          label: metric.label,
+          label: resolveMetricLabel(metricKey, undefined, t),
           color: metricSeriesColor(renderSeries.length),
           kind: metric.kind,
           unit: metric.unit,
@@ -1096,8 +1095,13 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         });
       }
     }
-    return Array.from(merged.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [definitions]);
+    return Array.from(merged.values())
+      .map((item) => ({
+        ...item,
+        label: resolveMetricLabel(item.key, definitionMap, t),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [definitionMap, definitions, t]);
 
   const customQuery = useMemo(
     () => toQueryRange(customQueryRange),
@@ -1253,7 +1257,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     setDashboard((current) => {
       const normalized = normalizeDashboard(current);
       const nextIndex = normalized.length + 1;
-      const title = getMetricLabel(metricKey, definitionMap);
+      const title = resolveMetricLabel(metricKey, definitionMap, t);
       return [
         ...normalized,
         {
@@ -1569,7 +1573,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <ChartLine className="size-4 shrink-0 text-muted-foreground" />
-                    <h2 className="truncate text-lg font-bold">{chart.title}</h2>
+                    <h2 className="truncate text-lg font-bold">{formatChartTitle(chart, t)}</h2>
                   </div>
                   <div className="mt-1 truncate text-xs text-muted-foreground">
                     {latestText}
@@ -1671,7 +1675,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                           className="size-2 shrink-0 rounded-[2px]"
                           style={{ backgroundColor: metricSeriesColor(index) }}
                         />
-                        <span className="truncate">{getMetricLabel(metricKey, definitionMap)}</span>
+                        <span className="truncate">{resolveMetricLabel(metricKey, definitionMap, t)}</span>
                         <button
                           type="button"
                           title={t("chart.removeMetric", "Remove metric")}
@@ -1764,7 +1768,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                         dot={item.pointCount !== undefined && item.pointCount <= 30}
                         isAnimationActive={false}
                         strokeWidth={2}
-                        connectNulls={false}
+                        connectNulls
                         type="linear"
                         hide={isSeriesHidden(chart.id, item)}
                       />

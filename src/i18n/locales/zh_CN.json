@@ -252,7 +252,15 @@
     "udp_connections": "UDP",
     "usage": "使用率",
     "valid": "有效样本",
-    "volatility": "波动"
+    "volatility": "波动",
+    "titles": {
+      "cpu": "CPU",
+      "disk": "磁盘",
+      "gpu": "GPU",
+      "latency": "延迟",
+      "memory": "内存",
+      "network": "网络"
+    }
   },
   "color": {
     "amber": "琥珀色",
