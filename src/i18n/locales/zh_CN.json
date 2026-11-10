@@ -1669,7 +1669,20 @@
       "export_status_failed": "失败",
       "export_status_cancelled": "已取消"
     },
-    "secret_copy_prevented": "敏感信息禁止复制"
+    "secret_copy_prevented": "敏感信息禁止复制",
+    "telemetry": {
+      "title": "遥测数据存储",
+      "description": "近期明细保存在 SQL，已完成的明细段归档为压缩文件；历史图表读取分级统计。",
+      "hot": "在线明细窗口",
+      "archive": "明细归档保留期",
+      "budget": "热数据积压预算",
+      "minutes": "分钟",
+      "days": "天",
+      "mib": "MiB",
+      "invalid": "请输入显示范围内的整数。",
+      "precision": "图表精度：最近 2 小时为 10 秒，1 天内为 5 分钟，7 天内为 15 分钟，之后为 1 小时，最长不超过各指标的保留期。",
+      "retention_notice": "缩短归档保留期会永久删除过期明细导出数据。流量累计与校准独立保留。归档失败会保留已接收数据，并在达到预算时暂停接收。"
+    }
   },
   "status_settings": "状态显示设置",
   "terminal": {

@@ -1669,7 +1669,20 @@
       "export_status_failed": "Failed",
       "export_status_cancelled": "Cancelled"
     },
-    "secret_copy_prevented": "Sensitive secret cannot be copied"
+    "secret_copy_prevented": "Sensitive secret cannot be copied",
+    "telemetry": {
+      "title": "Telemetry storage",
+      "description": "Recent samples stay in SQL. Completed raw segments move to compressed archives; charts use retained statistical summaries.",
+      "hot": "Online raw window",
+      "archive": "Raw archive retention",
+      "budget": "Hot backlog budget",
+      "minutes": "minutes",
+      "days": "days",
+      "mib": "MiB",
+      "invalid": "Enter whole numbers within the displayed limits.",
+      "precision": "Chart precision: 10 seconds for 2 hours, 5 minutes for 1 day, 15 minutes for 7 days, then 1 hour up to each metric’s retention limit.",
+      "retention_notice": "Shortening archive retention permanently removes expired raw exports. Traffic totals and calibration remain independent. Archive failures preserve accepted data and apply backpressure at the budget."
+    }
   },
   "status_settings": "Status Settings",
   "terminal": {
