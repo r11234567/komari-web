@@ -1,4 +1,5 @@
 import { memo, type ReactNode, useEffect, useMemo, useState } from "react";
+import { usePageVisible } from "@/hooks/usePageVisible";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -956,6 +957,7 @@ const toQueryRange = (range: CustomTimeRange) => {
 
 const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   const { t } = useTranslation();
+  const pageVisible = usePageVisible();
   const { uuid } = useParams<{ uuid: string }>();
   const { account } = useAccount();
   const { publicInfo, refresh: refreshPublicInfo } = usePublicInfo();
@@ -1126,7 +1128,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         : { hours: queryHours ?? 1 },
     [queryEnd, queryHours, queryRangeSignature, queryStart],
   );
-  const metricKeys = useMemo(() => {
+  const metricKeySignature = useMemo(() => {
     const keys = charts.flatMap((chart) =>
       chart.metrics.filter((metricKey) => {
         if (definitionsLoaded && !definitionMap.has(metricKey)) return false;
@@ -1135,8 +1137,9 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         return !metric?.realtimeValue && !metric?.realtimeTaggedValues;
       }),
     );
-    return Array.from(new Set(keys)).sort();
+    return JSON.stringify(Array.from(new Set(keys)).sort());
   }, [charts, definitionMap, definitionsLoaded, isRealtime]);
+  const metricKeys = useMemo<string[]>(() => JSON.parse(metricKeySignature), [metricKeySignature]);
 
   useEffect(() => {
     if (!uuid || metricKeys.length === 0) {
@@ -1150,6 +1153,8 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+
+    if (!pageVisible || !definitionsLoaded) return;
 
     queryPublicMetrics({
         metrics: metricKeys,
@@ -1179,8 +1184,10 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     };
   }, [
     aggregation,
+    definitionsLoaded,
     metricKeys,
     metricRangeParams,
+    pageVisible,
     uuid,
   ]);
 
@@ -1192,6 +1199,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
 
     let active = true;
     const controller = new AbortController();
+    if (!pageVisible || !definitionsLoaded) return;
     getPublicPingStats({
       agentIds: [uuid],
       ...("start" in metricRangeParams
@@ -1213,8 +1221,10 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
       controller.abort(new DOMException("Chart unmounted", "AbortError"));
     };
   }, [
+    definitionsLoaded,
     metricKeys,
     metricRangeParams,
+    pageVisible,
     uuid,
   ]);
 

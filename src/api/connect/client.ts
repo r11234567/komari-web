@@ -1,6 +1,7 @@
 import { createClient, type Transport } from "@connectrpc/connect";
 import { workspaceAccess } from "./workspace";
 import { createConnectTransport } from "@connectrpc/connect-web";
+import { withMetricReadQueue } from "./metricReadQueue";
 import { DashboardService } from "@komari/proto/komari/admin/v1/dashboard_pb";
 import { ApiTokenService } from "@komari/proto/komari/admin/v1/api_token_pb";
 import { TerminalSettingsService } from "@komari/proto/komari/admin/v1/terminal_pb";
@@ -31,13 +32,13 @@ export interface ConnectCallOptions {
   timeoutMs?: number;
 }
 
-const transport = createConnectTransport({
+const transport = withMetricReadQueue(createConnectTransport({
   baseUrl:
     typeof window === "undefined" ? "http://localhost" : window.location.origin,
   useBinaryFormat: true,
   defaultTimeoutMs: DEFAULT_UNARY_DEADLINE_MS,
   fetch: (input, init) => fetch(input, { ...init, credentials: "same-origin" }),
-});
+}));
 
 const browser = createClient(BrowserService, transport);
 const dashboard = createClient(DashboardService, transport);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { usePageVisible } from "@/hooks/usePageVisible";
 import { Card, Switch } from "@radix-ui/themes";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { useTranslation } from "react-i18next";
@@ -66,6 +67,7 @@ const MiniPingChart = ({
   hours = 12,
 }: MiniPingChartProps) => {
   const { t } = useTranslation();
+  const pageVisible = usePageVisible();
   const [metricSeries, setMetricSeries] = useState<MetricSeries[]>([]);
   const [tasks, setTasks] = useState<PublicPingTask[]>([]);
   const [stats, setStats] = useState<PingMetricStat[]>([]);
@@ -83,6 +85,7 @@ const MiniPingChart = ({
     }
 
     let active = true;
+    if (!pageVisible) return;
     const controller = new AbortController();
     setLoading(true);
     setError(null);
@@ -125,7 +128,7 @@ const MiniPingChart = ({
       active = false;
       controller.abort(new DOMException("Chart unmounted", "AbortError"));
     };
-  }, [hours, uuid]);
+  }, [hours, pageVisible, uuid]);
 
   const taskMap = useMemo(
     () => new Map(tasks.map((task) => [String(task.id), task])),
