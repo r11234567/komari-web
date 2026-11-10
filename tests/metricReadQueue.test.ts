@@ -3,8 +3,8 @@ import test from "node:test";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { MetricReadQueue, withMetricReadQueue } from "../src/api/connect/metricReadQueue.ts";
 
-test("the observed 23-request burst runs one historical read at a time", async () => {
-  const queue = new MetricReadQueue({ intervalMs: 0 });
+test("the observed 23-request burst permits 16 concurrent historical reads", async () => {
+  const queue = new MetricReadQueue();
   let active = 0;
   let maximum = 0;
   const reads = Array.from({ length: 23 }, (_, index) => queue.run(new AbortController().signal, async () => {
@@ -15,11 +15,11 @@ test("the observed 23-request burst runs one historical read at a time", async (
     return index;
   }));
   assert.deepEqual(await Promise.all(reads), Array.from({ length: 23 }, (_, index) => index));
-  assert.equal(maximum, 1);
+  assert.equal(maximum, 16);
 });
 
 test("superseded queued reads never enter the network operation", async () => {
-  const queue = new MetricReadQueue({ intervalMs: 0 });
+  const queue = new MetricReadQueue({ maximumConcurrent: 1 });
   let release!: () => void;
   const first = queue.run(new AbortController().signal, () => new Promise<void>((resolve) => { release = resolve; }));
   const cancelled = new AbortController();
@@ -34,7 +34,7 @@ test("superseded queued reads never enter the network operation", async () => {
 });
 
 test("429 pauses every queued read, honors Retry-After and retries only once", async () => {
-  const queue = new MetricReadQueue({ intervalMs: 0, maximumWaitMs: 5000 });
+  const queue = new MetricReadQueue({ maximumConcurrent: 1, maximumWaitMs: 5000 });
   const start = Date.now();
   let attempts = 0;
   const times: number[] = [];
@@ -56,7 +56,7 @@ test("429 pauses every queued read, honors Retry-After and retries only once", a
 });
 
 test("pending work is bounded and expires instead of waiting indefinitely", async () => {
-  const queue = new MetricReadQueue({ intervalMs: 0, maximumQueued: 1, maximumWaitMs: 30 });
+  const queue = new MetricReadQueue({ maximumConcurrent: 1, maximumQueued: 1, maximumWaitMs: 30 });
   let release!: () => void;
   const current = queue.run(new AbortController().signal, () => new Promise<void>((resolve) => { release = resolve; }));
   const waiting = queue.run(new AbortController().signal, async () => "obsolete");
@@ -64,6 +64,47 @@ test("pending work is bounded and expires instead of waiting indefinitely", asyn
   await assert.rejects(waiting, (error) => ConnectError.from(error).code === Code.DeadlineExceeded);
   release();
   await current;
+});
+
+test("a timed-out chart does not suspend unrelated reads", async () => {
+  const queue = new MetricReadQueue({ maximumConcurrent: 1 });
+  const expired = queue.run(new AbortController().signal, async () => {
+    throw new ConnectError("slow chart", Code.DeadlineExceeded);
+  });
+  const follower = queue.run(new AbortController().signal, async () => "ready");
+  await assert.rejects(expired, (error) => ConnectError.from(error).code === Code.DeadlineExceeded);
+  const began = Date.now();
+  assert.equal(await follower, "ready");
+  assert.ok(Date.now() - began < 500);
+});
+
+test("Ping uses four reserved slots while all sixteen chart slots are busy", async () => {
+  const releases: (() => void)[] = [];
+  let charts = 0;
+  let pings = 0;
+  const transport = withMetricReadQueue({
+    unary: async (method: { name: string }) => {
+      if (method.name === "QueryMetrics") charts++;
+      else pings++;
+      await new Promise<void>((resolve) => { releases.push(resolve); });
+      return { message: {} };
+    },
+  } as any);
+  const invoke = (name: string) => transport.unary(
+    { parent: { typeName: "komari.metrics.v1.MetricsService" }, name } as any,
+    new AbortController().signal, undefined, undefined, {} as any,
+  );
+  const work = Array.from({ length: 17 }, () => invoke("QueryMetrics"));
+  work.push(...Array.from({ length: 5 }, () => invoke("GetPingStats")));
+  assert.equal(charts, 16);
+  assert.equal(pings, 4);
+  while (releases.length) {
+    releases.splice(0).forEach(release => release());
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  await Promise.all(work);
+  assert.equal(charts, 17);
+  assert.equal(pings, 5);
 });
 
 test("persistent 429 stops after two attempts", async () => {

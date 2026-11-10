@@ -12,21 +12,24 @@ type ReadJob = {
 
 export class MetricReadQueue {
   private pending: ReadJob[] = [];
-  private active = false;
+  private active = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private nextStart = 0;
   private cooldownUntil = 0;
   private readonly intervalMs: number;
   private readonly maximumQueued: number;
   private readonly maximumWaitMs: number;
+  private readonly maximumConcurrent: number;
 
-  constructor(options: { intervalMs?: number; maximumQueued?: number; maximumWaitMs?: number } = {}) {
-    this.intervalMs = options.intervalMs ?? 1000;
-    this.maximumQueued = options.maximumQueued ?? 32;
+  constructor(options: { intervalMs?: number; maximumQueued?: number; maximumWaitMs?: number; maximumConcurrent?: number } = {}) {
+    this.intervalMs = options.intervalMs ?? 0;
+    this.maximumQueued = options.maximumQueued ?? 128;
     this.maximumWaitMs = options.maximumWaitMs ?? 30_000;
+    this.maximumConcurrent = options.maximumConcurrent ?? 16;
     if (!Number.isFinite(this.intervalMs) || this.intervalMs < 0 ||
         !Number.isInteger(this.maximumQueued) || this.maximumQueued < 1 ||
-        !Number.isFinite(this.maximumWaitMs) || this.maximumWaitMs <= 0) {
+        !Number.isFinite(this.maximumWaitMs) || this.maximumWaitMs <= 0 ||
+        !Number.isInteger(this.maximumConcurrent) || this.maximumConcurrent < 1) {
       throw new RangeError("Invalid historical read queue limits");
     }
   }
@@ -75,7 +78,7 @@ export class MetricReadQueue {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
-    if (this.active || this.pending.length === 0) return;
+    if (this.active >= this.maximumConcurrent || this.pending.length === 0) return;
     const wait = Math.max(this.nextStart, this.cooldownUntil) - Date.now();
     if (wait > 0) {
       this.timer = setTimeout(() => { this.timer = undefined; this.pump(); }, Math.min(wait, 2_147_483_647));
@@ -88,10 +91,11 @@ export class MetricReadQueue {
       this.pump();
       return;
     }
-    this.active = true;
+    this.active++;
     this.nextStart = Date.now() + this.intervalMs;
     job.attempts++;
     void this.execute(job);
+    this.pump();
   }
 
   private async execute(job: ReadJob) {
@@ -103,18 +107,17 @@ export class MetricReadQueue {
     } catch (error) {
       const failure = ConnectError.from(error);
       const backpressure = failure.code === Code.ResourceExhausted || failure.code === Code.Unavailable;
-      const timedOut = failure.code === Code.DeadlineExceeded || job.signal.reason?.name === "TimeoutError";
-      if ((!job.signal.aborted || timedOut) && (backpressure || timedOut)) {
+      if (!job.signal.aborted && backpressure) {
         const header = failure.metadata.get("Retry-After");
         const seconds = header ? Number(header) : NaN;
         const indicated = Number.isFinite(seconds) ? seconds * 1000 : header ? Date.parse(header) - Date.now() : 0;
-        const delay = Math.max(timedOut ? 10_000 : 2000, Number.isFinite(indicated) ? indicated : 0);
+        const delay = Math.max(2000, Number.isFinite(indicated) ? indicated : 0);
         this.cooldownUntil = Math.max(this.cooldownUntil, Date.now() + delay);
-        retry = backpressure && !job.signal.aborted && job.attempts < 2;
+        retry = job.attempts < 2;
       }
       if (!retry) job.reject(error);
     } finally {
-      this.active = false;
+      this.active--;
       if (retry) this.enqueue(job, true);
       this.pump();
     }
@@ -129,14 +132,21 @@ const historyMethods = new Set([
   "komari.browser.v1.BrowserService/GetTrafficTrend",
 ]);
 
-export function withMetricReadQueue(base: Transport, queue = new MetricReadQueue()): Transport {
+export function withMetricReadQueue(
+  base: Transport,
+  queue = new MetricReadQueue(),
+  pingQueue = new MetricReadQueue({ maximumConcurrent: 4 }),
+): Transport {
   return {
     ...base,
     unary(method, signal, timeoutMs, header, input, contextValues) {
       if (!historyMethods.has(`${method.parent.typeName}/${method.name}`)) {
         return base.unary(method, signal, timeoutMs, header, input, contextValues);
       }
-      return queue.run(signal ?? new AbortController().signal,
+      // Ping must remain usable while charts are slow or backing off. Both
+      // lanes still obey server Retry-After and have bounded pending work.
+      const lane = method.name === "GetPingStats" ? pingQueue : queue;
+      return lane.run(signal ?? new AbortController().signal,
         () => base.unary(method, signal, timeoutMs, header, input, contextValues));
     },
   };
