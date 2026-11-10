@@ -15,9 +15,10 @@ export function acceptState(current: GetNodeConfigStateResponse | undefined, nex
   return !current || next.updateSequence >= current.updateSequence;
 }
 
-export function boundedRemoteSettings<T extends { remoteControlEnabled?: boolean; websshEnabled?: boolean; executionEnabled?: boolean }>(settings: T): T {
+export function boundedRemoteSettings<T extends { remoteControlEnabled?: boolean; websshEnabled?: boolean; executionEnabled?: boolean; rootExecutionAllowed?: boolean }>(settings: T): T {
   return { ...settings, websshEnabled: !!settings.remoteControlEnabled && !!settings.websshEnabled,
-    executionEnabled: !!settings.remoteControlEnabled && !!settings.executionEnabled };
+    executionEnabled: !!settings.remoteControlEnabled && !!settings.executionEnabled,
+    rootExecutionAllowed: !!settings.remoteControlEnabled && !!settings.rootExecutionAllowed };
 }
 
 // An absent observation is unknown, never evidence that installation succeeded.

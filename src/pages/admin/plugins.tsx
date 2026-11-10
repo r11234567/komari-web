@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Loading from "@/components/loading";
 import PluginConfigDialog from "@/components/admin/PluginConfigDialog";
+import PluginPackageManager, { PluginPackageApprovalDialog } from "@/components/admin/PluginPackageManager";
 import InlineSvgIcon from "@/components/InlineSvgIcon";
 import UploadDialog from "@/components/UploadDialog";
 import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
@@ -74,6 +75,7 @@ export default function PluginsPage() {
   );
 
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [packageRevision, setPackageRevision] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [slideDirection, setSlideDirection] = useState(1);
@@ -105,6 +107,7 @@ export default function PluginsPage() {
   const loadList = useCallback(async (signal = AbortSignal.timeout(15_000)) => {
     try {
       setPlugins(await listAdminPlugins(signal));
+      setPackageRevision(value => value + 1);
     } catch (error) {
       if (signal.aborted) return;
       toast.error(error instanceof Error ? error.message : String(error));
@@ -134,8 +137,11 @@ export default function PluginsPage() {
     const task = createChunkUploadTask("/api/admin/upload");
     uploadTaskRef.current = task;
     try {
-      await task.upload("plugin", file, setUploadProgress);
-      toast.success(t("plugin.uploaded", "Plugin uploaded"));
+      const result = await task.upload<PluginInfo & { requires_approval: boolean }>("plugin", file, setUploadProgress);
+      const needsApproval = result?.requires_approval !== false;
+      if (result && needsApproval) setPendingApproval(result);
+      toast.success(t(needsApproval ? "plugin.package_review.staged" : "plugin.package_review.updated"));
+      refreshNavigation();
       setUploadDialogOpen(false);
       setUploadProgress(0);
       await loadList();
@@ -187,28 +193,6 @@ export default function PluginsPage() {
     }
   };
 
-  const approveAndEnable = async () => {
-    if (!pendingApproval) return;
-    const plugin = pendingApproval;
-    setPendingApproval(null);
-    setToggling(plugin.short);
-    try {
-      await setAdminPluginEnabled({
-        short: plugin.short,
-        enabled: true,
-        approved: true,
-        signal: AbortSignal.timeout(15_000),
-      });
-      refreshNavigation();
-      toast.success(t("plugin.enable_success", "Plugin enabled"));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setToggling(null);
-      await loadList();
-    }
-  };
-
   const openLogs = async (plugin: PluginInfo) => {
     setLogPlugin(plugin);
     setLogContent("");
@@ -241,41 +225,6 @@ export default function PluginsPage() {
     }
   };
 
-  // 需要批准的权限列表（按能力拆分；超时/大小限制等运行时设置不在此列）。
-  // server.registerRPC、server.getConfig、插件目录内文件读写默认授予，不弹确认。
-  const permissionLabels = (plugin: PluginInfo): string[] => {
-    const labels: string[] = [];
-    const p = plugin.permissions;
-    if (!p) return labels;
-    if (p.allowSystemRPC)
-      labels.push(t("plugin.permission.allowSystemRPC", "Call system RPC"));
-    if (p.allowRoutes)
-      labels.push(t("plugin.permission.allowRoutes", "Register HTTP routes"));
-    if (p.allowHooks)
-      labels.push(
-        t("plugin.permission.allowHooks", "Modify HTTP requests/responses"),
-      );
-    if (p.allowHTMLInject)
-      labels.push(
-        t(
-          "plugin.permission.allowHTMLInject",
-          "Embed CSS/JS into every HTML page",
-        ),
-      );
-    if (p.allowExec)
-      labels.push(t("plugin.permission.allowExec", "Execute child processes"));
-    if (p.allowListen)
-      labels.push(t("plugin.permission.allowListen", "Listen on local ports"));
-    if (p.allowAllFileAccess)
-      labels.push(
-        t(
-          "plugin.permission.allowAllFileAccess",
-          "Access files outside the plugin directory",
-        ),
-      );
-    return labels;
-  };
-
   if (loading) return <Loading />;
 
   return (
@@ -286,6 +235,7 @@ export default function PluginsPage() {
           <Heading size="4">{t("plugin.title", "Plugins")}</Heading>
         </Flex>
         <Flex gap="2">
+          <PluginPackageManager compact refreshKey={packageRevision} onChanged={async () => { refreshNavigation(); await loadList(); }} />
           <Button
             onClick={() => setUploadDialogOpen(true)}
             disabled={uploading}
@@ -299,7 +249,6 @@ export default function PluginsPage() {
           </Button>
         </Flex>
       </Flex>
-
       <TextField.Root value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("plugin.market_search", "Search plugins...")}>
         <TextField.Slot><Search size={14} /></TextField.Slot>
       </TextField.Root>
@@ -443,60 +392,7 @@ export default function PluginsPage() {
       )}
 
       {/* 权限确认弹窗 */}
-      <Dialog.Root
-        open={pendingApproval !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingApproval(null);
-        }}
-      >
-        <Dialog.Content>
-          <Dialog.Title>
-            {t("plugin.permission_title", "Permission required")}
-          </Dialog.Title>
-          <Text as="p" size="2" className="mb-2">
-            {t(
-              "plugin.permission_description",
-              "This plugin requests the following permissions:",
-            )}
-          </Text>
-          <Flex direction="column" gap="2" my="3">
-            {pendingApproval &&
-              permissionLabels(pendingApproval).length === 0 && (
-                <Text size="2" color="gray">
-                  {t(
-                    "plugin.permission_none",
-                    "This plugin requests no special permissions",
-                  )}
-                </Text>
-              )}
-            {pendingApproval &&
-              permissionLabels(pendingApproval).map((label) => (
-                <Badge
-                  key={label}
-                  color="orange"
-                  size="2"
-                  className="justify-start"
-                >
-                  {label}
-                </Badge>
-              ))}
-          </Flex>
-          <Text size="1" color="gray" className="mb-4">
-            {t(
-              "plugin.permission_default_note",
-              "Default granted: read plugin configuration, register plugin RPC, read/write files inside the plugin directory",
-            )}
-          </Text>
-          <Flex gap="2" justify="end">
-            <Button variant="soft" onClick={() => setPendingApproval(null)}>
-              {t("common.cancel", "Cancel")}
-            </Button>
-            <Button onClick={approveAndEnable}>
-              {t("plugin.permission_approve", "Approve & Enable")}
-            </Button>
-          </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
+      <PluginPackageApprovalDialog short={pendingApproval?.short ?? null} onClose={() => setPendingApproval(null)} onChanged={async () => { refreshNavigation(); await loadList(); }} />
 
       {/* 运行日志弹窗 */}
       <Dialog.Root
