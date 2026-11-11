@@ -1929,5 +1929,28 @@
     "events": "事件通知",
     "pluginFeatures": "外掛功能",
     "extensions": "外觀與外掛"
+  },
+  "storage_update": {
+    "title": "Telemetry storage upgrade",
+    "description": "The upgrade starts automatically. Charts, Agent reporting and other operations are temporarily unavailable until it completes.",
+    "preserved": "Original history tables are preserved. Restarting resumes from durable checkpoints; a failed migration can be retried. Do not run an older server against the upgraded database.",
+    "network": "Connection interrupted: {{error}}. Checking again automatically; the server migration continues.",
+    "phase": "Current stage",
+    "working": "Migration in progress",
+    "processed": "Confirmed records: {{count}}. Total work is not yet known.",
+    "elapsed": "Elapsed: {{seconds}} seconds",
+    "retry": "Retry migration",
+    "states": {
+      "pending": "Preparing",
+      "migrating": "Migrating",
+      "completed": "Completed; reconnecting to the panel",
+      "failed": "Migration stopped; original history preserved"
+    },
+    "phases": {
+      "preparing": "Preparing",
+      "traffic_ledger": "Settling traffic ledgers",
+      "telemetry_history": "Importing historical telemetry",
+      "completed": "Completed"
+    }
   }
 }

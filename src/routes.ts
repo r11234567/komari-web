@@ -13,6 +13,10 @@ const LoginPage = lazy(() => import("./pages/login"));
 
 export const routes: RouteObject[] = [
   {
+    path: "/admin/update/storage-v4",
+    element: React.createElement(lazy(() => import("./pages/storage_update"))),
+  },
+  {
     path: "/",
     element: React.createElement(lazy(() => import("./pages/_layout"))),
     children: [
