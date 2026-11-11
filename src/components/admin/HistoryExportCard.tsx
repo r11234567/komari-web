@@ -31,9 +31,21 @@ export function HistoryExportCard() {
 
   React.useEffect(() => { if (!uuid && nodeList?.length) setUUID(nodeList[0].uuid); }, [nodeList, uuid]);
   React.useEffect(() => {
-    let active = true; setRetention(null);
-    if (owner) void requestAdminData<Retention>("/api/admin/history/export/retention", t("history_export.capability_error")).then(info => { if (active) setRetention(info); }).catch(e => { if (active) setError(String(e)); });
-    return () => { active = false; };
+    let active = true; let failures = 0; let timer: ReturnType<typeof setTimeout>; setRetention(null);
+    const loadCapabilities = async () => {
+      try {
+        const info = await requestAdminData<Retention>("/api/admin/history/export/retention", t("history_export.capability_error"));
+        if (active) setRetention(info);
+      } catch (e) {
+        failures++;
+        if (active) {
+          setError(`${t("history_export.list_unavailable")}: ${e instanceof Error ? e.message : String(e)}`);
+          timer = setTimeout(() => void loadCapabilities(), exportPollDelay(document.visibilityState === "visible", failures));
+        }
+      }
+    };
+    if (owner) void loadCapabilities();
+    return () => { active = false; clearTimeout(timer); };
   }, [owner, revision, t]);
   React.useEffect(() => {
     let active = true; let timer: ReturnType<typeof setTimeout>; let failures = 0; let etag = "";
@@ -50,7 +62,7 @@ export function HistoryExportCard() {
           if (active) setJobs(body.data ?? []);
         }
         if (active) setError(""); failures = 0;
-      } catch (e) { failures++; if (active) setError(e instanceof Error ? e.message : String(e)); }
+      } catch (e) { failures++; if (active) setError(`${t("history_export.list_unavailable")}: ${e instanceof Error ? e.message : String(e)}`); }
       if (active) timer = setTimeout(() => void poll(), exportPollDelay(document.visibilityState === "visible", failures));
     };
     void poll(); return () => { active = false; clearTimeout(timer); };
