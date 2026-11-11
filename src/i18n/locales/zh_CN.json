@@ -2150,6 +2150,14 @@
     "page": "第 {{page}} 页 · 共 {{total}} 个 Token"
   },
   "history_export": {
+    "phase_started": "本阶段开始于 {{at}} · 累计处理 {{seconds}} 秒（不含暂停及恢复）",
+    "throughput": "最近 {{seconds}} 秒：{{rows}} 行/秒 · 输出 {{size}} KiB/秒",
+    "phase_eta": "仅本阶段预计剩余约 {{low}}–{{high}} 分钟；后续发布不包含在内",
+    "eta_unavailable": "剩余时间暂无法可靠估计；暂停或恢复后重新采样",
+    "current_input": "当前输入 {{index}} / {{total}} · {{kind}}",
+    "resource_usage": "全部导出共享：CPU {{cpu}}%（实例有效算力） · 内存及缓存 {{memory}} MiB · CPU 累计节流 {{throttled}} 秒 · I/O 预算累计等待 {{io}} 秒",
+    "io_budget_waiting": "正在等待 I/O 预算",
+    "waiting_since": "本次等待开始于 {{at}} · 已等待 {{seconds}} 秒",
     "list_forbidden": "当前账户无权读取这些导出任务",
     "list_unavailable": "任务列表暂时不可用，将自动重试",
     "capability_error": "读取导出能力失败",

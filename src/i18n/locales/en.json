@@ -2150,6 +2150,14 @@
     "page": "Page {{page}} · {{total}} tokens"
   },
   "history_export": {
+    "phase_started": "Phase started {{at}} · {{seconds}} processing seconds (excluding pauses and recovery)",
+    "throughput": "Last {{seconds}} seconds: {{rows}} rows/s · {{size}} KiB/s output",
+    "phase_eta": "This phase only: approximately {{low}}–{{high}} minutes remaining; later publication is excluded",
+    "eta_unavailable": "Remaining time cannot yet be estimated reliably; sampling restarts after pause or recovery",
+    "current_input": "Current input {{index}} / {{total}} · {{kind}}",
+    "resource_usage": "All exports combined: {{cpu}}% of effective instance CPU · {{memory}} MiB memory including cache · {{throttled}}s cumulative CPU throttling · {{io}}s cumulative I/O budget wait",
+    "io_budget_waiting": "Waiting for I/O budget",
+    "waiting_since": "Current wait started {{at}} · {{seconds}} seconds waiting",
     "list_forbidden": "This account cannot access these export jobs",
     "list_unavailable": "The task list is temporarily unavailable; retrying automatically",
     "capability_error": "Could not read export capabilities",

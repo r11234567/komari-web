@@ -1,7 +1,7 @@
 import { useAccount } from "@/contexts/AccountContext";
 import { useNodeList } from "@/contexts/NodeListContext";
 import { requestAdminData } from "@/lib/adminApi";
-import { exportActions, exportPollDelay, phaseProgress, type ExportJob, type ExportMode } from "@/utils/historyExport";
+import { exportActions, exportPollDelay, phaseProgress, phaseETAMinutes, type ExportJob, type ExportMode } from "@/utils/historyExport";
 import { Button, Flex, Progress, Select, Text, TextField } from "@radix-ui/themes";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -102,6 +102,7 @@ export function HistoryExportCard() {
       {error && <Text role="alert" color="red" size="2">{error}</Text>}
       <div aria-live="polite" data-testid="export-task-list">{jobs.filter(job => job.owner === owner).map(job => {
         const percent = phaseProgress(job);
+        const eta = phaseETAMinutes(job);
         return <Flex key={job.id} direction="column" gap="2" className="rounded-md border p-3 mb-3" data-testid={`export-job-${job.id}`}>
           <Text weight="bold">{job.node_name} · {t(`settings.lts_database.export_mode_${job.mode}`,modeNames[job.mode])} · {t(`history_export.status.${job.status}`,job.status)} / {t(`history_export.phase.${job.phase}`,job.phase)}</Text>
           <Text size="1" color="gray">{job.start} → {job.end} · {job.id} · v{job.format_version}</Text>
@@ -109,6 +110,13 @@ export function HistoryExportCard() {
           {percent === undefined && <Text size="2">{t("history_export.unknown")}</Text>}
           <Text size="2">{t("history_export.counters", {decoded:job.decoded_records.toLocaleString(),rows:job.written_rows.toLocaleString(),size:(job.output_bytes / 1048576).toFixed(2),checkpoint:job.confirmed_checkpoint})}</Text>
           <Text size="1" color="gray">{t("history_export.heartbeat", {heartbeat:displayTime(job.last_heartbeat_at,t("history_export.waiting_worker")),progress:displayTime(job.last_progress_at,t("history_export.not_started")),cores:job.cpu_core_limit})}</Text>
+          {job.phase_started_at && <Text size="1" color="gray">{t("history_export.phase_started", {at:displayTime(job.phase_started_at,""),seconds:Math.round(job.phase_active_seconds ?? 0)})}</Text>}
+          {job.throughput && job.throughput.window_seconds > 0 && ["running","publishing"].includes(job.status) && <Text size="2">{t("history_export.throughput", {seconds:Math.round(job.throughput.window_seconds),rows:job.throughput.rows_per_second.toFixed(1),size:(job.throughput.output_bytes_per_second/1024).toFixed(1)})}</Text>}
+          {eta && <Text size="2">{t("history_export.phase_eta", {low:eta[0],high:eta[1]})}</Text>}
+          {!eta && !["done","expired","cancelled","failed"].includes(job.status) && <Text size="1" color="gray">{t("history_export.eta_unavailable")}</Text>}
+          {job.current_input && <Text size="1" color="gray">{t("history_export.current_input", {index:job.current_input.index,total:job.current_input.total,kind:job.current_input.kind})}</Text>}
+          {job.resources?.scope === "worker_group" && <Text size="1" color="gray">{t("history_export.resource_usage", {cpu:job.resources.cpu_share === undefined ? "—" : (job.resources.cpu_share*100).toFixed(2),memory:(job.resources.memory_current_bytes/1048576).toFixed(1),throttled:job.resources.cpu_throttled_seconds.toFixed(1),io:job.resources.io_budget_wait_seconds.toFixed(1)})}{job.resources.io_budget_waiting ? ` · ${t("history_export.io_budget_waiting")}` : ""}</Text>}
+          {job.waiting_since && !job.waiting_since.startsWith("0001-") && <Text size="1" color="gray">{t("history_export.waiting_since", {at:displayTime(job.waiting_since,""),seconds:Math.round(job.current_wait_seconds ?? 0)})}</Text>}
           {job.wait_reason && <Text size="2" color="amber">{t("history_export.wait_reason", {reason:t(`history_export.wait.${job.wait_reason}`,job.wait_reason)})}</Text>}{job.error && <Text size="2" color="red">{job.error}</Text>}
           {job.status === "retry_wait" && job.retry_at && <Text size="2">{t("history_export.retry_at", {at:job.retry_at})}</Text>}
           <Flex gap="2" wrap="wrap">{exportActions(job).map(action => <Button key={action} size="1" variant="soft" disabled={busy} onClick={() => void control(job.id, action)}>{t(`history_export.${action}`)}</Button>)}{job.status === "done" && <Button asChild size="1"><a href={`/api/admin/history/export/${job.id}/download`}>{t("history_export.download", {mode:job.mode})}</a></Button>}</Flex>
