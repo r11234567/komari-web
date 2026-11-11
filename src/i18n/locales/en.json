@@ -187,6 +187,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "Source: {{seconds}}s",
+    "coverageGap": "Some retained data cannot answer this interval; shown as gaps",
     "addChart": "Add chart",
     "addMetric": "Add metric",
     "approximate": "approx.",

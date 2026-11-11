@@ -31,6 +31,7 @@ import {
   comparePingTaskOrder,
   formatRemainingTags,
   metricChartBoundaryTicks,
+  metricLineRows,
   metricSeriesColor,
   metricSeriesDataKey,
   metricSeriesKey,
@@ -352,7 +353,8 @@ const MiniPingChart = ({
                   dot={item.pointCount <= 30}
                   isAnimationActive={false}
                   strokeWidth={2}
-                  connectNulls
+                  data={metricLineRows(chartData, item.dataKey)}
+                  connectNulls={false}
                   type="linear"
                   hide={hiddenLines[item.dataKey] === true}
                 />

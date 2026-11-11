@@ -1,10 +1,10 @@
 import { metricSeriesToLiveRecords } from "../../utils/liveMetricRecords";
+import { mapMetricQuerySeries } from "../../utils/metricQueryResponse";
 import { timestampDate, timestampFromDate } from "@bufbuild/protobuf/wkt";
 import type { AgentReport } from "@komari/proto/komari/report/v1/report_pb";
 import { connectClients, connectUnary } from "./client";
 import type {
   MetricDefinition,
-  MetricSeries,
   PingMetricStat,
   PublicPingTask,
 } from "@/types/metrics";
@@ -37,25 +37,7 @@ export const queryPublicMetrics = async (input: {
       downsample: input.downsample,
     }, { signal, timeoutMs }),
   );
-  return response.series.map<MetricSeries>((series) => ({
-    metric_key: series.metric,
-    entity_id: series.agentId,
-    tags: series.labels,
-    type: series.type,
-    unit: series.unit,
-    retention_days: series.retentionDays,
-    downsampled: series.downsampled,
-    downsample_algorithm: series.aggregation,
-    interval_seconds: series.interval ? Number(series.interval.seconds) : undefined,
-    count: series.queryPoints.length,
-    points: series.queryPoints.map((point) => ({
-      time: point.observedAt ? timestampDate(point.observedAt).toISOString() : "",
-      value: point.value ?? null,
-      count: point.sampleCount,
-      tags: series.labels,
-      labels: point.labels,
-    })),
-  }));
+  return response.series.map(mapMetricQuerySeries);
 };
 
 export const listPublicMetricDefinitions = async (signal: AbortSignal) => {

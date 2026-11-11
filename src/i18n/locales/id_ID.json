@@ -165,6 +165,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "Resolusi sumber: {{seconds}} dtk",
+    "coverageGap": "Sebagian data tersimpan tidak mendukung interval ini dan ditampilkan sebagai celah",
     "addChart": "Tambah grafik",
     "addMetric": "Tambah metrik",
     "approximate": "perkiraan",

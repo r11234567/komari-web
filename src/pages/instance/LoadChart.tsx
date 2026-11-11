@@ -77,6 +77,7 @@ import {
   formatRemainingTags,
   isPingMetric,
   metricChartBoundaryTicks,
+  metricLineRows,
   trimMetricChartBoundaryRows,
   metricSeriesColor,
   metricSeriesDataKey,
@@ -166,6 +167,8 @@ type RenderSeries = {
   unit?: string;
   yAxisId?: "left" | "right";
   tags?: Record<string, string>;
+  coverage?: string;
+  sourceInterval?: number;
 };
 
 type BuiltChartData = {
@@ -626,6 +629,8 @@ const buildRowsFromMetricSeries = (
         ),
         unit: series.unit,
         tags,
+        coverage: series.coverage,
+        sourceInterval: Math.max(0, ...(series.sources ?? []).map(source => source.source_interval_seconds)),
       });
 
       for (const point of series.points ?? []) {
@@ -1653,6 +1658,16 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                             <span className={cn("truncate", hidden && "line-through")}>
                               {item.label}
                             </span>
+                            {item.sourceInterval !== undefined && item.sourceInterval > 0 && (
+                              <span className="text-muted-foreground" data-testid="chart-source-precision">
+                                {t("chart.sourcePrecision", { defaultValue: "Source: {{seconds}}s", seconds: item.sourceInterval })}
+                              </span>
+                            )}
+                            {item.coverage && item.coverage !== "complete" && (
+                              <span className="text-amber-600" data-testid="chart-coverage-gap">
+                                {t("chart.coverageGap", "Some retained data cannot answer this interval")}
+                              </span>
+                            )}
                           </button>
                           {stat && (
                             <Tips
@@ -1772,13 +1787,14 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                       <Line
                         key={item.dataKey}
                         dataKey={item.dataKey}
+                        data={metricLineRows(chartRows, item.dataKey)}
                         name={item.dataKey}
                         yAxisId={item.yAxisId}
                         stroke={item.color}
                         dot={item.pointCount !== undefined && item.pointCount <= 30}
                         isAnimationActive={false}
                         strokeWidth={2}
-                        connectNulls
+                        connectNulls={false}
                         type="linear"
                         hide={isSeriesHidden(chart.id, item)}
                       />

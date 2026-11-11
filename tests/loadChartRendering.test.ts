@@ -153,7 +153,7 @@ test("getMetricLabel localizes system metrics from settings.metrics.system", () 
   );
 });
 
-test("LoadChart and MiniPingChart enable connectNulls on Line component", () => {
+test("charts keep explicit unknown buckets while using each series own timestamps", () => {
   const loadChartSource = readFileSync(
     new URL("../src/pages/instance/LoadChart.tsx", import.meta.url),
     "utf8",
@@ -168,8 +168,8 @@ test("LoadChart and MiniPingChart enable connectNulls on Line component", () => 
     "LoadChart must specify connectNulls",
   );
   assert.ok(
-    !loadChartSource.includes("connectNulls={false}"),
-    "LoadChart must not disable connectNulls",
+    loadChartSource.includes("connectNulls={false}") && loadChartSource.includes("metricLineRows(chartRows, item.dataKey)"),
+    "LoadChart must break at explicit gaps without treating other series timestamps as gaps",
   );
 
   assert.ok(
@@ -177,13 +177,13 @@ test("LoadChart and MiniPingChart enable connectNulls on Line component", () => 
     "MiniPingChart must specify connectNulls",
   );
   assert.ok(
-    !miniPingSource.includes("connectNulls={false}"),
-    "MiniPingChart must not disable connectNulls",
+    miniPingSource.includes("connectNulls={false}") && miniPingSource.includes("metricLineRows(chartData, item.dataKey)"),
+    "MiniPingChart must preserve unavailable buckets",
   );
 });
 
-test("multi-target sparse ping data preserves continuity under connectNulls and EWMA", async () => {
-  const { applyMetricEwma, trimMetricChartBoundaryRows } = await import(
+test("sparse ping lines retain continuity and EWMA resets at explicit unknown buckets", async () => {
+  const { applyMetricEwma, trimMetricChartBoundaryRows, metricLineRows } = await import(
     "../src/utils/metricSeries.ts"
   );
 
@@ -223,6 +223,8 @@ test("multi-target sparse ping data preserves continuity under connectNulls and 
   assert.equal(smoothed[4].t1, undefined);
   assert.ok(typeof smoothed[6].t1 === "number");
 
-  // Under Recharts with connectNulls=true, a line connects valid indices (0 -> 3 -> 6)
-  // across the undefined gaps without breaking into disconnected zero-length segments.
+  assert.deepEqual(metricLineRows(smoothed, "t1").map(row=>row.t1), [150, smoothed[3].t1, smoothed[6].t1]);
+  const withGap = [{time:"a",t1:100},{time:"b",t2:42},{time:"c",t1:null},{time:"d",t1:200}];
+  const gapSmoothed=applyMetricEwma(withGap,series,true);
+  assert.deepEqual(metricLineRows(gapSmoothed,"t1").map(row=>row.t1),[100,null,200]);
 });

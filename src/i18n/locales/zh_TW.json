@@ -165,6 +165,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "來源粒度：{{seconds}} 秒",
+    "coverageGap": "部分保留資料無法回答此間隔，已顯示為缺口",
     "addChart": "新增圖表",
     "addMetric": "新增指標",
     "approximate": "近似",

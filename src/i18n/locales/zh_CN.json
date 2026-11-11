@@ -187,6 +187,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "来源粒度：{{seconds}} 秒",
+    "coverageGap": "部分留存数据无法回答此间隔，已显示为空缺",
     "addChart": "新增图表",
     "addMetric": "添加指标",
     "approximate": "近似",

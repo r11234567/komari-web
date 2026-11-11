@@ -165,6 +165,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "元データの間隔：{{seconds}} 秒",
+    "coverageGap": "この間隔で集計できない保存データは欠損として表示します",
     "addChart": "グラフを追加",
     "addMetric": "メトリックを追加",
     "approximate": "概算",
