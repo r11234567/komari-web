@@ -2150,6 +2150,8 @@
     "page": "第 {{page}} 页 · 共 {{total}} 个 Token"
   },
   "history_export": {
+    "validating_checkpoint": "正在校验已提交输出",
+    "checkpoint_verification": "已校验 {{done}} / {{total}} MiB 已提交输出；不会增加已导出行数",
     "phase_started": "本阶段开始于 {{at}} · 累计处理 {{seconds}} 秒（不含暂停及恢复）",
     "throughput": "最近 {{seconds}} 秒：{{rows}} 行/秒 · 输出 {{size}} KiB/秒",
     "phase_eta": "仅本阶段预计剩余约 {{low}}–{{high}} 分钟；后续发布不包含在内",

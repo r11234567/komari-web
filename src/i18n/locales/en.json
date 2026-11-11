@@ -2150,6 +2150,8 @@
     "page": "Page {{page}} · {{total}} tokens"
   },
   "history_export": {
+    "validating_checkpoint": "Validating committed output",
+    "checkpoint_verification": "Validated {{done}} / {{total}} MiB of committed output; this does not advance exported rows",
     "phase_started": "Phase started {{at}} · {{seconds}} processing seconds (excluding pauses and recovery)",
     "throughput": "Last {{seconds}} seconds: {{rows}} rows/s · {{size}} KiB/s output",
     "phase_eta": "This phase only: approximately {{low}}–{{high}} minutes remaining; later publication is excluded",

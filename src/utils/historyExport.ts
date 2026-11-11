@@ -16,6 +16,7 @@ export type ExportJob = {
   throughput?: { at: string; window_seconds: number; rows_per_second: number; output_bytes_per_second: number; decoded_records_per_second: number };
   phase_eta?: { state: string; scope: string; reason?: string; low_seconds?: number; high_seconds?: number };
   current_input?: { index: number; total: number; kind: string };
+  checkpoint_verification?: { started_at: string; last_progress_at: string; verified_bytes: number; total_bytes: number };
   resources?: { scope: string; at: string; sample_seconds: number; cpu_share?: number; effective_cpus: number; cpu_throttled_seconds: number; memory_current_bytes: number; io_budget_waiting: boolean; io_budget_wait_seconds: number };
 };
 export function phaseETAMinutes(job: ExportJob): [number, number] | undefined {
@@ -27,6 +28,7 @@ export function phaseETAMinutes(job: ExportJob): [number, number] | undefined {
 }
 export function phaseProgress(job: ExportJob): number | undefined {
   if (job.status === "done") return 100;
+  if (["recovering", "cancelled", "expired"].includes(job.status)) return undefined;
   if (!Number.isFinite(job.phase_total) || job.phase_total <= 0 ||
       !Number.isFinite(job.phase_completed) || job.progress_kind === "indeterminate") return undefined;
   return Math.min(100, Math.max(0, job.phase_completed / job.phase_total * 100));

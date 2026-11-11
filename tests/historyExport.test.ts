@@ -8,6 +8,7 @@ test("export percentages describe known input units only, never elapsed range", 
   assert.equal(phaseProgress({ ...job, phase: "publishing", phase_total: 0 }), undefined);
   assert.equal(phaseProgress({ ...job, phase_total: Number.NaN }), undefined);
   assert.equal(phaseProgress({ ...job, status: "done" }), 100);
+  for (const status of ["recovering", "cancelled", "expired"]) assert.equal(phaseProgress({ ...job, status }), undefined);
 });
 test("ETA is a bounded estimate for the current active phase only", () => {
   const measured = { ...job, phase_eta: {state:"stable",scope:"phase",low_seconds:120,high_seconds:240} };

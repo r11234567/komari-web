@@ -86,7 +86,7 @@ export function HistoryExportCard() {
   };
 
   return <SettingCard title={t("settings.lts_database.background_exports", "后台导出任务")} description={t("settings.lts_database.background_exports_description", "关闭页面不影响任务；完成后返回任务列表下载。所有任务共享 CPU 硬上限，最多占实例有效算力的 10%。")}>
-    <Flex direction="column" gap="3" data-testid="history-export-card">
+    <Flex direction="column" gap="3" className="w-full min-w-0 [overflow-wrap:anywhere]" data-testid="history-export-card">
       <Flex gap="3" wrap="wrap">
         <Select.Root value={uuid || undefined} onValueChange={setUUID}><Select.Trigger aria-label={t("history_export.node")} placeholder={t("history_export.select_node")} /><Select.Content>{nodeList?.map(n => <Select.Item key={n.uuid} value={n.uuid}>{n.name || n.uuid}</Select.Item>)}</Select.Content></Select.Root>
         <Select.Root value={category} onValueChange={setCategory}><Select.Trigger aria-label={t("history_export.category")} /><Select.Content>{["resource", "network", "latency", "all"].map(c => <Select.Item key={c} value={c}>{t(`settings.lts_database.export_${c}`, c)}</Select.Item>)}</Select.Content></Select.Root>
@@ -98,16 +98,17 @@ export function HistoryExportCard() {
       {mode === "summary" && <Flex gap="2" wrap="wrap"><Select.Root value={aggregation} onValueChange={setAggregation}><Select.Trigger aria-label={t("history_export.algorithm")} /><Select.Content>{["avg", "min", "max", "sum", "count", "p95", "stddev"].map(a => <Select.Item key={a} value={a}>{a}</Select.Item>)}</Select.Content></Select.Root><Text as="label" size="2">{t("history_export.interval")}<TextField.Root type="number" min={0} value={interval} onChange={e => setInterval(Number(e.target.value))} /></Text></Flex>}
       {retention && !retention.worker_available && <Text role="status" color="amber" size="2">{t("history_export.worker_unavailable", {reason: retention.worker_error})}</Text>}
       <Text size="2" color="gray">{t("history_export.snapshot_policy")}</Text>
-      <Flex gap="2"><Button onClick={() => void create()} disabled={busy || !uuid || !owner || !retention?.worker_available} data-testid="create-background-export">{t("history_export.create")}</Button><Button variant="soft" onClick={refresh}>{t("history_export.refresh")}</Button></Flex>
+      <Flex gap="2" wrap="wrap"><Button onClick={() => void create()} disabled={busy || !uuid || !owner || !retention?.worker_available} data-testid="create-background-export">{t("history_export.create")}</Button><Button variant="soft" onClick={refresh}>{t("history_export.refresh")}</Button></Flex>
       {error && <Text role="alert" color="red" size="2">{error}</Text>}
       <div aria-live="polite" data-testid="export-task-list">{jobs.filter(job => job.owner === owner).map(job => {
         const percent = phaseProgress(job);
         const eta = phaseETAMinutes(job);
         return <Flex key={job.id} direction="column" gap="2" className="rounded-md border p-3 mb-3" data-testid={`export-job-${job.id}`}>
-          <Text weight="bold">{job.node_name} · {t(`settings.lts_database.export_mode_${job.mode}`,modeNames[job.mode])} · {t(`history_export.status.${job.status}`,job.status)} / {t(`history_export.phase.${job.phase}`,job.phase)}</Text>
+          <Text weight="bold">{job.node_name} · {t(`settings.lts_database.export_mode_${job.mode}`,modeNames[job.mode])} · {t(`history_export.status.${job.status}`,job.status)} / {job.status === "recovering" ? t("history_export.validating_checkpoint") : t(`history_export.phase.${job.phase}`,job.phase)}</Text>
           <Text size="1" color="gray">{job.start} → {job.end} · {job.id} · v{job.format_version}</Text>
           {percent !== undefined && <><Progress value={percent} /><Text size="1">{job.status === "done" ? t("history_export.complete") : t("history_export.phase_progress", {done:job.phase_completed,total:job.phase_total,percent:percent.toFixed(1)})}</Text></>}
-          {percent === undefined && <Text size="2">{t("history_export.unknown")}</Text>}
+          {job.status === "recovering" && job.checkpoint_verification && <><Progress value={job.checkpoint_verification.total_bytes > 0 ? Math.min(100, job.checkpoint_verification.verified_bytes / job.checkpoint_verification.total_bytes * 100) : 0} /><Text size="2">{t("history_export.checkpoint_verification", {done:(job.checkpoint_verification.verified_bytes/1048576).toFixed(2),total:(job.checkpoint_verification.total_bytes/1048576).toFixed(2)})}</Text></>}
+          {percent === undefined && !(job.status === "recovering" && job.checkpoint_verification) && <Text size="2">{t("history_export.unknown")}</Text>}
           <Text size="2">{t("history_export.counters", {decoded:job.decoded_records.toLocaleString(),rows:job.written_rows.toLocaleString(),size:(job.output_bytes / 1048576).toFixed(2),checkpoint:job.confirmed_checkpoint})}</Text>
           <Text size="1" color="gray">{t("history_export.heartbeat", {heartbeat:displayTime(job.last_heartbeat_at,t("history_export.waiting_worker")),progress:displayTime(job.last_progress_at,t("history_export.not_started")),cores:job.cpu_core_limit})}</Text>
           {job.phase_started_at && <Text size="1" color="gray">{t("history_export.phase_started", {at:displayTime(job.phase_started_at,""),seconds:Math.round(job.phase_active_seconds ?? 0)})}</Text>}
