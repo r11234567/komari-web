@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  dashboardBillingPlotValue,
   dashboardLocalStorageTotal,
   dashboardOnlinePercent,
   dashboardRuntimeStorageTotal,
@@ -10,6 +11,14 @@ import {
   isAbortError,
   type DashboardData,
 } from "../src/utils/dashboard.ts";
+
+test("billing plot preserves real zero and leaves unavailable days as gaps", () => {
+  const day = { day: "2026-11-11", up: 1, down: 2, billable: 3 };
+  assert.equal(dashboardBillingPlotValue(day), 3);
+  assert.equal(dashboardBillingPlotValue({ ...day, billable: 0 }), 0);
+  assert.equal(dashboardBillingPlotValue({ ...day, available: false }), null);
+  assert.equal(dashboardBillingPlotValue({ ...day, available: true }), 3);
+});
 import {
   dashboardAlertCategoryPath,
   dashboardAlertDetailPath,

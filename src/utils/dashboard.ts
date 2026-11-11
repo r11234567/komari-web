@@ -10,6 +10,22 @@ export interface DashboardTrafficDay {
   up: number;
   down: number;
   billable: number;
+  available?: boolean;
+}
+
+export interface DashboardTrafficTrend {
+  buckets: DashboardTrafficBucket[];
+  coverage: string;
+  intervalSeconds: number;
+  requestedIntervalSeconds: number;
+  accountingThrough?: string;
+  dataEnd?: string;
+  catchingUp: boolean;
+  missingClients: number;
+}
+
+export function dashboardBillingPlotValue(day: DashboardTrafficDay): number | null {
+  return day.available === false ? null : day.billable;
 }
 
 export interface DashboardTrafficBucket {
@@ -204,6 +220,12 @@ export interface DashboardChartsData {
     ranking: DashboardTrafficRankItem[];
     history_ready: boolean;
     error?: string;
+    today_error?: string;
+    trend_error?: string;
+    ranking_error?: string;
+    accounting_through?: string;
+    catching_up?: boolean;
+    trend_coverage?: string;
   };
   latency: DashboardLatencySummary;
   packet_loss: {
