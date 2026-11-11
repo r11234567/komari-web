@@ -165,6 +165,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "Resolusi sumber: {{seconds}} dtk",
+    "coverageGap": "Sebagian data tersimpan tidak mendukung interval ini dan ditampilkan sebagai celah",
     "addChart": "Tambah grafik",
     "addMetric": "Tambah metrik",
     "approximate": "perkiraan",
@@ -230,7 +232,15 @@
     "udp_connections": "UDP",
     "usage": "Penggunaan",
     "valid": "Sampel valid",
-    "volatility": "Volatilitas"
+    "volatility": "Volatilitas",
+    "titles": {
+      "cpu": "CPU",
+      "disk": "Disk",
+      "gpu": "GPU",
+      "latency": "Latensi",
+      "memory": "Memori",
+      "network": "Jaringan"
+    }
   },
   "color": {
     "amber": "Kuning Muda",
@@ -445,6 +455,10 @@
     "title": "Pemberitahuan Hukum dan Panduan Kepatuhan"
   },
   "exec": {
+    "runAsRoot": "Jalankan sebagai root",
+    "defaultUser": "Secara bawaan dijalankan sebagai komari",
+    "executeAsRoot": "Jalankan sebagai root",
+    "rootNotAllowed": "Eksekusi root belum diizinkan atau tersedia pada semua node yang dipilih.",
     "allCompleted": "Semua tugas telah selesai dieksekusi",
     "command": "Perintah",
     "commandPlaceholder": "whoami (gunakan Shift+Enter untuk baris baru)",
@@ -1258,6 +1272,8 @@
       "private_site": "Situs Privat",
       "private_site_description": "Jadikan situs privat. Setelah diaktifkan, data hanya dapat diakses setelah login.",
       "script_domain": "Alamat koneksi Agen",
+      "ssrf_protection_enabled": "Aktifkan perlindungan SSRF",
+      "ssrf_protection_enabled_description": "Blokir alamat privat, lokal, dan nonpublik lainnya untuk unduhan pasar tema dan plugin, impor tema jarak jauh, serta pembaruan, termasuk tujuan pengalihan. Menonaktifkannya melewati pemeriksaan alamat.",
       "script_domain_description": "Tentukan alamat koneksi panel untuk skrip instalasi, memudahkan pengguna dengan beberapa domain, dan tidak akan mempengaruhi akses domain lain. Biarkan kosong untuk menggunakan domain saat ini.",
       "send_ip_addr_to_guest": "Tampilkan sebagian alamat IP kepada pengunjung",
       "send_ip_addr_to_guest_description": "Dalam keadaan tidak login, sebagian informasi alamat IP dapat dilihat melalui common:getNodes, berbentuk 9.*.*.* / fe80:*:*:*:*:*:*:*. Digunakan untuk menampilkan IP pada beberapa tema.",
@@ -1523,6 +1539,25 @@
   },
   "status_settings": "Pengaturan Status",
   "terminal": {
+    "lock_workspace": "Kunci ruang kerja mesin ini",
+    "workspace_unlock_title": "Buka terminal dan berkas",
+    "workspace_cancel_unlock": "Batalkan pembukaan kunci",
+    "workspace_unlock_description": "Akses berlaku hingga 30 menit dan terkunci setelah 3 menit tanpa aktivitas. Terminal dan berkas menggunakan izin akun sistem yang dipilih.",
+    "workspace_target": "Mesin tujuan",
+    "workspace_system_user": "Akun sistem pada mesin ini",
+    "workspace_user_placeholder": "Misalnya, alice",
+    "workspace_identity_hint": "Siapkan kredensial tepercaya di Akun terlebih dahulu. Root juga memerlukan izin eksplisit pada mesin. Pergantian identitas Windows belum didukung.",
+    "workspace_verify_unlock": "Verifikasi dan buka",
+    "workspace_change_user": "Ganti akun",
+    "workspace_locked": "Ruang kerja terkunci",
+    "workspace_unlock_machine": "Buka kunci mesin ini",
+    "startup_reconnecting": "Koneksi terputus; memulihkan terminal semula",
+    "startup_authorizing": "Menunggu pembukaan kunci mesin ini",
+    "startup_creating": "Meminta terminal",
+    "startup_waiting_agent": "Menunggu Agen membuka terminal",
+    "startup_waiting_output": "Terminal terbuka; menunggu keluaran pertama",
+    "startup_seconds": "{{count}} dtk",
+    "startup_slow_hint": "Masih menghubungkan. Batas otorisasi tetap berlaku; tutup tab ini untuk membatalkan.",
     "2fa_code_prompt": "Masukkan kode 2FA: ",
     "2fa_prompt": "Autentikasi dua faktor diperlukan.",
     "clients_load_failed": "Gagal memuat server",
@@ -1673,6 +1708,10 @@
     "chart_loading": "Memuat data grafik",
     "current_alerts": "Peringatan aktif",
     "data_unavailable": "Data tidak tersedia",
+    "traffic_coarse": "Riwayat ini memiliki presisi {{minutes}} menit. Interval yang diminta pulih saat riwayat menit terkumpul.",
+    "traffic_partial": "Menampilkan sebagian pemakaian yang telah dikonfirmasi. Beberapa node belum tercatat atau pencatatan sedang menyusul.",
+    "traffic_data_end": "Data hingga {{time}}",
+    "traffic_today_unavailable": "Pemakaian hari ini tidak tersedia. Hari yang telah diselesaikan tetap terlihat; hari ini tidak dihitung sebagai nol.",
     "latency_24h": "Latensi 24 jam",
     "no_recent_alert": "Tidak ada peringatan terbaru",
     "recovered_today": "Pulih hari ini",
@@ -1877,5 +1916,28 @@
     "events": "Notifikasi peristiwa",
     "pluginFeatures": "Fitur plugin",
     "extensions": "Tampilan & plugin"
+  },
+  "storage_update": {
+    "title": "Telemetry storage upgrade",
+    "description": "The upgrade starts automatically. Charts, Agent reporting and other operations are temporarily unavailable until it completes.",
+    "preserved": "Original history tables are preserved. Restarting resumes from durable checkpoints; a failed migration can be retried. Do not run an older server against the upgraded database.",
+    "network": "Connection interrupted: {{error}}. Checking again automatically; the server migration continues.",
+    "phase": "Current stage",
+    "working": "Migration in progress",
+    "processed": "Confirmed records: {{count}}. Total work is not yet known.",
+    "elapsed": "Elapsed: {{seconds}} seconds",
+    "retry": "Retry migration",
+    "states": {
+      "pending": "Preparing",
+      "migrating": "Migrating",
+      "completed": "Completed; reconnecting to the panel",
+      "failed": "Migration stopped; original history preserved"
+    },
+    "phases": {
+      "preparing": "Preparing",
+      "traffic_ledger": "Settling traffic ledgers",
+      "telemetry_history": "Importing historical telemetry",
+      "completed": "Completed"
+    }
   }
 }

@@ -41,10 +41,12 @@ import {
   dashboardLocalStorageTotal,
   dashboardRuntimeStorageTotal,
   dashboardTrafficAxisWidth,
+  dashboardBillingPlotValue,
   shortDashboardDay,
   type DashboardChartsData,
   type DashboardData,
   type DashboardTrafficBucket,
+  type DashboardTrafficTrend,
 } from "@/utils/dashboard";
 import {
   dashboardChartSections,
@@ -118,6 +120,7 @@ export default function AdminDashboard() {
   const [data, setData] = React.useState<DashboardData | null>(() => getDashboardSnapshot(summaryKey, accountKey));
   const [charts, setCharts] = React.useState<DashboardChartsData | null>(() => getDashboardChartsSnapshot(chartKey, accountKey));
   const [trafficTrend, setTrafficTrend] = React.useState<DashboardTrafficBucket[] | null>(null);
+  const [trafficTrendStatus, setTrafficTrendStatus] = React.useState<DashboardTrafficTrend | null>(null);
   const [billing, setBilling] = React.useState<BillingOverview | null>(() => getBillingSnapshot<BillingOverview>(billingURL));
   const [loading, setLoading] = React.useState(() => getDashboardSnapshot(summaryKey, accountKey) === null);
   const [error, setError] = React.useState<string | null>(null);
@@ -172,6 +175,7 @@ export default function AdminDashboard() {
   const loadTrafficTrend = React.useCallback(async () => {
     if (!chartSections.includes("traffic")) {
       setTrafficTrend(null);
+      setTrafficTrendStatus(null);
       setTrafficTrendError(null);
       return;
     }
@@ -181,7 +185,8 @@ export default function AdminDashboard() {
     try {
       const next = await requestTrafficTrend(controller.signal);
       if (controller.signal.aborted) return;
-      setTrafficTrend(next);
+      setTrafficTrend(next.buckets);
+      setTrafficTrendStatus(next);
       setTrafficTrendError(null);
     } catch (reason) {
       if (!controller.signal.aborted && !isAbortError(reason)) {
@@ -369,6 +374,7 @@ export default function AdminDashboard() {
   const dailyChartData = React.useMemo(
     () => (charts?.traffic.daily ?? []).map((item) => ({
       ...item,
+      billable: dashboardBillingPlotValue(item),
       label: shortDashboardDay(item.day, locale),
     })),
     [charts?.traffic.daily, locale],
@@ -409,9 +415,9 @@ export default function AdminDashboard() {
           <SummaryPanel
             icon={<WalletCards size={18} />}
             label={t("admin_dashboard.today_billable")}
-            value={charts && !charts.traffic.error ? formatBytes(charts.traffic.today_billable) : "-"}
+            value={charts && !charts.traffic.error && !charts.traffic.today_error ? formatBytes(charts.traffic.today_billable) : "-"}
           >
-            {charts && !charts.traffic.error ? (
+            {charts && !charts.traffic.error && !charts.traffic.today_error ? (
               <div className="grid grid-cols-2 gap-3">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <ArrowUpFromLine size={14} className="shrink-0 text-[var(--accent-11)]" />
@@ -504,7 +510,7 @@ export default function AdminDashboard() {
           />
         );
       case "traffic_trend":
-        return <TrafficTrendPanel trend={trafficTrend} error={trafficTrendError} axisWidth={trafficTrendAxisWidth} />;
+        return <TrafficTrendPanel trend={trafficTrend} status={trafficTrendStatus} error={trafficTrendError} axisWidth={trafficTrendAxisWidth} />;
       case "billing_trend":
         return (
           <BillingTrendPanel

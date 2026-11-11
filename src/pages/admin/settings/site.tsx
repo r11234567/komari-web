@@ -154,6 +154,15 @@ export default function SiteSettings() {
         }}
         className="km-setting-card"
       />
+      <SettingCardSwitch
+        title={t("settings.site.ssrf_protection_enabled")}
+        description={t("settings.site.ssrf_protection_enabled_description")}
+        defaultChecked={settings.ssrf_protection_enabled ?? true}
+        onChange={async (checked) => {
+          await updateSettingsWithToast({ ssrf_protection_enabled: checked }, t);
+        }}
+        className="km-setting-card"
+      />
       <SettingCardCollapse
         title={t("settings.site.temporary_share")}
         description={t("settings.site.temporary_share_description")}

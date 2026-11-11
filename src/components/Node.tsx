@@ -16,6 +16,7 @@ import Tips from "./ui/tips";
 import { formatBytes } from "@/utils/unitHelper";
 import { formatTrafficGB } from "@/utils/trafficDisplay";
 import TrafficUsageSummary from "./TrafficUsageSummary";
+import { trafficResetRemaining } from "@/utils/trafficDisplay";
 
 /** 格式化秒*/
 export function formatUptime(seconds: number, t: TFunction): string {
@@ -214,6 +215,11 @@ const Node = React.memo(
                     basic.traffic_limit_type.charAt(0).toUpperCase() +
                       basic.traffic_limit_type.slice(1)}
                   ({formatTrafficGB(basic.traffic_limit)})
+                  {basic.trafficAccounting?.nextReset && (
+                    <span className="ml-1 text-[var(--accent-11)] font-medium">
+                      · 还有 {trafficResetRemaining(basic.trafficAccounting.nextReset)}
+                    </span>
+                  )}
                 </Text>
               </Flex>
             </Flex>
@@ -253,7 +259,7 @@ const Node = React.memo(
           </Flex>
           {basic.traffic_limit > 0 && isMobile && (
             <UsageBar
-              label={`${basic.traffic_limit_type && basic.traffic_limit_type.charAt(0).toUpperCase() + basic.traffic_limit_type.slice(1)}(${formatTrafficGB(basic.traffic_limit)})`}
+              label={`${basic.traffic_limit_type && basic.traffic_limit_type.charAt(0).toUpperCase() + basic.traffic_limit_type.slice(1)}(${formatTrafficGB(basic.traffic_limit)})${basic.trafficAccounting?.nextReset ? ` · 还有 ${trafficResetRemaining(basic.trafficAccounting.nextReset)}` : ""}`}
               max={Infinity}
               value={getTrafficPercentage(
                 liveData.network.totalUp,

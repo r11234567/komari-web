@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acceptDelivery, configQueryCommand, installationView, runtimeDraft, unsupportedHostPlatform } from "../src/utils/deploymentObservation.ts";
 
+test("Windows basic GPU defaults on and preserves explicit off without widening other platforms", () => {
+  assert.equal(runtimeDraft(undefined, {}, true).enableGpu, true);
+  assert.equal(runtimeDraft({ enableGpu: false } as any, {}, true).enableGpu, false);
+  assert.equal(runtimeDraft({ enableGpu: true } as any, { enableGpu: false }, true).enableGpu, false);
+  assert.equal("enableGpu" in runtimeDraft({ enableGpu: true } as any, { enableGpu: true }), false);
+});
+
 test("missing observations never invent Linux defaults, accounts or enabled options", () => {
   const view = installationView();
   assert.ok(Object.values(view).every((value) => value === "未上报"));

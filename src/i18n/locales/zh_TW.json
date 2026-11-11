@@ -165,6 +165,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "來源粒度：{{seconds}} 秒",
+    "coverageGap": "部分保留資料無法回答此間隔，已顯示為缺口",
     "addChart": "新增圖表",
     "addMetric": "新增指標",
     "approximate": "近似",
@@ -230,7 +232,15 @@
     "udp_connections": "UDP",
     "usage": "使用率",
     "valid": "有效樣本",
-    "volatility": "波動"
+    "volatility": "波動",
+    "titles": {
+      "cpu": "CPU",
+      "disk": "磁碟",
+      "gpu": "GPU",
+      "latency": "延遲",
+      "memory": "記憶體",
+      "network": "網路"
+    }
   },
   "color": {
     "amber": "琥珀色",
@@ -445,6 +455,10 @@
     "title": "法律聲明與合規指引"
   },
   "exec": {
+    "runAsRoot": "以 root 身分執行",
+    "defaultUser": "預設以 komari 執行",
+    "executeAsRoot": "以 root 執行",
+    "rootNotAllowed": "所選節點中有節點尚未獲准或無法使用 root 執行。",
     "allCompleted": "所有任務執行完成",
     "command": "執行命令",
     "commandPlaceholder": "whoami（使用 Shift+Enter 換行）",
@@ -1258,6 +1272,8 @@
       "private_site": "私有站點",
       "private_site_description": "將站點設定為私有，開啟後資料都需要登陸後才能獲取。",
       "script_domain": "Agent 連線地址",
+      "ssrf_protection_enabled": "啟用 SSRF 防護",
+      "ssrf_protection_enabled_description": "開啟後，主題與外掛市集下載、主題遠端匯入及更新會封鎖內網、本機與其他非公網位址，包括重新導向目標。關閉後略過位址檢查。",
       "script_domain_description": "為安裝指令碼定義面板的連線地址，方便多個域名的使用者，並不會影響其他域名的訪問。留空使用當前域名。",
       "send_ip_addr_to_guest": "向訪客顯示部分IP地址",
       "send_ip_addr_to_guest_description": "未登入的情況下可以透過 common:getNodes 檢視部分IP地址資訊，形如 9.*.*.* / fe80:*:*:*:*:*:*:*。用於部分主題展示IP。",
@@ -1519,10 +1535,42 @@
     "secret_copy_prevented": "敏感資訊禁止複製",
     "dashboard": {
       "title": "儀表板設定"
+    },
+    "telemetry": {
+      "title": "遙測資料儲存",
+      "description": "近期明細保存在 SQL，已完成的明細段歸檔為壓縮檔案；歷史圖表讀取分級統計。",
+      "hot": "線上明細視窗",
+      "archive": "明細歸檔保留期",
+      "budget": "熱資料積壓預算",
+      "minutes": "分鐘",
+      "days": "天",
+      "mib": "MiB",
+      "invalid": "請輸入顯示範圍內的整數。",
+      "precision": "圖表精度：最近 2 小時為 10 秒，1 天內為 5 分鐘，7 天內為 15 分鐘，之後為 1 小時，最長不超過各指標的保留期。",
+      "retention_notice": "縮短歸檔保留期會永久刪除過期明細匯出資料。流量累計與校準獨立保留。歸檔失敗會保留已接收資料，並在達到預算時暫停接收。"
     }
   },
   "status_settings": "狀態顯示設定",
   "terminal": {
+    "lock_workspace": "鎖定此機器工作台",
+    "workspace_unlock_title": "解鎖終端與檔案工作台",
+    "workspace_cancel_unlock": "取消解鎖",
+    "workspace_unlock_description": "驗證後最多使用 30 分鐘，3 分鐘無操作自動鎖定。終端和檔案使用所選系統帳號的實際權限。",
+    "workspace_target": "目標機器",
+    "workspace_system_user": "目標機器的系統帳號",
+    "workspace_user_placeholder": "例如 alice",
+    "workspace_identity_hint": "請先在帳戶設定可信憑證；root 還需機器端明確允許。暫不支援 Windows 身分切換。",
+    "workspace_verify_unlock": "驗證並解鎖",
+    "workspace_change_user": "更換帳號",
+    "workspace_locked": "工作台已鎖定",
+    "workspace_unlock_machine": "解鎖此機器",
+    "startup_reconnecting": "連線中斷，正在恢復原終端",
+    "startup_authorizing": "等待解鎖此機器",
+    "startup_creating": "正在請求終端",
+    "startup_waiting_agent": "等待節點建立終端",
+    "startup_waiting_output": "節點終端已啟動，等待首次輸出",
+    "startup_seconds": "{{count}} 秒",
+    "startup_slow_hint": "連線尚未完成，授權時限仍然有效；可關閉此分頁取消。",
     "2fa_code_prompt": "請輸入 2FA 驗證碼: ",
     "2fa_prompt": "需要雙因素認證。",
     "clients_load_failed": "伺服器載入失敗",
@@ -1673,6 +1721,10 @@
     "chart_loading": "圖表資料載入中",
     "current_alerts": "目前告警",
     "data_unavailable": "資料暫不可用",
+    "traffic_coarse": "此段歷史僅保留 {{minutes}} 分鐘精度，分鐘資料累積後自動恢復",
+    "traffic_partial": "目前顯示已確認的部分流量，部分節點尚未記帳或後台正在追趕",
+    "traffic_data_end": "資料截至 {{time}}",
+    "traffic_today_unavailable": "今日流量暫不可用；已結算日期仍可查看，今日不計作零流量",
     "latency_24h": "24 小時延遲",
     "no_recent_alert": "暫無最近告警",
     "recovered_today": "今日恢復",
@@ -1877,5 +1929,28 @@
     "events": "事件通知",
     "pluginFeatures": "外掛功能",
     "extensions": "外觀與外掛"
+  },
+  "storage_update": {
+    "title": "Telemetry storage upgrade",
+    "description": "The upgrade starts automatically. Charts, Agent reporting and other operations are temporarily unavailable until it completes.",
+    "preserved": "Original history tables are preserved. Restarting resumes from durable checkpoints; a failed migration can be retried. Do not run an older server against the upgraded database.",
+    "network": "Connection interrupted: {{error}}. Checking again automatically; the server migration continues.",
+    "phase": "Current stage",
+    "working": "Migration in progress",
+    "processed": "Confirmed records: {{count}}. Total work is not yet known.",
+    "elapsed": "Elapsed: {{seconds}} seconds",
+    "retry": "Retry migration",
+    "states": {
+      "pending": "Preparing",
+      "migrating": "Migrating",
+      "completed": "Completed; reconnecting to the panel",
+      "failed": "Migration stopped; original history preserved"
+    },
+    "phases": {
+      "preparing": "Preparing",
+      "traffic_ledger": "Settling traffic ledgers",
+      "telemetry_history": "Importing historical telemetry",
+      "completed": "Completed"
+    }
   }
 }

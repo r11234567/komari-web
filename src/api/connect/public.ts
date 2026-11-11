@@ -1,10 +1,11 @@
 import { metricSeriesToLiveRecords } from "../../utils/liveMetricRecords";
+import { Code, ConnectError } from "@connectrpc/connect";
+import { mapMetricQuerySeries } from "../../utils/metricQueryResponse";
 import { timestampDate, timestampFromDate } from "@bufbuild/protobuf/wkt";
 import type { AgentReport } from "@komari/proto/komari/report/v1/report_pb";
 import { connectClients, connectUnary } from "./client";
 import type {
   MetricDefinition,
-  MetricSeries,
   PingMetricStat,
   PublicPingTask,
 } from "@/types/metrics";
@@ -37,25 +38,7 @@ export const queryPublicMetrics = async (input: {
       downsample: input.downsample,
     }, { signal, timeoutMs }),
   );
-  return response.series.map<MetricSeries>((series) => ({
-    metric_key: series.metric,
-    entity_id: series.agentId,
-    tags: series.labels,
-    type: series.type,
-    unit: series.unit,
-    retention_days: series.retentionDays,
-    downsampled: series.downsampled,
-    downsample_algorithm: series.aggregation,
-    interval_seconds: series.interval ? Number(series.interval.seconds) : undefined,
-    count: series.queryPoints.length,
-    points: series.queryPoints.map((point) => ({
-      time: point.observedAt ? timestampDate(point.observedAt).toISOString() : "",
-      value: point.value ?? null,
-      count: point.sampleCount,
-      tags: series.labels,
-      labels: point.labels,
-    })),
-  }));
+  return response.series.map(mapMetricQuerySeries);
 };
 
 export const listPublicMetricDefinitions = async (signal: AbortSignal) => {
@@ -193,14 +176,24 @@ export const queryRecentLiveRecords = async (input: {
   maxPoints?: number;
   signal: AbortSignal;
 }) => {
-  const series = await queryPublicMetrics({
+  const read = (hours: number) => queryPublicMetrics({
     agentIds: [input.agentId],
     metrics: [...RECENT_LIVE_METRICS],
-    hours: input.hours ?? 0.5,
-    maxPoints: input.maxPoints ?? 150,
-    aggregation: "avg",
+    hours,
+    maxPoints: input.maxPoints ?? 300,
+    downsample: false,
     fillEmpty: false,
     signal: input.signal,
   });
-  return metricSeriesToLiveRecords(series);
+  let series;
+  try {
+    // Keep a margin inside the default 15m raw read window. Realtime history
+    // contains actual observations; averaged rollups must not impersonate it.
+    series = await read(input.hours ?? 14.5 / 60);
+  } catch (error) {
+    if (!(error instanceof ConnectError) || error.code !== Code.FailedPrecondition) throw error;
+    // Deployments may configure a shorter hot window (minimum 1m).
+    series = await read(0.5 / 60);
+  }
+  return metricSeriesToLiveRecords(series).slice(-(input.maxPoints ?? 300));
 };

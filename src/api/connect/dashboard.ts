@@ -26,6 +26,7 @@ import type {
   DashboardLatencySummary,
   DashboardResourceRankItem,
   DashboardTrafficBucket,
+  DashboardTrafficTrend,
 } from "@/utils/dashboard";
 
 const byteCount = (value: bigint) => {
@@ -41,14 +42,14 @@ const trafficBucketLabel = (date: Date) => {
   return `${part(date.getMonth() + 1)}-${part(date.getDate())} ${part(date.getHours())}:${part(date.getMinutes())}`;
 };
 
-export async function requestTrafficTrend(signal: AbortSignal): Promise<DashboardTrafficBucket[]> {
+export async function requestTrafficTrend(signal: AbortSignal): Promise<DashboardTrafficTrend> {
   const response = await connectUnary({ signal }, (requestSignal, timeoutMs) =>
     connectClients.browser.getTrafficTrend(
       { window: trafficTrendWindow, interval: trafficTrendInterval },
       { signal: requestSignal, timeoutMs },
     ),
   );
-  return response.buckets.map((bucket) => {
+  const buckets: DashboardTrafficBucket[] = response.buckets.map((bucket) => {
     const startTime = bucket.startTime ? timestampDate(bucket.startTime) : null;
     return {
       hour: startTime ? trafficBucketLabel(startTime) : "-",
@@ -57,6 +58,16 @@ export async function requestTrafficTrend(signal: AbortSignal): Promise<Dashboar
       down: byteCount(bucket.downloadBytes),
     };
   });
+  return {
+    buckets,
+    coverage: response.coverage || "complete",
+    intervalSeconds: Number(response.interval?.seconds ?? 1200n),
+    requestedIntervalSeconds: Number(response.requestedInterval?.seconds ?? 1200n),
+    accountingThrough: response.accountingThrough ? timestampDate(response.accountingThrough).toISOString() : undefined,
+    dataEnd: response.dataEnd ? timestampDate(response.dataEnd).toISOString() : undefined,
+    catchingUp: response.catchingUp,
+    missingClients: response.missingClients,
+  };
 }
 
 const isoOrNull = (value?: Timestamp) => (value ? timestampDate(value).toISOString() : null);
@@ -276,6 +287,7 @@ const chartsData = (charts?: ProtoCharts): DashboardChartsData => ({
       up: byteCount(day.uploadBytes),
       down: byteCount(day.downloadBytes),
       billable: byteCount(day.billableBytes),
+      available: day.available,
     })),
     ranking: (charts?.traffic?.ranking ?? []).map((item) => ({
       uuid: item.uuid,
@@ -287,6 +299,12 @@ const chartsData = (charts?: ProtoCharts): DashboardChartsData => ({
     })),
     history_ready: charts?.traffic?.historyReady ?? false,
     error: textOrUndefined(charts?.traffic?.error ?? ""),
+    today_error: textOrUndefined(charts?.traffic?.todayError ?? ""),
+    trend_error: textOrUndefined(charts?.traffic?.trendError ?? ""),
+    ranking_error: textOrUndefined(charts?.traffic?.rankingError ?? ""),
+    accounting_through: isoOrUndefined(charts?.traffic?.accountingThrough),
+    catching_up: charts?.traffic?.catchingUp ?? false,
+    trend_coverage: textOrUndefined(charts?.traffic?.trendCoverage ?? ""),
   },
   latency: latencySummary(charts?.latency),
   packet_loss: {

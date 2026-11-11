@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
+import { usePageVisible } from "@/hooks/usePageVisible";
 import { useParams, useNavigate } from "react-router-dom";
 import { useLiveData } from "../../contexts/LiveDataContext";
 import { useTranslation } from "react-i18next";
@@ -16,13 +17,14 @@ import { queryRecentLiveRecords } from "@/api/connect/public";
 
 export default function InstancePage() {
   const { t } = useTranslation();
+  const pageVisible = usePageVisible();
   const navigate = useNavigate();
   const { onRefresh, live_data } = useLiveData();
   const { uuid } = useParams<{ uuid: string }>();
   const [recent, setRecent] = useState<Record[]>([]);
   const [chartRealtimeActive, setChartRealtimeActive] = useState(true);
   const { nodeList } = useNodeList();
-  const length = 30 * 5;
+  const length = 300;
   // #region 初始数据加载
   const node = nodeList?.find((n) => n.uuid === uuid);
   const { publicInfo } = usePublicInfo();
@@ -108,6 +110,7 @@ export default function InstancePage() {
     }
 
     const controller = new AbortController();
+    if (!pageVisible) return;
     setRecent([]);
 
     queryRecentLiveRecords({
@@ -127,7 +130,7 @@ export default function InstancePage() {
       });
 
     return () => controller.abort();
-  }, [uuid, length]);
+  }, [uuid, length, pageVisible]);
   // 动态追加数据
   useEffect(() => {
     const unsubscribe = onRefresh((resp) => {
