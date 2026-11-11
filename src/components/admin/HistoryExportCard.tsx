@@ -110,6 +110,7 @@ export function HistoryExportCard() {
           <Text size="2">{t("history_export.counters", {decoded:job.decoded_records.toLocaleString(),rows:job.written_rows.toLocaleString(),size:(job.output_bytes / 1048576).toFixed(2),checkpoint:job.confirmed_checkpoint})}</Text>
           <Text size="1" color="gray">{t("history_export.heartbeat", {heartbeat:displayTime(job.last_heartbeat_at,t("history_export.waiting_worker")),progress:displayTime(job.last_progress_at,t("history_export.not_started")),cores:job.cpu_core_limit})}</Text>
           {job.wait_reason && <Text size="2" color="amber">{t("history_export.wait_reason", {reason:t(`history_export.wait.${job.wait_reason}`,job.wait_reason)})}</Text>}{job.error && <Text size="2" color="red">{job.error}</Text>}
+          {job.status === "retry_wait" && job.retry_at && <Text size="2">{t("history_export.retry_at", {at:job.retry_at})}</Text>}
           <Flex gap="2" wrap="wrap">{exportActions(job).map(action => <Button key={action} size="1" variant="soft" disabled={busy} onClick={() => void control(job.id, action)}>{t(`history_export.${action}`)}</Button>)}{job.status === "done" && <Button asChild size="1"><a href={`/api/admin/history/export/${job.id}/download`}>{t("history_export.download", {mode:job.mode})}</a></Button>}</Flex>
           {job.status === "done" && <Text size="1" color="gray">{t("history_export.ready", {expires:job.expires_at,hash:job.sha256})}</Text>}
         </Flex>;

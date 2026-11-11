@@ -2183,8 +2183,11 @@
     "retry": "从检查点重试",
     "download": "下载已生成的 {{mode}} CSV",
     "ready": "到期 {{expires}} · SHA256 {{hash}} · 下载仅传输完成文件",
+    "retry_at": "下次自动重试：{{at}}",
     "status": {
       "queued": "排队中",
+      "recovering": "重启后验证检查点",
+      "retry_wait": "等待自动重试",
       "running": "运行中",
       "paused": "已暂停",
       "cancel_requested": "取消已接收，正在安全停止",
@@ -2208,6 +2211,8 @@
       "cancelled": "已取消"
     },
     "wait": {
+      "database_busy": "数据库暂时繁忙",
+      "checkpoint_validation": "正在验证持久化输出检查点",
       "pause": "用户暂停",
       "user_pause_requested": "等待安全暂停",
       "foreground_latency": "前台查询延迟升高",

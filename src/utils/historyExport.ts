@@ -8,6 +8,8 @@ export type ExportJob = {
   created_at: string; start: string; end: string; ready_at?: string;
   expires_at?: string; last_heartbeat_at: string; last_progress_at: string;
   wait_reason?: string; error?: string; filename?: string; sha256?: string;
+
+  retry_at?: string;
   cpu_core_limit: number; cpu_share_limit: number; snapshot_id?: string;
 };
 export function phaseProgress(job: ExportJob): number | undefined {
@@ -23,6 +25,6 @@ export function exportActions(job: ExportJob): string[] {
   if (job.status === "failed") return ["retry", "cancel"];
   if (job.status === "paused") return ["resume", "cancel"];
   if (job.phase === "publishing" || job.status === "publishing") return [];
-  if (job.status === "queued" || job.status === "running") return ["pause", "cancel"];
+  if (["queued", "running", "recovering", "retry_wait"].includes(job.status)) return ["pause", "cancel"];
   return [];
 }

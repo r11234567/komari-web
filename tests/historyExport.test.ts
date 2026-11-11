@@ -13,6 +13,8 @@ test("background polling backs off and controls respect publication", () => {
   assert.equal(exportPollDelay(true, 0), 5000); assert.equal(exportPollDelay(false, 0), 30000);
   assert.equal(exportPollDelay(true, 8), 40000); assert.equal(exportPollDelay(false, 8), 60000);
   assert.deepEqual(exportActions(job), ["pause", "cancel"]);
+  assert.deepEqual(exportActions({ ...job, status: "retry_wait" }), ["pause", "cancel"]);
+  assert.deepEqual(exportActions({ ...job, status: "recovering" }), ["pause", "cancel"]);
   assert.deepEqual(exportActions({ ...job, status: "paused" }), ["resume", "cancel"]);
   assert.deepEqual(exportActions({ ...job, phase: "publishing" }), []);
 });

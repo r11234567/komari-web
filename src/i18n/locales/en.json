@@ -2177,6 +2177,7 @@
     "waiting_worker": "Waiting for worker",
     "not_started": "Not started",
     "wait_reason": "Waiting: {{reason}}",
+    "retry_at": "Next automatic attempt: {{at}}",
     "pause": "Pause",
     "resume": "Resume",
     "cancel": "Cancel",
@@ -2185,6 +2186,8 @@
     "ready": "Expires {{expires}} · SHA256 {{hash}} · Download transfers the completed file",
     "status": {
       "queued": "Queued",
+      "recovering": "Validating checkpoint after restart",
+      "retry_wait": "Waiting to retry",
       "running": "Running",
       "paused": "Paused",
       "cancel_requested": "Cancellation requested; stopping safely",
@@ -2208,6 +2211,8 @@
       "cancelled": "Cancelled"
     },
     "wait": {
+      "database_busy": "Database temporarily busy",
+      "checkpoint_validation": "Validating the durable output checkpoint",
       "pause": "Paused by user",
       "user_pause_requested": "Waiting for a safe pause",
       "foreground_latency": "Foreground query latency is elevated",
