@@ -1,4 +1,5 @@
 import { metricSeriesToLiveRecords } from "../../utils/liveMetricRecords";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { mapMetricQuerySeries } from "../../utils/metricQueryResponse";
 import { timestampDate, timestampFromDate } from "@bufbuild/protobuf/wkt";
 import type { AgentReport } from "@komari/proto/komari/report/v1/report_pb";
@@ -175,14 +176,24 @@ export const queryRecentLiveRecords = async (input: {
   maxPoints?: number;
   signal: AbortSignal;
 }) => {
-  const series = await queryPublicMetrics({
+  const read = (hours: number) => queryPublicMetrics({
     agentIds: [input.agentId],
     metrics: [...RECENT_LIVE_METRICS],
-    hours: input.hours ?? 0.5,
-    maxPoints: input.maxPoints ?? 150,
-    aggregation: "avg",
+    hours,
+    maxPoints: input.maxPoints ?? 300,
+    downsample: false,
     fillEmpty: false,
     signal: input.signal,
   });
-  return metricSeriesToLiveRecords(series);
+  let series;
+  try {
+    // Keep a margin inside the default 15m raw read window. Realtime history
+    // contains actual observations; averaged rollups must not impersonate it.
+    series = await read(input.hours ?? 14.5 / 60);
+  } catch (error) {
+    if (!(error instanceof ConnectError) || error.code !== Code.FailedPrecondition) throw error;
+    // Deployments may configure a shorter hot window (minimum 1m).
+    series = await read(0.5 / 60);
+  }
+  return metricSeriesToLiveRecords(series).slice(-(input.maxPoints ?? 300));
 };

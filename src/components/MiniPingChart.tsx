@@ -97,7 +97,7 @@ const MiniPingChart = ({
         metrics: [PING_LATENCY_METRIC],
         agentIds: [uuid],
         hours,
-        maxPoints: 240,
+        maxPoints: 360,
         aggregation: "avg",
         fillEmpty: true,
         signal: controller.signal,
@@ -105,7 +105,7 @@ const MiniPingChart = ({
     const statsRequest = getPublicPingStats({
       agentIds: [uuid],
       hours,
-      maxPoints: 240,
+      maxPoints: 360,
       signal: controller.signal,
     }).catch(() => []);
 

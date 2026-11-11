@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
+import { chartTargetPoints, chartWindowHours } from "@/utils/chartWindows";
 import {
   ChartContainer,
   ChartTooltip,
@@ -201,8 +202,7 @@ type MetricRangeParams =
   | { hours: number }
   | { start: string; end: string };
 
-const MAX_REALTIME_POINTS = 30 * 5;
-const HISTORY_MAX_POINTS = 700;
+const MAX_REALTIME_POINTS = 300;
 const DASHBOARD_TEMPLATE_KEY = "chartDashboardTemplate";
 const CUSTOM_RANGE_DEFAULT_DAYS = 24;
 
@@ -558,28 +558,14 @@ const buildTimeViews = (
 ): TimeView[] => {
   const views: TimeView[] = [
     { key: "real-time", label: t("common.real_time") },
-    { key: "10m", label: t("chart.minutes", { count: 10 }), hours: 10 / 60 },
-    { key: "1h", label: t("chart.hours", { count: 1 }), hours: 1 },
   ];
-  const validRetentionDays =
-    Number.isFinite(maxMetricRetentionDays) && maxMetricRetentionDays > 0
-      ? maxMetricRetentionDays
-      : 0;
-
-  if (validRetentionDays >= 1) {
-    views.push({ key: "1d", label: t("chart.days", { count: 1 }), hours: 24 });
-  }
-  if (validRetentionDays >= 7) {
-    views.push({ key: "7d", label: t("chart.days", { count: 7 }), hours: 7 * 24 });
-  }
-  if (validRetentionDays > 0 && validRetentionDays !== 1 && validRetentionDays !== 7) {
-    const retentionHours = validRetentionDays * 24;
+  for (const hours of chartWindowHours(maxMetricRetentionDays)) {
     views.push({
-      key: `retention-${retentionHours}`,
-      label: Number.isInteger(validRetentionDays)
-        ? t("chart.days", { count: validRetentionDays })
-        : t("chart.hours", { count: retentionHours }),
-      hours: retentionHours,
+      key: hours < 24 ? `${hours}h` : `${hours / 24}d`,
+      label: hours >= 24 && Number.isInteger(hours / 24)
+        ? t("chart.days", { count: hours / 24 })
+        : t("chart.hours", { count: hours }),
+      hours,
     });
   }
 
@@ -1167,7 +1153,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         ...("start" in metricRangeParams
           ? { start: new Date(metricRangeParams.start), end: new Date(metricRangeParams.end) }
           : { hours: metricRangeParams.hours }),
-        maxPoints: HISTORY_MAX_POINTS,
+        maxPoints: chartTargetPoints(displayRangeHours ?? 1),
         aggregation,
         fillEmpty: true,
         signal: controller.signal,
@@ -1192,6 +1178,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     definitionsLoaded,
     metricKeys,
     metricRangeParams,
+    displayRangeHours,
     pageVisible,
     uuid,
   ]);
@@ -1210,7 +1197,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
       ...("start" in metricRangeParams
         ? { start: new Date(metricRangeParams.start), end: new Date(metricRangeParams.end) }
         : { hours: metricRangeParams.hours }),
-      maxPoints: HISTORY_MAX_POINTS,
+      maxPoints: chartTargetPoints(displayRangeHours ?? 1),
       signal: controller.signal,
     })
       .then((result) => {
@@ -1229,6 +1216,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     definitionsLoaded,
     metricKeys,
     metricRangeParams,
+    displayRangeHours,
     pageVisible,
     uuid,
   ]);

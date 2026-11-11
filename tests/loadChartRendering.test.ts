@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { chartTargetPoints, chartWindowHours } from "../src/utils/chartWindows.ts";
+
+test("history windows retain all standard views and continue beyond 30 days", () => {
+  assert.deepEqual(chartWindowHours(90),[1,6,12,24,168,360,720,1080,1440,1800,2160]);
+  assert.deepEqual(chartWindowHours(2/24),[1,2]);
+  assert.deepEqual(chartWindowHours(46),[1,6,12,24,168,360,720,1080,1104]);
+  assert.deepEqual(chartWindowHours(0),[]);
+  assert.ok(chartWindowHours(120).includes(105*24));
+  assert.equal(chartTargetPoints(75*24),300);
+  assert.equal(chartTargetPoints(90*24),309);
+  for (const hours of [1,6,12,24,168,360,720,1080,1440]) assert.equal(chartTargetPoints(hours),360);
+});
 
 import {
   formatChartTitle,
