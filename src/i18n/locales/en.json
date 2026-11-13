@@ -1684,13 +1684,14 @@
       "title": "Telemetry storage",
       "description": "Recent samples stay in SQL. Completed raw segments move to compressed archives; charts use retained statistical summaries.",
       "hot": "Online raw window",
+      "hot_retention": "Hot SQL safety retention",
       "archive": "Raw archive retention",
       "budget": "Hot backlog budget",
       "minutes": "minutes",
       "days": "days",
       "mib": "MiB",
       "invalid": "Enter whole numbers within the displayed limits.",
-      "precision": "Chart precision: 10 seconds for 2 hours, 5 minutes for 1 day, 15 minutes for 7 days, then 1 hour up to each metric’s retention limit.",
+      "precision": "Retained precision: 10s/1h, 1m/1d, 5m/2d, 30m/7d, 1h/15d, 2h/60d, 6h/180d, 12h/365d, then daily. Each metric’s retention limit still applies. Charts merge complete source buckets; finer historical detail requires a background raw export.",
       "retention_notice": "Shortening archive retention permanently removes expired raw exports. Traffic totals and calibration remain independent. Archive failures preserve accepted data and apply backpressure at the budget."
     }
   },

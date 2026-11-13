@@ -1368,7 +1368,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   const customInputMax = toDateTimeLocalValue(new Date());
 
   return (
-    <Flex direction="column" align="center" gap="4" className="km-load-chart w-full max-w-screen">
+    <Flex direction="column" align="center" gap="4" className="km-load-chart w-full max-w-screen" data-chart-loading={loading ? "true" : "false"} data-chart-hours={displayRangeHours ?? 1}>
       <div className="w-full overflow-x-auto px-2">
         <div className="w-max mx-auto">
           <SegmentedControl.Root value={selectedView.key} onValueChange={setViewKey}>

@@ -32,7 +32,7 @@ export const queryPublicMetrics = async (input: {
       metrics: input.metrics,
       startTime: timestampFromDate(start),
       endTime: timestampFromDate(end),
-      maxPoints: input.maxPoints ?? 500,
+      maxPoints: input.maxPoints ?? 600,
       aggregation: input.aggregation ?? "avg",
       fillEmpty: input.fillEmpty ?? false,
       downsample: input.downsample,
@@ -84,7 +84,7 @@ export const getPublicPingStats = async (input: {
       agentIds: input.agentIds,
       startTime: timestampFromDate(start),
       endTime: timestampFromDate(end),
-      maxPoints: input.maxPoints ?? 500,
+      maxPoints: input.maxPoints ?? 600,
     }, { signal, timeoutMs }),
   );
   return response.stats.map<PingMetricStat>((stat) => ({
