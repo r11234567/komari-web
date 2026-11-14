@@ -1682,8 +1682,8 @@
     "secret_copy_prevented": "敏感信息禁止复制",
     "telemetry": {
       "title": "遥测数据存储",
-      "description": "近期明细保存在 SQL，已完成的明细段归档为压缩文件；历史图表读取分级统计。",
-      "hot": "在线明细窗口",
+      "description": "SQL 保留图表统计和有容量上限的交接队列；原始明细写入 .jsonl.zst 归档后即从 SQL 删除。",
+      "hot": "原始明细交接窗口",
       "hot_retention": "热明细安全保留期",
       "archive": "明细归档保留期",
       "budget": "热数据积压预算",

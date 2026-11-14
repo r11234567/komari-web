@@ -8,9 +8,8 @@ import { SettingCard } from "./SettingCard";
 
 const fields = [
   { key: "metric_hot_window_minutes", label: "hot", fallback: 15, min: 1, max: 120, unit: "minutes" },
-  { key: "metric_hot_retention_minutes", label: "hot_retention", fallback: 1440, min: 1, max: 10080, unit: "minutes" },
   { key: "metric_archive_retention_days", label: "archive", fallback: 30, min: 1, max: 3650, unit: "days" },
-  { key: "metric_hot_budget_mib", label: "budget", fallback: 1024, min: 64, max: 65536, unit: "mib" },
+  { key: "metric_hot_budget_mib", label: "budget", fallback: 16, min: 4, max: 65536, unit: "mib" },
 ] as const;
 
 export function DownsamplingCard() {
@@ -18,7 +17,11 @@ export function DownsamplingCard() {
   const { settings, loading, error, updateMultipleSettings } = useSettings();
   const [draft, setDraft] = React.useState<Record<string, number>>({});
   const [saving, setSaving] = React.useState(false);
-  const value = (field: typeof fields[number]) => draft[field.key] ?? Number(settings[field.key] ?? field.fallback);
+  const value = (field: typeof fields[number]) => {
+    if (draft[field.key] !== undefined) return draft[field.key];
+    const saved = Number(settings[field.key] ?? field.fallback);
+    return field.key === "metric_hot_budget_mib" && (saved === 0 || saved === 1024) ? field.fallback : saved;
+  };
   const save = async () => {
     const changes: Record<string, number> = {};
     for (const field of fields) {
@@ -27,9 +30,6 @@ export function DownsamplingCard() {
         toast.error(t("settings.telemetry.invalid")); return;
       }
       changes[field.key] = next;
-    }
-    if (changes.metric_hot_retention_minutes < changes.metric_hot_window_minutes) {
-      toast.error(t("settings.telemetry.invalid")); return;
     }
     setSaving(true);
     try {

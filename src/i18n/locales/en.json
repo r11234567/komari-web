@@ -1682,8 +1682,8 @@
     "secret_copy_prevented": "Sensitive secret cannot be copied",
     "telemetry": {
       "title": "Telemetry storage",
-      "description": "Recent samples stay in SQL. Completed raw segments move to compressed archives; charts use retained statistical summaries.",
-      "hot": "Online raw window",
+      "description": "SQL keeps chart summaries and a bounded handoff queue. Raw samples are removed from SQL after archival to .jsonl.zst files.",
+      "hot": "Raw handoff window",
       "hot_retention": "Hot SQL safety retention",
       "archive": "Raw archive retention",
       "budget": "Hot backlog budget",
