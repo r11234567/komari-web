@@ -107,12 +107,7 @@ type Aggregation =
   | "avg"
   | "min"
   | "max"
-  | "first"
-  | "last"
-  | "stddev"
-  | "p70"
-  | "p95"
-  | "p99";
+  | "last";
 type MetricKind =
   | "percent"
   | "bytes"
@@ -210,11 +205,7 @@ const AGGREGATIONS: Array<{ value: Aggregation; labelKey: string }> = [
   { value: "avg", labelKey: "chart.avg" },
   { value: "min", labelKey: "chart.sampling.min" },
   { value: "max", labelKey: "chart.sampling.max" },
-  { value: "first", labelKey: "chart.sampling.first" },
   { value: "last", labelKey: "chart.sampling.last" },
-  { value: "stddev", labelKey: "chart.sampling.stddev" },
-  { value: "p95", labelKey: "chart.sampling.p95" },
-  { value: "p99", labelKey: "chart.sampling.p99" },
 ];
 
 const DEFAULT_DASHBOARD: DashboardChart[] = [
@@ -448,6 +439,10 @@ const fallbackCatalog: MetricCatalogItem[] = [
 ];
 
 const fallbackCatalogMap = new Map(fallbackCatalog.map((item) => [item.key, item]));
+const rawOnlyMetrics = new Set([
+  "net.total.up", "net.total.down", "traffic.up", "traffic.down",
+  "process.count", "connections.tcp", "connections.udp",
+]);
 
 const formatTags = (
   metricKey: string,
@@ -982,10 +977,13 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   );
   const [customQueryRevision, setCustomQueryRevision] = useState(0);
   const [customRangeError, setCustomRangeError] = useState<string | null>(null);
-  const [aggregation, setAggregation] = useLocalStorage<Aggregation>(
+  const [storedAggregation, setAggregation] = useLocalStorage<Aggregation>(
     "komari-instance-metric-aggregation",
     "avg",
   );
+  const aggregation: Aggregation = AGGREGATIONS.some((item) => item.value === storedAggregation)
+    ? storedAggregation
+    : "avg";
   const [ewmaEnabled, setEwmaEnabled] = useLocalStorage(
     "komari-instance-metric-ewma",
     false,
@@ -1000,6 +998,12 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     parseDashboardTemplate(globalDashboardTemplate),
   );
   const charts = useMemo(() => normalizeDashboard(dashboard), [dashboard]);
+  const visibleCharts = useMemo(
+    () => isRealtime ? charts : charts
+      .map((chart) => ({ ...chart, metrics: chart.metrics.filter((key) => !rawOnlyMetrics.has(key)) }))
+      .filter((chart) => chart.metrics.length > 0),
+    [charts, isRealtime],
+  );
   const [savingGlobalTemplate, setSavingGlobalTemplate] = useState(false);
   const [pingTasks, setPingTasks] = useState<PublicPingTask[]>([]);
   const [pingStats, setPingStats] = useState<PingMetricStat[]>([]);
@@ -1089,12 +1093,13 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
       }
     }
     return Array.from(merged.values())
+      .filter((item) => isRealtime || !rawOnlyMetrics.has(item.key))
       .map((item) => ({
         ...item,
         label: resolveMetricLabel(item.key, definitionMap, t),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [definitionMap, definitions, t]);
+  }, [definitionMap, definitions, isRealtime, t]);
 
   const customQuery = useMemo(
     () => toQueryRange(customQueryRange),
@@ -1120,7 +1125,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     [queryEnd, queryHours, queryRangeSignature, queryStart],
   );
   const metricKeySignature = useMemo(() => {
-    const keys = charts.flatMap((chart) =>
+    const keys = visibleCharts.flatMap((chart) =>
       chart.metrics.filter((metricKey) => {
         if (definitionsLoaded && !definitionMap.has(metricKey)) return false;
         if (!isRealtime) return true;
@@ -1129,7 +1134,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
       }),
     );
     return JSON.stringify(Array.from(new Set(keys)).sort());
-  }, [charts, definitionMap, definitionsLoaded, isRealtime]);
+  }, [visibleCharts, definitionMap, definitionsLoaded, isRealtime]);
   const metricKeys = useMemo<string[]>(() => JSON.parse(metricKeySignature), [metricKeySignature]);
 
   useEffect(() => {
@@ -1536,11 +1541,11 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         onDragEnd={handleChartDragEnd}
       >
         <SortableContext
-          items={charts.map((chart) => chart.id)}
+          items={visibleCharts.map((chart) => chart.id)}
           strategy={rectSortingStrategy}
         >
           <div className="km-load-chart-canvas grid w-full max-w-[1100px] grid-cols-1 gap-3 lg:grid-cols-3">
-            {charts.map((chart) => {
+            {visibleCharts.map((chart) => {
           const chartPingStatsMap = pingStatsMap;
           const metricBuilt = buildRowsFromMetricSeries(
             metricSeries,
