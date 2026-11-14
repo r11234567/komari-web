@@ -11,4 +11,4 @@ export const chartWindowHours = (retentionDays: number): number[] => {
 
 // The server aims at 360 using the retained nested grid. Some windows need
 // up to 600 actual cells (45d uses 540 two-hour cells) to avoid losing detail.
-export const chartTargetPoints = (_hours: number): number => 600;
+export const CHART_TARGET_POINTS = 600;

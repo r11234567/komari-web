@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import { chartTargetPoints, chartWindowHours } from "@/utils/chartWindows";
+import { CHART_TARGET_POINTS, chartWindowHours } from "@/utils/chartWindows";
 import {
   ChartContainer,
   ChartTooltip,
@@ -1158,7 +1158,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         ...("start" in metricRangeParams
           ? { start: new Date(metricRangeParams.start), end: new Date(metricRangeParams.end) }
           : { hours: metricRangeParams.hours }),
-        maxPoints: chartTargetPoints(displayRangeHours ?? 1),
+        maxPoints: CHART_TARGET_POINTS,
         aggregation,
         fillEmpty: true,
         signal: controller.signal,
@@ -1202,7 +1202,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
       ...("start" in metricRangeParams
         ? { start: new Date(metricRangeParams.start), end: new Date(metricRangeParams.end) }
         : { hours: metricRangeParams.hours }),
-      maxPoints: chartTargetPoints(displayRangeHours ?? 1),
+      maxPoints: CHART_TARGET_POINTS,
       signal: controller.signal,
     })
       .then((result) => {
