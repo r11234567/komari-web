@@ -165,6 +165,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "元データの間隔：{{seconds}} 秒",
+    "coverageGap": "この間隔で集計できない保存データは欠損として表示します",
     "addChart": "グラフを追加",
     "addMetric": "メトリックを追加",
     "approximate": "概算",
@@ -1706,6 +1708,10 @@
     "chart_loading": "グラフデータを読み込み中",
     "current_alerts": "現在のアラート",
     "data_unavailable": "データを取得できません",
+    "traffic_coarse": "この履歴の精度は {{minutes}} 分です。分単位の履歴が蓄積されると元の間隔に戻ります。",
+    "traffic_partial": "確定済みの一部の通信量を表示しています。一部のノードが未集計、またはバックグラウンドで集計中です。",
+    "traffic_data_end": "データの終端 {{time}}",
+    "traffic_today_unavailable": "本日の通信量は取得できません。確定済みの日は表示され、本日はゼロとして扱いません。",
     "latency_24h": "24時間の遅延",
     "no_recent_alert": "最近のアラートはありません",
     "recovered_today": "本日の復旧",
@@ -1910,5 +1916,28 @@
     "events": "イベント通知",
     "pluginFeatures": "プラグイン機能",
     "extensions": "外観とプラグイン"
+  },
+  "storage_update": {
+    "title": "Telemetry storage upgrade",
+    "description": "The upgrade starts automatically. Charts, Agent reporting and other operations are temporarily unavailable until it completes.",
+    "preserved": "Original history tables are preserved. Restarting resumes from durable checkpoints; a failed migration can be retried. Do not run an older server against the upgraded database.",
+    "network": "Connection interrupted: {{error}}. Checking again automatically; the server migration continues.",
+    "phase": "Current stage",
+    "working": "Migration in progress",
+    "processed": "Confirmed records: {{count}}. Total work is not yet known.",
+    "elapsed": "Elapsed: {{seconds}} seconds",
+    "retry": "Retry migration",
+    "states": {
+      "pending": "Preparing",
+      "migrating": "Migrating",
+      "completed": "Completed; reconnecting to the panel",
+      "failed": "Migration stopped; original history preserved"
+    },
+    "phases": {
+      "preparing": "Preparing",
+      "traffic_ledger": "Settling traffic ledgers",
+      "telemetry_history": "Importing historical telemetry",
+      "completed": "Completed"
+    }
   }
 }

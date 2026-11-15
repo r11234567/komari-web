@@ -155,6 +155,11 @@ export const pingMetricStatKey = (entityId: string, taskId: string) =>
 
 export type MetricChartRow = Record<string, string | number | null>;
 
+// Other series' timestamps are absent, whereas an explicit null is an actual
+// unknown bucket. Each Line keeps only its own samples and explicit gaps.
+export const metricLineRows = (rows: MetricChartRow[], dataKey: string) =>
+  rows.filter(row => row[dataKey] !== undefined);
+
 export const trimMetricChartBoundaryRows = (
   rows: MetricChartRow[],
   dataKeys: readonly string[],
@@ -196,6 +201,7 @@ export const applyMetricEwma = <TSeries extends { dataKey: string }>(
     let previous: number | null = null;
     for (const row of smoothed) {
       const value = row[item.dataKey];
+      if (value === null) { previous = null; continue; }
       if (typeof value !== "number" || !Number.isFinite(value)) continue;
       previous = previous === null ? value : alpha * value + (1 - alpha) * previous;
       row[item.dataKey] = previous;

@@ -24,7 +24,7 @@ export default function InstancePage() {
   const [recent, setRecent] = useState<Record[]>([]);
   const [chartRealtimeActive, setChartRealtimeActive] = useState(true);
   const { nodeList } = useNodeList();
-  const length = 30 * 5;
+  const length = 300;
   // #region 初始数据加载
   const node = nodeList?.find((n) => n.uuid === uuid);
   const { publicInfo } = usePublicInfo();

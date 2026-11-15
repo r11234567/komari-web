@@ -31,6 +31,7 @@ import {
   comparePingTaskOrder,
   formatRemainingTags,
   metricChartBoundaryTicks,
+  metricLineRows,
   metricSeriesColor,
   metricSeriesDataKey,
   metricSeriesKey,
@@ -96,7 +97,7 @@ const MiniPingChart = ({
         metrics: [PING_LATENCY_METRIC],
         agentIds: [uuid],
         hours,
-        maxPoints: 240,
+        maxPoints: 360,
         aggregation: "avg",
         fillEmpty: true,
         signal: controller.signal,
@@ -104,7 +105,7 @@ const MiniPingChart = ({
     const statsRequest = getPublicPingStats({
       agentIds: [uuid],
       hours,
-      maxPoints: 240,
+      maxPoints: 360,
       signal: controller.signal,
     }).catch(() => []);
 
@@ -352,7 +353,8 @@ const MiniPingChart = ({
                   dot={item.pointCount <= 30}
                   isAnimationActive={false}
                   strokeWidth={2}
-                  connectNulls
+                  data={metricLineRows(chartData, item.dataKey)}
+                  connectNulls={false}
                   type="linear"
                   hide={hiddenLines[item.dataKey] === true}
                 />

@@ -165,6 +165,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "來源粒度：{{seconds}} 秒",
+    "coverageGap": "部分保留資料無法回答此間隔，已顯示為缺口",
     "addChart": "新增圖表",
     "addMetric": "新增指標",
     "approximate": "近似",
@@ -1533,6 +1535,20 @@
     "secret_copy_prevented": "敏感資訊禁止複製",
     "dashboard": {
       "title": "儀表板設定"
+    },
+    "telemetry": {
+      "title": "遙測資料儲存",
+      "description": "近期明細保存在 SQL，已完成的明細段歸檔為壓縮檔案；歷史圖表讀取分級統計。",
+      "hot": "線上明細視窗",
+      "hot_retention": "熱明細安全保留期",
+      "archive": "明細歸檔保留期",
+      "budget": "熱資料積壓預算",
+      "minutes": "分鐘",
+      "days": "天",
+      "mib": "MiB",
+      "invalid": "請輸入顯示範圍內的整數。",
+      "precision": "保留精度：10 秒/1 小時、1 分鐘/1 天、5 分鐘/2 天、30 分鐘/7 天、1 小時/15 天、2 小時/60 天、6 小時/180 天、12 小時/365 天，之後按天；同時受指標保留期限制。圖表合併完整來源桶，歷史明細透過背景原始匯出讀取。",
+      "retention_notice": "縮短歸檔保留期會永久刪除過期明細匯出資料。流量累計與校準獨立保留。歸檔失敗會保留已接收資料，並在達到預算時暫停接收。"
     }
   },
   "status_settings": "狀態顯示設定",
@@ -1706,6 +1722,10 @@
     "chart_loading": "圖表資料載入中",
     "current_alerts": "目前告警",
     "data_unavailable": "資料暫不可用",
+    "traffic_coarse": "此段歷史僅保留 {{minutes}} 分鐘精度，分鐘資料累積後自動恢復",
+    "traffic_partial": "目前顯示已確認的部分流量，部分節點尚未記帳或後台正在追趕",
+    "traffic_data_end": "資料截至 {{time}}",
+    "traffic_today_unavailable": "今日流量暫不可用；已結算日期仍可查看，今日不計作零流量",
     "latency_24h": "24 小時延遲",
     "no_recent_alert": "暫無最近告警",
     "recovered_today": "今日恢復",
@@ -1910,5 +1930,28 @@
     "events": "事件通知",
     "pluginFeatures": "外掛功能",
     "extensions": "外觀與外掛"
+  },
+  "storage_update": {
+    "title": "Telemetry storage upgrade",
+    "description": "The upgrade starts automatically. Charts, Agent reporting and other operations are temporarily unavailable until it completes.",
+    "preserved": "Original history tables are preserved. Restarting resumes from durable checkpoints; a failed migration can be retried. Do not run an older server against the upgraded database.",
+    "network": "Connection interrupted: {{error}}. Checking again automatically; the server migration continues.",
+    "phase": "Current stage",
+    "working": "Migration in progress",
+    "processed": "Confirmed records: {{count}}. Total work is not yet known.",
+    "elapsed": "Elapsed: {{seconds}} seconds",
+    "retry": "Retry migration",
+    "states": {
+      "pending": "Preparing",
+      "migrating": "Migrating",
+      "completed": "Completed; reconnecting to the panel",
+      "failed": "Migration stopped; original history preserved"
+    },
+    "phases": {
+      "preparing": "Preparing",
+      "traffic_ledger": "Settling traffic ledgers",
+      "telemetry_history": "Importing historical telemetry",
+      "completed": "Completed"
+    }
   }
 }

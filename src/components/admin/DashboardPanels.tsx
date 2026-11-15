@@ -858,10 +858,12 @@ export function ResourceRankingPanel({ data, limit }: { data: DashboardData; lim
 
 export function TrafficTrendPanel({
   trend,
+  status,
   error,
   axisWidth,
 }: {
   trend: DashboardTrafficBucket[] | null;
+  status?: import("@/utils/dashboard").DashboardTrafficTrend | null;
   error: string | null;
   axisWidth: number;
 }) {
@@ -896,7 +898,13 @@ export function TrafficTrendPanel({
           </div>
         )}
       />
-      {error ? (
+      {status && status.coverage !== "complete" && status.coverage !== "unavailable" ? (
+        <p role="status" data-testid="traffic-coverage" className="mb-2 text-xs text-muted-foreground">
+          {status.intervalSeconds !== status.requestedIntervalSeconds ? t("admin_dashboard.traffic_coarse", { minutes: status.intervalSeconds / 60 }) : t("admin_dashboard.traffic_partial")}
+          {status.dataEnd ? ` · ${t("admin_dashboard.traffic_data_end", { time: new Date(status.dataEnd).toLocaleString() })}` : ""}
+        </p>
+      ) : null}
+      {error || status?.coverage === "unavailable" ? (
         <div className="flex min-h-[220px] flex-1 items-center justify-center text-sm text-[var(--red-11)]">
           {t("admin_dashboard.data_unavailable")}
         </div>
@@ -946,7 +954,7 @@ export function BillingTrendPanel({
 }: {
   charts: DashboardChartsData | null;
   error: string | null;
-  data: Array<DashboardChartsData["traffic"]["daily"][number] & { label: string }>;
+  data: Array<Omit<DashboardChartsData["traffic"]["daily"][number], "billable"> & { label: string; billable: number | null }>;
   axisWidth: number;
 }) {
   const { t } = useTranslation();
@@ -961,6 +969,7 @@ export function BillingTrendPanel({
       {charts && !charts.traffic.error && !charts.traffic.history_ready ? (
         <p className="mb-2 text-xs text-muted-foreground">{t("admin_dashboard.history_preparing")}</p>
       ) : null}
+      {charts?.traffic.today_error && !charts.traffic.error ? <p role="status" className="mb-2 text-xs text-[var(--orange-11)]">{t("admin_dashboard.traffic_today_unavailable")}</p> : null}
       {error || charts?.traffic.error ? (
         <div className="flex min-h-[220px] flex-1 items-center justify-center text-sm text-[var(--red-11)]">
           {t("admin_dashboard.data_unavailable")}
@@ -1011,7 +1020,7 @@ export function DailyTrafficRankingPanel({
           </span>
         )}
       />
-      {error || charts?.traffic.error ? (
+      {error || charts?.traffic.error || charts?.traffic.ranking_error ? (
         <div className="flex min-h-44 items-center justify-center text-sm text-[var(--red-11)]">
           {t("admin_dashboard.data_unavailable")}
         </div>

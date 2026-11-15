@@ -31,6 +31,7 @@ const App = () => {
   const isRestrictedGuideRoute = [
     "/admin/database-migration",
     "/admin/update/1.2.7",
+    "/admin/update/storage-v4",
     "/install",
     "/database-recovery",
   ].includes(restrictedPath);
