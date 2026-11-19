@@ -15,8 +15,10 @@ import { Github, Globe, User } from "lucide-react";
 import AccountTwoFactorGate from "@/components/admin/AccountTwoFactorGate";
 import Loading from "@/components/loading";
 import TrustedCredentialVerification from "@/components/TrustedCredentialVerification";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential_pb";
 import { credentialHeader } from "@/api/connect/trustedCredential";
+import { restCredentialResource } from "@/utils/credentialAction";
 import NativeCredentialContacts from "@/components/admin/NativeCredentialContacts";
 
 const Account = () => {
@@ -33,6 +35,7 @@ const InnerLayout = () => {
   const [usernameSaving, setUsernameSaving] = React.useState(false);
   const [passwordSaving, setPasswordSaving] = React.useState(false);
   const [passwordDraft, setPasswordDraft] = React.useState<{ password: string } | null>(null);
+  const [sensitiveAction, setSensitiveAction] = React.useState<SensitiveAction | null>(null);
   const [twoFaVerified, setTwoFaVerified] = React.useState(false);
   if (loading) {
     return <Loading />;
@@ -52,32 +55,40 @@ const InnerLayout = () => {
 
   function handleSubmitUsernameChange(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setUsernameSaving(true);
-    fetch("/api/admin/update/user", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        uuid: account?.uuid,
-        username: (event.currentTarget as HTMLFormElement).username.value,
-      }),
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to update username");
+    const nextUsername = ((event.currentTarget as HTMLFormElement).username.value as string).trim();
+    if (!account?.uuid || !nextUsername) return;
+    setSensitiveAction({
+      action: "account:update_username",
+      targets: [account.uuid],
+      resource: restCredentialResource("POST", "/api/admin/update/user"),
+      title: t("account.change_username_title"),
+      execute: async (token, signal) => {
+        setUsernameSaving(true);
+        try {
+          const response = await fetch("/api/admin/update/user", {
+            method: "POST",
+            credentials: "same-origin",
+            signal,
+            headers: {
+              "Content-Type": "application/json",
+              [credentialHeader]: token,
+            },
+            body: JSON.stringify({
+              uuid: account.uuid,
+              username: nextUsername,
+            }),
+          });
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || "Failed to update username");
+          }
+          toast.success(t("common.updated_successfully"));
+          refresh();
+        } finally {
+          setUsernameSaving(false);
         }
-        return response.json();
-      })
-      .then(() => {
-        toast.success(t("common.updated_successfully"));
-      })
-      .catch((error) => {
-        toast.error(error.message);
-      })
-      .finally(() => {
-        setUsernameSaving(false);
-      });
+      },
+    });
   }
   function changePassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -160,32 +171,57 @@ const InnerLayout = () => {
     }
   }
   
-  const handleSSOAuth = async () => {
-    try {
-      const ssoInfo = getSSOInfo();
-      if (ssoInfo?.isBound) {
-        // 解绑SSO
-        const response = await fetch("/api/admin/oauth2/unbind", {
-          method: "POST",
-        });
-
-        if (response.ok) {
+  const handleSSOAuth = () => {
+    const ssoInfo = getSSOInfo();
+    if (ssoInfo?.isBound) {
+      setSensitiveAction({
+        action: "account:unbind_sso",
+        targets: [account?.uuid ?? ""],
+        resource: restCredentialResource("POST", "/api/admin/oauth2/unbind"),
+        title: t("account_settings.confirm_unbind"),
+        execute: async (token, signal) => {
+          const response = await fetch("/api/admin/oauth2/unbind", {
+            method: "POST",
+            credentials: "same-origin",
+            signal,
+            headers: { [credentialHeader]: token },
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(
+              t("account_settings.unbind_sso_failed", {
+                provider: getSSODisplayName(ssoInfo.platform),
+                error: error.message || t("common.unknownError"),
+              }),
+            );
+          }
           toast.success(t("account_settings.unbind_sso_success", { provider: getSSODisplayName(ssoInfo.platform) }));
-          refresh(); // 刷新用户信息
-        } else {
-          const error = await response.json();
-          toast.error(t("account_settings.unbind_sso_failed", { 
-            provider: getSSODisplayName(ssoInfo.platform),
-            error: error.message || t("common.unknownError")
-          }));
-        }
-      } else {
-        window.location.href = "/api/admin/oauth2/bind";
-      }
-    } catch (error) {
-      console.error("处理SSO认证失败:", error);
-      toast.error(t("account_settings.sso_auth_failed"));
+          refresh();
+        },
+      });
+      return;
     }
+    setSensitiveAction({
+      action: "account:bind_sso",
+      targets: [account?.uuid ?? ""],
+      resource: restCredentialResource("POST", "/api/admin/oauth2/bind"),
+      title: t("account_settings.bind_sso"),
+      execute: async (token, signal) => {
+        const response = await fetch("/api/admin/oauth2/bind", {
+          method: "POST",
+          credentials: "same-origin",
+          signal,
+          headers: { [credentialHeader]: token },
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.message || t("account_settings.sso_auth_failed"));
+        }
+        const payload = await response.json().catch(() => ({}));
+        const redirectUrl = typeof payload?.data?.redirect_url === "string" ? payload.data.redirect_url : "/api/oauth";
+        window.location.assign(redirectUrl);
+      },
+    });
   };
   return (
     <Flex gap="4" direction="column" align="start">
@@ -338,6 +374,7 @@ const InnerLayout = () => {
           </Flex>
         </Flex>
       </Flex>
+      <SensitiveActionDialog request={sensitiveAction} onClose={() => setSensitiveAction(null)} />
     </Flex>
   );
 };
@@ -353,7 +390,10 @@ const TwoFactorDisabled = ({ onEnabled }: { onEnabled?: () => void }) => {
   React.useEffect(() => {
     if (isOpen) {
       setIsLoading(true);
-      fetch("/api/admin/2fa/generate")
+      fetch("/api/admin/2fa/generate", {
+        method: "POST",
+        credentials: "same-origin",
+      })
         .then((response) => {
           if (!response.ok) {
             throw new Error(t("account.qr_fetch_error"));

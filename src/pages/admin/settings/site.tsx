@@ -15,6 +15,9 @@ import Loading from "@/components/loading";
 import { DownloadIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import UploadDialog from "@/components/UploadDialog";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
+import { credentialHeader } from "@/api/connect/trustedCredential";
+import { restCredentialResource } from "@/utils/credentialAction";
 import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 
 export default function SiteSettings() {
@@ -26,20 +29,64 @@ export default function SiteSettings() {
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreProgress, setRestoreProgress] = useState(0);
+  const [sensitiveAction, setSensitiveAction] = useState<SensitiveAction | null>(null);
   const restoreTaskRef = useRef<ChunkUploadTask | null>(null);
   useEffect(() => () => restoreTaskRef.current?.cancel(), []);
-  const uploadBackup = async (file: File) => {
+  const startBackupDownload = () => {
+    setSensitiveAction({
+      action: "backup:download",
+      targets: [],
+      resource: restCredentialResource("GET", "/api/admin/download/backup"),
+      title: t("settings.site.backup_download"),
+      execute: async (token, signal) => {
+        const response = await fetch("/api/admin/download/backup", {
+          method: "GET",
+          credentials: "same-origin",
+          signal,
+          headers: { [credentialHeader]: token },
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.message || `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") || "";
+        const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition);
+        const filename = match ? decodeURIComponent(match[1].replace(/"$/g, "")) : "komari-backup.zip";
+        const url = URL.createObjectURL(blob);
+        try {
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      },
+    });
+  };
+  const uploadBackup = (file: File) => {
     if (restoring) return;
     if (!file.name.toLowerCase().endsWith(".zip")) { toast.error(t("theme.invalid_file_type")); return; }
-    const task = createChunkUploadTask("/api/admin/upload");
-    restoreTaskRef.current = task;
-    setRestoring(true); setRestoreProgress(0);
-    try {
-      await task.upload("backup", file, setRestoreProgress);
-      toast.success(t("account_settings.upload_success")); setRestoreOpen(false);
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) toast.error(String(error));
-    } finally { setRestoring(false); setRestoreProgress(0); restoreTaskRef.current = null; }
+    setSensitiveAction({
+      action: "backup:restore",
+      targets: [],
+      resource: restCredentialResource("POST", "/api/admin/upload/init"),
+      title: t("settings.site.backup_restore"),
+      execute: async (token) => {
+        const task = createChunkUploadTask("/api/admin/upload");
+        restoreTaskRef.current = task;
+        setRestoring(true); setRestoreProgress(0);
+        try {
+          await task.upload("backup", file, setRestoreProgress, { [credentialHeader]: token });
+          toast.success(t("account_settings.upload_success")); setRestoreOpen(false);
+        } catch (error) {
+          if (!(error instanceof DOMException && error.name === "AbortError")) toast.error(String(error));
+        } finally { setRestoring(false); setRestoreProgress(0); restoreTaskRef.current = null; }
+      },
+    });
   };
   const cancelRestore = () => restoreTaskRef.current?.cancel();
 
@@ -392,9 +439,7 @@ export default function SiteSettings() {
       <SettingCardIconButton
         title={t("settings.site.backup_download")}
         description={t("settings.site.backup_download_description")}
-        onClick={() => {
-          window.open("/api/admin/download/backup", "_blank");
-        }}
+        onClick={startBackupDownload}
         className="km-setting-card"
       >
         <DownloadIcon size={16} />
@@ -431,6 +476,7 @@ export default function SiteSettings() {
         onFileSelected={(file) => uploadBackup(file)}
         closeLabel={t("common.cancel")}
       />
+      <SensitiveActionDialog request={sensitiveAction} onClose={() => setSensitiveAction(null)} />
     </>
   );
 }

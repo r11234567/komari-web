@@ -340,9 +340,10 @@ const ConfigFormTabs = ({
       return (
         <Box
           key={`textbox-${index}`}
-          className="km-config-textbox"
-          dangerouslySetInnerHTML={{ __html: title || "" }}
-        />
+          className="km-config-textbox whitespace-pre-wrap"
+        >
+          {title || ""}
+        </Box>
       );
     }
 

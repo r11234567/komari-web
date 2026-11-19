@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { Dialog, Flex, Button } from "@radix-ui/themes";
 import { UserAgentHelper } from "@/utils/UserAgentHelper";
 import Loading from "@/components/loading";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import {
   deleteAdminSession,
   deleteAllAdminSessions,
@@ -22,6 +23,7 @@ type Resp = AdminSessionList;
 export default function Sessions() {
   const [t] = useTranslation();
   const [sessions, setSessions] = React.useState<Resp | null>(null);
+  const [sensitiveAction, setSensitiveAction] = React.useState<SensitiveAction | null>(null);
   React.useEffect(() => {
     listAdminSessions()
       .then((data) => {
@@ -53,13 +55,15 @@ export default function Sessions() {
       });
   }
   function deleteAllSessions() {
-    deleteAllAdminSessions()
-      .then(() => {
-        window.location.href = "/"; // 登出
-      })
-      .catch((error) => {
-        toast.error(error.message);
-      });
+    setSensitiveAction({
+      action: "maintenance:delete_all_sessions",
+      targets: [],
+      title: t("sessions.delete_all"),
+      execute: async (token, signal) => {
+        await deleteAllAdminSessions(signal, token);
+        window.location.href = "/";
+      },
+    });
   }
 
   if (!sessions) {
@@ -233,6 +237,7 @@ export default function Sessions() {
           </TableBody>
         </Table>
       </div>
+      <SensitiveActionDialog request={sensitiveAction} onClose={() => setSensitiveAction(null)} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { connectClients, connectUnary } from "@/api/connect/client";
+import { credentialHeader } from "@/api/connect/trustedCredential";
 
 const isoString = (value?: Timestamp) => (value ? timestampDate(value).toISOString() : "");
 
@@ -53,11 +54,15 @@ export const deleteAdminSession = (session: string, signal?: AbortSignal) => con
   ),
 );
 
-export const deleteAllAdminSessions = (signal?: AbortSignal) => connectUnary(
+export const deleteAllAdminSessions = (signal?: AbortSignal, authorizationToken?: string) => connectUnary(
   { signal: anySignal(signal) },
   (requestSignal, timeoutMs) => connectClients.maintenance.deleteAllSessions(
     {},
-    { signal: requestSignal, timeoutMs },
+    {
+      signal: requestSignal,
+      timeoutMs,
+      headers: authorizationToken ? { [credentialHeader]: authorizationToken } : undefined,
+    },
   ),
 );
 
@@ -275,12 +280,16 @@ const maintenanceOutcome = (result?: {
   size_error: result?.sizeError || undefined,
 });
 
-export async function vacuumDatabase(signal?: AbortSignal): Promise<DatabaseMaintenanceReport> {
+export async function vacuumDatabase(signal?: AbortSignal, authorizationToken?: string): Promise<DatabaseMaintenanceReport> {
   const response = await connectUnary(
     { signal: anySignal(signal), timeoutMs: 30 * 60_000 },
     (requestSignal, timeoutMs) => connectClients.maintenance.vacuumDatabase(
       {},
-      { signal: requestSignal, timeoutMs },
+      {
+        signal: requestSignal,
+        timeoutMs,
+        headers: authorizationToken ? { [credentialHeader]: authorizationToken } : undefined,
+      },
     ),
   );
   const result = response.result;

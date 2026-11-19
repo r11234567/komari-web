@@ -2,13 +2,21 @@ import { useEffect, useState, type CSSProperties } from "react";
 
 const MAX_INLINE_SVG_BYTES = 64 * 1024;
 const BLOCKED_ELEMENTS = new Set([
+  "animate",
+  "animatecolor",
+  "animatemotion",
+  "animatetransform",
   "canvas",
+  "discard",
   "embed",
   "foreignobject",
   "iframe",
   "link",
+  "mpath",
   "object",
   "script",
+  "set",
+  "style",
   "video",
 ]);
 

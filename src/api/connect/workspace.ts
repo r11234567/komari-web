@@ -2,7 +2,7 @@ import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { WorkspaceService, type WorkspaceAuthorization } from "@komari/proto/komari/workspace/v1/workspace_pb";
-import { WorkspacePeers } from "../../utils/workspacePeers";
+import { WorkspacePeers, type WorkspaceSyncResult } from "../../utils/workspacePeers";
 import { WorkspaceState, type WorkspaceGrant } from "../../utils/workspaceState";
 
 export const workspaceState = new WorkspaceState();
@@ -22,10 +22,8 @@ function fromAuthorization(value: WorkspaceAuthorization, previous?: WorkspaceGr
     expiresAt: timestampDate(value.expiresAt).getTime(), idleExpiresAt: timestampDate(value.idleExpiresAt).getTime(),
     controller: previous?.controller ?? new AbortController() };
 }
-export const ensureWorkspace = (agentId: string, signal?: AbortSignal) => {
-  peers?.request(agentId);
-  return workspaceState.authorize(agentId, signal);
-};
+export const ensureWorkspace = (agentId: string, signal?: AbortSignal) =>
+  workspaceState.authorize(agentId, signal);
 export async function unlockWorkspace(agentId: string, systemUser: string, authorizationToken: string, signal?: AbortSignal) {
   const pending = workspaceState.pending.get(agentId);
   const boundSignal = pending ? AbortSignal.any([pending.controller.signal, ...(signal ? [signal] : [])]) : signal;
@@ -34,11 +32,12 @@ export async function unlockWorkspace(agentId: string, systemUser: string, autho
   if (!response.authorization) throw new Error("Missing workspace authorization");
   const grant = fromAuthorization(response.authorization);
   workspaceState.install(grant);
-
+  peers?.notifyChanged(agentId);
 }
 export function lockWorkspace(agentId: string, reopen = false) {
+  peers?.cancelSync(agentId);
   const grant = workspaceState.invalidate(agentId);
-  if (grant) peers?.lock(agentId, grant.token);
+  if (grant) peers?.lock(agentId);
   if (grant) void client.lockWorkspace({ grantToken: grant.token }).catch(() => {});
   for (const [id, session] of sessions) { if (session.agentId === agentId) sessions.delete(id); }
   if (reopen) void ensureWorkspace(agentId).catch(() => {});
@@ -65,7 +64,24 @@ export function workspaceSessionAccess(sessionId: string, signal: AbortSignal) {
 }
 
 export function trackWorkspaceActivity() {
-  if (typeof BroadcastChannel !== "undefined") peers = new WorkspacePeers(workspaceState, new BroadcastChannel("komari-workspace-v1"));
+  const syncFromServer = async (agentId: string, signal: AbortSignal): Promise<WorkspaceSyncResult> => {
+    try {
+      const response = await client.getWorkspace(
+        { grantToken: "" },
+        { signal, headers: { "X-Komari-Workspace-Agent": agentId } },
+      );
+      if (!response.authorization) return { kind: "none" };
+      return { kind: "grant", grant: fromAuthorization(response.authorization) };
+    } catch (error: unknown) {
+      if (error instanceof ConnectError && [Code.Unauthenticated, Code.PermissionDenied].includes(error.code)) {
+        return { kind: "unauthorized" };
+      }
+      return { kind: "none" };
+    }
+  };
+  if (typeof BroadcastChannel !== "undefined") {
+    peers = new WorkspacePeers(workspaceState, new BroadcastChannel("komari-workspace-v1"), Date.now, syncFromServer);
+  }
   const release = (agentId: string) => {
     if (peers?.hasConsumer(agentId)) workspaceState.invalidate(agentId);
     else lockWorkspace(agentId);

@@ -459,8 +459,12 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     },
   };
 
-  function logout() {
-    window.open("/api/logout", "_self");
+  async function logout() {
+    try {
+      await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+    } finally {
+      window.location.assign("/");
+    }
   }
   return (
     <>

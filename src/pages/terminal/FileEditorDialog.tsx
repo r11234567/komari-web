@@ -1819,6 +1819,8 @@ const FileEditorDialog = ({
                       key={activeDocument.path}
                       title={activeDocument.name}
                       src={officePreviewSrc}
+                      sandbox="allow-scripts allow-same-origin allow-forms"
+                      referrerPolicy="no-referrer"
                       className="h-full w-full border-0 bg-white"
                     />
                   ) : (
