@@ -1,4 +1,4 @@
-name: Follow Komari Release
+name: Release / Follow Komari Release
 
 on:
   workflow_dispatch:

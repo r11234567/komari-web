@@ -1,0 +1,162 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_browser:
+        description: Run browser E2E explicitly (disabled by default)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run lint
+        run: npm run lint
+      - name: Run tests
+        run: npm test
+      - name: Build project
+        run: npm run build
+      - name: Reject legacy transports in default theme
+        run: |
+          set -euo pipefail
+          matches=$(find dist -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \) \
+            ! -name 'bundle-analysis.html' -print0 \
+            | xargs -0 grep -IlE 'rpc2|jsonrpc|/api/rpc|new WebSocket' || true)
+          if [ -n "$matches" ]; then
+            echo "Legacy transport references found in published files:"
+            echo "$matches"
+            exit 1
+          fi
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+    name: Node 22 / theme compatibility
+  web:
+    name: Node 24 / tests, components and bundles
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install
+        run: bash scripts/ci/run-audit-check.sh install npm ci --no-audit
+      - name: Protocol tests
+        run: bash scripts/ci/run-audit-check.sh protocol-tests npm run test:proto
+      - name: Protocol
+        run: bash scripts/ci/run-audit-check.sh protocol node scripts/ci/check-protocol.cjs
+      - name: Dependency security
+        run: bash scripts/ci/run-audit-check.sh dependency-security npm run test:dependency-security
+      - name: Dependency audit
+        run: bash scripts/ci/run-audit-check.sh dependency-audit npm run audit:security
+      - name: Lint
+        run: bash scripts/ci/run-audit-check.sh lint npm run lint
+      - name: Unit
+        run: bash scripts/ci/run-audit-check.sh unit npm test
+      - name: Account and workspace
+        run: bash scripts/ci/run-audit-check.sh account-and-workspace node --test tests/trustedPasskey.test.ts tests/nativePasswordLogin.test.ts
+          tests/loginVerificationPage.test.ts tests/otpInput.test.ts tests/trustedVerification.test.ts tests/credentialAction.test.ts tests/remoteCredential.test.ts
+      - name: Theme build
+        run: bash scripts/ci/run-audit-check.sh theme-build npm run build
+      - name: Keep the theme bundle
+        run: mv dist dist-theme
+      - name: System build
+        run: bash scripts/ci/run-audit-check.sh system-build npm run build:system
+      - name: Record build provenance
+        run: |-
+          git rev-parse HEAD > ci-artifacts/source-commit.txt
+          sha256sum package-lock.json > ci-artifacts/dependencies.sha256
+      - name: Component dom
+        run: bash scripts/ci/run-audit-check.sh component-dom npm install --no-save --package-lock=false --ignore-scripts --no-audit jsdom@26.1.0
+      - name: Real component save, verification scope, selected machine and no polling
+        run: bash scripts/ci/run-audit-check.sh credential-components node --import ./tests/credential/register.mjs --test --test-reporter=tap
+          tests/credential/components.test.ts
+      - name: Require observed non-skipped component assertions
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/run-audit-check.sh credential-evidence python3 scripts/ci/check-credential-lifecycle.py
+      - name: Prove missing authorization header fails the actual component test
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/run-audit-check.sh credential-negative bash scripts/ci/test-credential-negative.sh
+      - name: Actual terminal attachment, per-node locking and cancellation
+        run: bash scripts/ci/run-audit-check.sh workspace-session-components node --import ./tests/workspace/register.mjs --test --test-reporter=tap
+          tests/workspace/components.test.ts
+      - name: Actual unlock portal, live metrics and collected-session lock screen
+        run: bash scripts/ci/run-audit-check.sh workspace-components node --import ./tests/workspace-ui/setup.mjs --import ./tests/workspace-ui/register.mjs
+          --test --test-reporter=tap tests/workspace-ui/components.test.ts
+      - name: Require observed component passes without skips
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/run-audit-check.sh workspace-evidence python3 scripts/ci/check-workspace-components.py
+      - name: Missing portal, provider or collected-session lock must fail real components
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/run-audit-check.sh workspace-negative bash scripts/ci/test-workspace-components-negative.sh
+      - name: Retain web-checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-checks-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |-
+            ci-artifacts/
+            dist/
+            dist-theme/
+          retention-days: 30
+  browser:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_browser == true
+    name: Web / actual terminal browser interactions
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked application dependencies
+        run: bash scripts/ci/run-audit-check.sh install npm ci --no-audit
+      - name: Install pinned CI-only browser test tooling
+        run: bash scripts/ci/run-audit-check.sh playwright-install npm install --no-save --package-lock=false --ignore-scripts --no-audit @playwright/test@1.56.1
+      - name: Install Chromium on the GitHub runner
+        run: bash scripts/ci/run-audit-check.sh chromium-install npx --no-install playwright install --with-deps chromium
+      - name: Test 2FA confirmation, actual system clipboard and terminal input
+        run: bash scripts/ci/run-audit-check.sh browser npx --no-install playwright test --config tests/browser/playwright.config.cjs
+      - name: Retain screenshots, videos, traces, HTML report and console logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-audit-web-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-artifacts/
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 30
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
