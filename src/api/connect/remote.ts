@@ -5,6 +5,7 @@ import type { Execution, ExecutionEvent } from "@komari/proto/komari/exec/v1/exe
 import type { FileCommand, SessionClosed, SessionEvent } from "@komari/proto/komari/webssh/v1/webssh_pb";
 import { connectClients, connectUnary } from "./client";
 import { createTerminalEventAcknowledger } from "../../utils/terminalTransport";
+import { resolveExecutionDefaults } from "../../utils/credentialAction";
 import { DEFAULT_STREAM_DEADLINE_MS } from "./deadline";
 
 export const reconnectableStreamError = (error: unknown) =>
@@ -35,14 +36,15 @@ export async function createRemoteExecutions(input: {
   idempotencyKey: string;
   signal: AbortSignal;
 }): Promise<Execution[]> {
+  const resolved = resolveExecutionDefaults(input);
   const response = await connectUnary(
     { signal: input.signal, timeoutMs: 30_000 },
     (signal, timeoutMs) => connectClients.execution.createExecution({
       agentIds: input.agentIds,
       command: input.command,
       runAsRoot: input.runAsRoot ?? false,
-      timeout: durationFromMs(input.timeoutMs ?? 5 * 60_000),
-      maxOutputBytes: input.maxOutputBytes ?? BigInt(1 << 20),
+      timeout: durationFromMs(resolved.timeoutMs),
+      maxOutputBytes: resolved.maxOutputBytes,
       idempotencyKey: input.idempotencyKey,
       twoFactor: { authorizationToken: input.authorizationToken },
     }, { signal, timeoutMs }),

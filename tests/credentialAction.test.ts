@@ -3,8 +3,11 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   credentialActionResource,
+  DEFAULT_EXECUTION_MAX_OUTPUT_BYTES,
+  DEFAULT_EXECUTION_TIMEOUT_SECONDS,
   executionCredentialTargets,
   executionSpecDigest,
+  resolveExecutionDefaults,
   restCredentialResource,
 } from "../src/utils/credentialAction.ts";
 
@@ -50,4 +53,22 @@ test("execution spec digest binds command, args, sorted env, cwd, limits and roo
     expectedDigest,
   ]);
   assert.equal(restCredentialResource("post", "/api/admin/update/user"), "rest:POST:/api/admin/update/user");
+
+  // Execution page default parameters must match the RPC payload sent by createRemoteExecutions.
+  const resolved = resolveExecutionDefaults({ command: "uname -a", runAsRoot: false });
+  assert.equal(resolved.timeoutMs, DEFAULT_EXECUTION_TIMEOUT_SECONDS * 1000);
+  assert.equal(resolved.timeoutSeconds, 300);
+  assert.equal(resolved.maxOutputBytes, BigInt(DEFAULT_EXECUTION_MAX_OUTPUT_BYTES));
+  const defaultTargets = await executionCredentialTargets(["agent-1"], resolved.credentialSpec);
+  const explicitTargets = await executionCredentialTargets(["agent-1"], {
+    command: "uname -a",
+    timeoutSeconds: 300,
+    maxOutputBytes: 1 << 20,
+    runAsRoot: false,
+  });
+  assert.deepEqual(defaultTargets, explicitTargets);
+  assert.notDeepEqual(
+    defaultTargets,
+    await executionCredentialTargets(["agent-1"], { command: "uname -a", runAsRoot: false }),
+  );
 });

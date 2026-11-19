@@ -32,7 +32,7 @@ export async function unlockWorkspace(agentId: string, systemUser: string, autho
   if (!response.authorization) throw new Error("Missing workspace authorization");
   const grant = fromAuthorization(response.authorization);
   workspaceState.install(grant);
-
+  peers?.notifyChanged(agentId);
 }
 export function lockWorkspace(agentId: string, reopen = false) {
   const grant = workspaceState.invalidate(agentId);
@@ -63,7 +63,25 @@ export function workspaceSessionAccess(sessionId: string, signal: AbortSignal) {
 }
 
 export function trackWorkspaceActivity() {
-  if (typeof BroadcastChannel !== "undefined") peers = new WorkspacePeers(workspaceState, new BroadcastChannel("komari-workspace-v1"));
+  const syncFromServer = (agentId: string) => {
+    const existing = workspaceState.grants.get(agentId);
+    if (!existing) return;
+    void client.getWorkspace({ grantToken: existing.token }, { signal: existing.controller.signal })
+      .then((response) => {
+        if (!response.authorization) return;
+        const current = workspaceState.grants.get(agentId);
+        if (!current || current.token !== existing.token) return;
+        workspaceState.install(fromAuthorization(response.authorization, current));
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ConnectError && [Code.Unauthenticated, Code.PermissionDenied].includes(error.code)) {
+          workspaceState.invalidate(agentId);
+        }
+      });
+  };
+  if (typeof BroadcastChannel !== "undefined") {
+    peers = new WorkspacePeers(workspaceState, new BroadcastChannel("komari-workspace-v1"), Date.now, syncFromServer);
+  }
   const release = (agentId: string) => {
     if (peers?.hasConsumer(agentId)) workspaceState.invalidate(agentId);
     else lockWorkspace(agentId);

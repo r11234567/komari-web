@@ -9,10 +9,12 @@ interface Channel {
 
 type Message =
   | { sender: string; kind: 'consumers'; agents: string[] }
+  | { sender: string; kind: 'changed'; agentId: string }
   | { sender: string; kind: 'lock'; agentId: string; lockedAt: number };
 
-// Coordinate active workspace consumers and explicit locks across same-origin
-// tabs without ever transmitting bearer grant tokens on BroadcastChannel.
+// Coordinate active workspace consumers, state-change pings, and explicit locks
+// across same-origin tabs without ever transmitting bearer grant tokens on
+// BroadcastChannel. Receiving tabs re-query the server using their own grant.
 export class WorkspacePeers {
   private id = crypto.randomUUID();
   private peers = new Map<string, { at: number; agents: string[] }>();
@@ -21,11 +23,18 @@ export class WorkspacePeers {
   private state: WorkspaceState;
   private channel: Channel;
   private now: () => number;
+  private onChanged?: (agentId: string) => void;
 
-  constructor(state: WorkspaceState, channel: Channel, now = Date.now) {
+  constructor(
+    state: WorkspaceState,
+    channel: Channel,
+    now = Date.now,
+    onChanged?: (agentId: string) => void,
+  ) {
     this.state = state;
     this.channel = channel;
     this.now = now;
+    this.onChanged = onChanged;
     channel.addEventListener('message', this.receive);
     this.unsubscribe = state.subscribe(this.announce);
     this.timer = setInterval(this.announce, 15_000);
@@ -34,6 +43,10 @@ export class WorkspacePeers {
 
   hasConsumer(agentId: string) {
     return [...this.peers.values()].some((peer) => this.now() - peer.at < 45_000 && peer.agents.includes(agentId));
+  }
+
+  notifyChanged(agentId: string) {
+    this.channel.postMessage({ sender: this.id, kind: 'changed', agentId });
   }
 
   lock(agentId: string) {
@@ -55,6 +68,11 @@ export class WorkspacePeers {
       if (this.peers.size < 256 || this.peers.has(message.sender)) {
         this.peers.set(message.sender, { at: this.now(), agents: message.agents });
       }
+      return;
+    }
+    if (message.kind === 'changed') {
+      if (typeof message.agentId !== 'string' || !message.agentId) return;
+      this.onChanged?.(message.agentId);
       return;
     }
     if (message.kind === 'lock') {

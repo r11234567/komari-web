@@ -8,10 +8,13 @@ test('workspace peers: coordinates consumers and locks across tabs without leaki
   const second = new WorkspaceState();
   const name = `workspace-unit-${crypto.randomUUID()}`;
   const wireMessages: unknown[] = [];
+  const changedAgents: string[] = [];
   const spy = new BroadcastChannel(name);
   spy.addEventListener('message', (event) => wireMessages.push(event.data));
   const a = new WorkspacePeers(first, new BroadcastChannel(name));
-  const b = new WorkspacePeers(second, new BroadcastChannel(name));
+  const b = new WorkspacePeers(second, new BroadcastChannel(name), Date.now, (agentId) => {
+    changedAgents.push(agentId);
+  });
   const release = first.retain('SJC');
   const now = Date.now();
   try {
@@ -52,6 +55,18 @@ test('workspace peers: coordinates consumers and locks across tabs without leaki
       };
       poll();
     });
+
+    const changed = new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 2000;
+      const poll = () => {
+        if (changedAgents.includes('SJC')) { resolve(); return; }
+        if (Date.now() > deadline) { reject(new Error('changed event did not cross channel')); return; }
+        setTimeout(poll, 10).unref();
+      };
+      poll();
+    });
+    a.notifyChanged('SJC');
+    await changed;
 
     const locked = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('lock did not cross channel')), 2000).unref();

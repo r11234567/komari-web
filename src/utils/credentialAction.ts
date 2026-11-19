@@ -17,6 +17,9 @@ export function restCredentialResource(method: string, path: string): string {
   return `rest:${method.toUpperCase()}:${path}`;
 }
 
+export const DEFAULT_EXECUTION_TIMEOUT_SECONDS = 5 * 60;
+export const DEFAULT_EXECUTION_MAX_OUTPUT_BYTES = 1 << 20;
+
 export interface ExecutionCredentialSpec {
   command: string;
   arguments?: readonly string[];
@@ -53,4 +56,33 @@ export async function executionCredentialTargets(
   if (spec.runAsRoot) targets.push("run-as:root");
   targets.push(await executionSpecDigest(spec));
   return targets;
+}
+
+// Normalize execution parameters using the exact same defaults sent by
+// createRemoteExecutions so the step-up proof and RPC payload never drift.
+export function resolveExecutionDefaults(spec: {
+  command: string;
+  arguments?: readonly string[];
+  environment?: Readonly<Record<string, string>>;
+  workingDirectory?: string;
+  timeoutMs?: number;
+  maxOutputBytes?: bigint;
+  runAsRoot?: boolean;
+}) {
+  const timeoutMs = spec.timeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_SECONDS * 1000;
+  const maxOutputBytes = spec.maxOutputBytes ?? BigInt(DEFAULT_EXECUTION_MAX_OUTPUT_BYTES);
+  return {
+    timeoutMs,
+    timeoutSeconds: Math.trunc(timeoutMs / 1000),
+    maxOutputBytes,
+    credentialSpec: {
+      command: spec.command,
+      arguments: spec.arguments,
+      environment: spec.environment,
+      workingDirectory: spec.workingDirectory,
+      timeoutSeconds: Math.trunc(timeoutMs / 1000),
+      maxOutputBytes: Number(maxOutputBytes),
+      runAsRoot: spec.runAsRoot ?? false,
+    } satisfies ExecutionCredentialSpec,
+  };
 }
