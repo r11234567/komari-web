@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import * as credentialAction from "../src/utils/credentialAction.ts";
 
 const source = ts.transpileModule(readFileSync(new URL("../src/api/connect/remote.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 
@@ -16,6 +17,7 @@ test("execution adapters forward the completed native authorization to each type
   vm.runInNewContext(source, { exports, require(name: string) {
     if (name === "./client") return { connectClients: { execution }, connectUnary: async (options: { signal: AbortSignal }, call: (signal: AbortSignal, timeoutMs: number) => Promise<unknown>) => call(options.signal, 30_000) };
     if (name === "@bufbuild/protobuf/wkt") return { durationFromMs: (milliseconds: number) => ({ seconds: BigInt(milliseconds / 1000) }) };
+    if (name === "../../utils/credentialAction") return credentialAction;
     if (["./workspace", "@connectrpc/connect", "../../utils/terminalTransport", "./deadline"].includes(name)) return {};
     throw new Error(`Unexpected import ${name}`);
   } });
@@ -23,6 +25,8 @@ test("execution adapters forward the completed native authorization to each type
   const result = await exports.createRemoteExecutions({ agentIds: ["synthetic-agent"], command: "synthetic-placeholder", authorizationToken: "synthetic-create-grant", idempotencyKey: "synthetic-request", signal });
   await exports.cancelRemoteExecution({ executionId: result[0].executionId, reason: "synthetic-cancel", authorizationToken: "synthetic-cancel-grant", signal });
   assert.equal(calls[0].input.twoFactor.authorizationToken, "synthetic-create-grant");
+  assert.equal(calls[0].input.timeout.seconds, BigInt(credentialAction.DEFAULT_EXECUTION_TIMEOUT_SECONDS));
+  assert.equal(calls[0].input.maxOutputBytes, BigInt(credentialAction.DEFAULT_EXECUTION_MAX_OUTPUT_BYTES));
   assert.equal(calls[1].input.twoFactor.authorizationToken, "synthetic-cancel-grant");
   assert.equal(calls[1].input.executionId, "synthetic-execution");
   assert.equal(calls[0].signal, signal);
