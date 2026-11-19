@@ -68,6 +68,29 @@ test('workspace peers: coordinates consumers and locks across tabs without leaki
     a.notifyChanged('SJC');
     await changed;
 
+    // A peer with no local grant also receives changed notifications to pull server state.
+    const coldState = new WorkspaceState();
+    const coldChanged: string[] = [];
+    const coldPeer = new WorkspacePeers(coldState, new BroadcastChannel(name), Date.now, (agentId) => {
+      coldChanged.push(agentId);
+    });
+    try {
+      const coldDone = new Promise<void>((resolve, reject) => {
+        const deadline = Date.now() + 2000;
+        const poll = () => {
+          if (coldChanged.includes('SJC')) { resolve(); return; }
+          if (Date.now() > deadline) { reject(new Error('cold peer did not receive changed event')); return; }
+          setTimeout(poll, 10).unref();
+        };
+        poll();
+      });
+      a.notifyChanged('SJC');
+      await coldDone;
+      assert.equal(coldState.grants.has('SJC'), false, 'channel must not install grants directly');
+    } finally {
+      coldPeer.dispose();
+    }
+
     const locked = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('lock did not cross channel')), 2000).unref();
       const off = second.subscribe(() => {

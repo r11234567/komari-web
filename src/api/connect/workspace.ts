@@ -65,13 +65,18 @@ export function workspaceSessionAccess(sessionId: string, signal: AbortSignal) {
 export function trackWorkspaceActivity() {
   const syncFromServer = (agentId: string) => {
     const existing = workspaceState.grants.get(agentId);
-    if (!existing) return;
-    void client.getWorkspace({ grantToken: existing.token }, { signal: existing.controller.signal })
+    const signal = existing?.controller.signal ?? AbortSignal.timeout(10_000);
+    void client.getWorkspace(
+      { grantToken: "" },
+      { signal, headers: { "X-Komari-Workspace-Agent": agentId } },
+    )
       .then((response) => {
         if (!response.authorization) return;
         const current = workspaceState.grants.get(agentId);
-        if (!current || current.token !== existing.token) return;
-        workspaceState.install(fromAuthorization(response.authorization, current));
+        // Reuse the existing AbortController only when refreshing the exact same
+        // grant token; a newly minted grant from a peer unlock gets a fresh scope.
+        const preserve = current && current.token === response.authorization.grantToken ? current : undefined;
+        workspaceState.install(fromAuthorization(response.authorization, preserve));
       })
       .catch((error: unknown) => {
         if (error instanceof ConnectError && [Code.Unauthenticated, Code.PermissionDenied].includes(error.code)) {
