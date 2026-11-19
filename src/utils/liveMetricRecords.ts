@@ -62,7 +62,7 @@ export const metricSeriesToLiveRecords = (series: MetricSeries[]): LiveRecord[] 
           }
           let device = devices.get(deviceKey);
           if (!device) {
-            device = { name: deviceName, memory_total: 0, memory_used: 0, utilization: 0, temperature: 0 };
+            device = { name: deviceName, memory_total: 0, memory_used: 0, utilization: 0, temperature: null };
             devices.set(deviceKey, device);
             record.gpu.detailed_info.push(device);
             record.gpu.count = record.gpu.detailed_info.length;

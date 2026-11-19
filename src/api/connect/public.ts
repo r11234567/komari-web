@@ -119,7 +119,7 @@ export const reportToLiveRecord = (report?: AgentReport): LiveRecord => {
     memory_total: Number(gpu.memoryTotalBytes ?? 0n),
     memory_used: Number(gpu.memoryUsedBytes ?? 0n),
     utilization: gpu.utilizationPercent ?? 0,
-    temperature: gpu.temperatureCelsius ?? 0,
+    temperature: gpu.temperatureCelsius ?? null,
   }));
   // Only devices that actually reported utilization count toward the average;
   // a model-only report must not average to a permanent zero.
