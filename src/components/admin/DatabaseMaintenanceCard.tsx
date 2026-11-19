@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { z } from "zod";
 import { getDatabaseStatus, vacuumDatabase } from "@/api/connect/maintenance";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import { SettingCard } from "./SettingCard";
 
 const maintenanceActionSchema = z.enum([
@@ -165,6 +166,7 @@ export function DatabaseMaintenanceCard() {
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [maintaining, setMaintaining] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [sensitiveAction, setSensitiveAction] = React.useState<SensitiveAction | null>(null);
 
   const fetchOverview = React.useCallback(async () => {
     setLoading(true);
@@ -197,36 +199,43 @@ export function DatabaseMaintenanceCard() {
     void fetchOverview();
   }, [fetchOverview]);
 
-  const handleMaintenance = async () => {
+  const handleMaintenance = () => {
     if (!overview || maintaining) return;
 
     setConfirmOpen(false);
-    setMaintaining(true);
-    try {
-      const data = await vacuumDatabase();
-      const parsed = maintenanceResultSchema.safeParse(data);
-      if (!parsed.success) {
-        throw new Error(t("settings.database.invalid_response"));
-      }
+    setSensitiveAction({
+      action: "maintenance:vacuum_database",
+      targets: [],
+      title: t("settings.database.maintenance_button"),
+      execute: async (token, signal) => {
+        setMaintaining(true);
+        try {
+          const data = await vacuumDatabase(signal, token);
+          const parsed = maintenanceResultSchema.safeParse(data);
+          if (!parsed.success) {
+            throw new Error(t("settings.database.invalid_response"));
+          }
 
-      const result = parsed.data;
-      const allItemsSucceeded = result.main.success && result.monitoring.success;
-      if (result.all_succeeded && allItemsSucceeded) {
-        toast.success(t("settings.database.maintenance_success"));
-      } else {
-        toast.warning(t("settings.database.maintenance_partial_failure"), {
-          description: maintenanceFailureDescription(result, t),
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(t("settings.database.maintenance_error"), {
-        description: message,
-      });
-    } finally {
-      await fetchOverview();
-      setMaintaining(false);
-    }
+          const result = parsed.data;
+          const allItemsSucceeded = result.main.success && result.monitoring.success;
+          if (result.all_succeeded && allItemsSucceeded) {
+            toast.success(t("settings.database.maintenance_success"));
+          } else {
+            toast.warning(t("settings.database.maintenance_partial_failure"), {
+              description: maintenanceFailureDescription(result, t),
+            });
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          toast.error(t("settings.database.maintenance_error"), {
+            description: message,
+          });
+        } finally {
+          await fetchOverview();
+          setMaintaining(false);
+        }
+      },
+    });
   };
 
   const actionDisabled = loading || maintaining;
@@ -330,6 +339,7 @@ export function DatabaseMaintenanceCard() {
           ) : null}
         </Flex>
       </Flex>
+      <SensitiveActionDialog request={sensitiveAction} onClose={() => setSensitiveAction(null)} />
     </SettingCard>
   );
 }

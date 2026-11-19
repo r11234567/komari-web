@@ -8,6 +8,7 @@ import { credentialActionResource } from "@/utils/credentialAction";
 export type SensitiveAction = {
   action: string;
   targets: string[];
+  resource?: string;
   title: string;
   execute: (authorizationToken: string, signal: AbortSignal) => Promise<void>;
 };
@@ -20,9 +21,14 @@ export default function SensitiveActionDialog({ request, onClose }: { request: S
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true; setScope(undefined); setError("");
-    if (request) void credentialActionResource(request.action, request.targets).then((resource) => {
-      if (active) setScope({ request, resource });
-    }).catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Unable to prepare verification"); });
+    if (request) {
+      const resolveResource = request.resource
+        ? Promise.resolve(request.resource)
+        : credentialActionResource(request.action, request.targets);
+      void resolveResource.then((resource) => {
+        if (active) setScope({ request, resource });
+      }).catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Unable to prepare verification"); });
+    }
     return () => { active = false; };
   }, [request]);
   return <Dialog.Root open={Boolean(request)} onOpenChange={(open) => { if (!open) onClose(); }}>

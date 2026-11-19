@@ -24,6 +24,7 @@ export type ChunkUploadTask = {
     purpose: UploadPurpose,
     file: File,
     onProgress: (progress: number) => void,
+    initHeaders?: Record<string, string>,
   ): Promise<T | undefined>;
   cancel(): void;
 };
@@ -100,6 +101,7 @@ export function createChunkUploadTask(basePath: string): ChunkUploadTask {
       purpose: UploadPurpose,
       file: File,
       onProgress: (progress: number) => void,
+      initHeaders?: Record<string, string>,
     ): Promise<T | undefined> {
       try {
         if (started) throw new Error("Upload task already used");
@@ -109,7 +111,8 @@ export function createChunkUploadTask(basePath: string): ChunkUploadTask {
         if (file.size <= 0 || file.size > maxSize) throw new Error(`Archive size must be between 1 byte and ${maxSize / 1024 / 1024} MiB`);
         const initResponse = await fetch(`${basePath}/init`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", ...initHeaders },
           body: JSON.stringify({ purpose, size: file.size, filename: file.name }),
           signal: AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)]),
         });

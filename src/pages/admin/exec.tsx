@@ -17,6 +17,7 @@ import NodeSelector from "@/components/NodeSelector";
 import { SettingCardCollapse } from "@/components/admin/SettingCard";
 import { cancelRemoteExecution, createRemoteExecutions, listRemoteAgentCapabilities, watchRemoteExecution } from "@/api/connect/remote";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
+import { executionCredentialTargets } from "@/utils/credentialAction";
 import { OperationState } from "@komari/proto/komari/common/v1/common_pb";
 
 interface TaskResult {
@@ -227,7 +228,10 @@ const ExecContent = () => {
             toast.error(t("exec.rootNotAllowed"));
             return;
         }
-        const proofTargets = asRoot ? [...targets, "run-as:root"] : targets;
+        const proofTargets = await executionCredentialTargets(targets, {
+            command,
+            runAsRoot: asRoot,
+        });
         const idempotencyKey = crypto.randomUUID();
         setCredentialAction({ action: "execution:create", targets: proofTargets, title: asRoot ? t("exec.executeAsRoot") : t("exec.execute"), execute: async (authorizationToken, verificationSignal) => {
             for (const controller of executionControllersRef.current.values()) {

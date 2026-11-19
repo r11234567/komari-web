@@ -22,10 +22,8 @@ function fromAuthorization(value: WorkspaceAuthorization, previous?: WorkspaceGr
     expiresAt: timestampDate(value.expiresAt).getTime(), idleExpiresAt: timestampDate(value.idleExpiresAt).getTime(),
     controller: previous?.controller ?? new AbortController() };
 }
-export const ensureWorkspace = (agentId: string, signal?: AbortSignal) => {
-  peers?.request(agentId);
-  return workspaceState.authorize(agentId, signal);
-};
+export const ensureWorkspace = (agentId: string, signal?: AbortSignal) =>
+  workspaceState.authorize(agentId, signal);
 export async function unlockWorkspace(agentId: string, systemUser: string, authorizationToken: string, signal?: AbortSignal) {
   const pending = workspaceState.pending.get(agentId);
   const boundSignal = pending ? AbortSignal.any([pending.controller.signal, ...(signal ? [signal] : [])]) : signal;
@@ -38,7 +36,7 @@ export async function unlockWorkspace(agentId: string, systemUser: string, autho
 }
 export function lockWorkspace(agentId: string, reopen = false) {
   const grant = workspaceState.invalidate(agentId);
-  if (grant) peers?.lock(agentId, grant.token);
+  if (grant) peers?.lock(agentId);
   if (grant) void client.lockWorkspace({ grantToken: grant.token }).catch(() => {});
   for (const [id, session] of sessions) { if (session.agentId === agentId) sessions.delete(id); }
   if (reopen) void ensureWorkspace(agentId).catch(() => {});
