@@ -97,7 +97,7 @@ const TerminalWorkbench = () => {
   return (
     <Theme
       appearance="dark"
-      className="km-page-terminal fixed inset-0 h-screen w-screen overflow-hidden bg-[#1e1e1e]"
+      className="km-page-terminal fixed inset-0 overflow-hidden bg-[#1e1e1e]"
     >
       <style>{settings.customCss}</style>
       <TerminalNotices
@@ -106,7 +106,7 @@ const TerminalWorkbench = () => {
       />
 
       <div
-        className="km-terminal-shell flex h-screen w-screen min-w-0 flex-col bg-[#1e1e1e] text-[#cccccc]"
+        className="km-terminal-shell flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#1e1e1e] text-[#cccccc]"
         style={resolvedAppearance}
       >
         <TerminalTabBar

@@ -2,8 +2,16 @@ import { workspaceAccess, rememberWorkspaceSession, workspaceSessionAccess, forg
 export const terminals: Terminal[] = [];
 export const starts: string[] = [];
 export const failures = new Set<string>();
+export const waitingForAttachment = new Set<string>();
+const attachmentWaiters = new Map<string, () => void>();
+export function attachRemoteSession(agentId: string) {
+  waitingForAttachment.delete(agentId);
+  attachmentWaiters.get(agentId)?.();
+}
 export class Terminal {
-  options: Record<string, unknown>;
+  private currentOptions: Record<string, unknown> = {};
+  get options() { return this.currentOptions; }
+  set options(value: Record<string, unknown>) { Object.assign(this.currentOptions, value); }
   rows = 24; cols = 80; text = ''; disposed = false;
   buffer = { active: { length: 0, getLine: () => undefined } };
   node?: HTMLElement;
@@ -29,10 +37,21 @@ export async function createRemoteSession(input: { agentId: string; signal: Abor
   rememberWorkspaceSession(sessionId, input.agentId, access.headers['X-Komari-Workspace-Grant']);
   return { sessionId };
 }
-export async function* watchRemoteSession(input: { sessionId: string; signal: AbortSignal }): AsyncIterable<never> {
+export async function* watchRemoteSession(input: { sessionId: string; signal: AbortSignal }): AsyncIterable<{ agentAttached: boolean }> {
   const access = workspaceSessionAccess(input.sessionId, input.signal);
   if (access.signal.aborted) return;
-  yield* [];
+  const agentId = input.sessionId.split(':')[0];
+  if (waitingForAttachment.has(agentId)) {
+    yield { agentAttached: false };
+    await new Promise<void>((resolve) => {
+      const finish = () => { attachmentWaiters.delete(agentId); access.signal.removeEventListener('abort', finish); resolve(); };
+      attachmentWaiters.set(agentId, finish);
+      access.signal.addEventListener('abort', finish, { once: true });
+      if (access.signal.aborted) finish();
+    });
+    if (access.signal.aborted) return;
+  }
+  yield { agentAttached: true };
   await new Promise<void>((resolve) => access.signal.addEventListener('abort', () => resolve(), { once: true }));
 }
 export async function sendRemoteSessionInput() {}

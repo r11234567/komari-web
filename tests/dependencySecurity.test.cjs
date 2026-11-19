@@ -1,8 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createRequire } = require('node:module');
-const { realpathSync } = require('node:fs');
-const { resolve } = require('node:path');
+const { realpathSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('node:fs');
+const { resolve, join } = require('node:path');
+const { tmpdir } = require('node:os');
 const rollupRequire = createRequire(require.resolve('@rollup/plugin-node-resolve'));
 const merge = rollupRequire('deepmerge');
 
@@ -39,4 +40,37 @@ test('existing clone, array, symbol and custom merge behavior remains compatible
  assert.deepEqual(merge(left,right,{arrayMerge:(_,source)=>source}).items,[2]);
  assert.deepEqual(merge({value:{n:1}},{value:{n:2}},{customMerge: key=>key==='value' ? (a,b)=>({n:a.n+b.n}) : undefined}),{value:{n:3}});
  assert.equal(left.items.length,1);
+});
+
+test('patched minimatch preserves real ESLint legacy override selection', () => {
+ const { Legacy: { ConfigArrayFactory } } = require('@eslint/eslintrc');
+ const configs = new ConfigArrayFactory().create({ overrides: [{
+  files: ['**/*.ts'], excludedFiles: ['**/ignored.ts'], rules: { 'no-debugger': 'error' },
+ }] });
+ assert.ok(['error', 2].includes(configs.extractConfig(resolve('src/example.ts')).rules['no-debugger'][0]));
+ assert.equal(configs.extractConfig(resolve('src/example.js')).rules['no-debugger'], undefined);
+ assert.equal(configs.extractConfig(resolve('src/ignored.ts')).rules['no-debugger'], undefined);
+});
+
+test('patched glob/minimatch preserve Workbox precache discovery and FileList exclusions', () => {
+ const root = mkdtempSync(join(tmpdir(), 'komari-glob-compat-'));
+ try {
+  mkdirSync(join(root, 'assets'));
+  writeFileSync(join(root, 'assets', 'app.js'), 'application');
+  writeFileSync(join(root, 'assets', 'app.js.map'), 'source map');
+  writeFileSync(join(root, 'assets', 'ignored.js'), 'excluded');
+  const { getFileDetails } = require('workbox-build/build/lib/get-file-details.js');
+  const result = getFileDetails({ globDirectory: root, globFollow: false,
+   globPattern: '**/*', globIgnores: ['**/*.map', '**/ignored.js'] });
+  assert.equal(result.warning, '');
+  assert.deepEqual(result.globbedFileDetails.map(item => ({ file: item.file, size: item.size })),
+   [{ file: 'assets/app.js', size: 11 }]);
+  assert.ok(result.globbedFileDetails[0].hash);
+  const { FileList } = require('filelist');
+  const files = new FileList();
+  const posixRoot = root.replaceAll('\\', '/');
+  files.include(posixRoot + '/assets/**/*.js', { windowsPathsNoEscape: true });
+  files.exclude(posixRoot + '/assets/ignored.js');
+  assert.deepEqual(files.toArray().map(file => file.replaceAll('\\', '/')), [posixRoot + '/assets/app.js']);
+ } finally { rmSync(root, { recursive: true, force: true }); }
 });

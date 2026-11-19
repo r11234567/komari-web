@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { JSDOM } from 'jsdom';
 import { createElement, act } from 'react';
 import { createRoot } from 'react-dom/client';
 import i18next from 'i18next';
@@ -8,15 +7,10 @@ import { initReactI18next } from 'react-i18next';
 import TerminalSession from '../../src/pages/terminal/TerminalSession.tsx';
 import WorkspaceBoundary from '../../src/pages/terminal/WorkspaceBoundary.tsx';
 import { rememberWorkspaceSession, workspaceSessionAccess, workspaceSessionValid, workspaceState } from '../../src/api/connect/workspace.ts';
-import { terminals, starts, failures } from './peripherals.ts';
+import { terminals, starts, failures, waitingForAttachment, attachRemoteSession } from './peripherals.ts';
 
+// DOM setup runs in register.mjs before static React/Radix imports.
 // No real panel, production credentials, operating-system shell or browser.
-const dom = new JSDOM('<html><body></body></html>', { url: 'https://unit.invalid/', pretendToBeVisual: true });
-for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'HTMLInputElement', 'MutationObserver', 'getComputedStyle']) {
-  Object.defineProperty(globalThis, key, { configurable: true, value: key === 'getComputedStyle' ? dom.window.getComputedStyle.bind(dom.window) : dom.window[key as keyof Window] });
-}
-globalThis.fetch = async () => { throw new Error('CI unit transport forbids external requests'); };
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, requestAnimationFrame: (fn: FrameRequestCallback) => setTimeout(() => fn(0), 0), cancelAnimationFrame: clearTimeout });
 await i18next.use(initReactI18next).init({ lng: 'en', resources: {}, initImmediate: false });
 const grant = (agentId: string, token: string) => ({ agentId, token, systemUser: 'alice', expiresAt: Date.now() + 30*60_000, idleExpiresAt: Date.now() + 3*60_000, controller: new AbortController() });
 const session = (uuid: string, active = true) => createElement(TerminalSession, { key: uuid, uuid, active, twoFaEnabled: true, disconnectMessage: 'closed', onApiChange: () => {} });
@@ -54,15 +48,53 @@ test('real WorkspaceBoundary: cancellation never reveals another machine or make
   const root = createRoot(host);
   const pending = workspaceState.authorize('third-machine');
   const other = workspaceState.authorize('fourth-machine');
+  // Register rejection handlers before rendering effects can cancel waiters.
+  const pendingRejected = assert.rejects(pending, { name: 'AbortError' });
+  const otherRejected = assert.rejects(other, { name: 'AbortError' });
   try {
     await act(async () => { root.render(createElement(WorkspaceBoundary, null, createElement('button', { id: 'fra-control' }, 'FRA'))); });
     assert.equal(host.querySelector('#fra-control')?.closest('[inert]'), null);
-    assert.equal(host.querySelector('[role="dialog"]')?.getAttribute('aria-modal'), 'false');
-    await act(async () => { workspaceState.cancel('third-machine'); await assert.rejects(pending); });
-    assert.equal(host.querySelector('[role="dialog"]'), null, 'Esc/cancel must not drain a hidden prompt queue');
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog, 'the actual Radix portal must render');
+    assert.equal(host.contains(dialog), false, 'unlock must use the portal');
+    assert.ok(dialog.getAttribute('aria-labelledby'), 'unlock must have an accessible title');
+    assert.ok(dialog.textContent?.includes('third-machine'));
+    assert.equal(dialog.textContent?.includes('fourth-machine'), false);
+    await act(async () => { workspaceState.cancel('third-machine'); await pendingRejected; });
+    assert.equal(document.querySelector('[role="dialog"]'), null, 'Esc/cancel must not drain a hidden prompt queue');
+    assert.equal(host.closest('[inert], [aria-hidden="true"]'), null, 'cancel must restore the page');
     assert.equal(workspaceState.pending.has('fourth-machine'), true);
   } finally {
-    await act(async () => { workspaceState.cancel('fourth-machine'); await assert.rejects(other); root.unmount(); }); host.remove();
+    await act(async () => { workspaceState.cancel('fourth-machine'); await otherRejected; root.unmount(); }); host.remove();
+  }
+});
+
+test('cold TerminalSession keeps input disabled through appearance changes until attachment and after locking', async () => {
+  const host = document.createElement('div'); document.body.appendChild(host);
+  const root = createRoot(host);
+  const before = terminals.length;
+  waitingForAttachment.add('cold-start');
+  workspaceState.install(grant('cold-start', 'cold-first'));
+  const render = (fontSize: number) => createElement(TerminalSession, {
+    uuid: 'cold-start', active: true, twoFaEnabled: true,
+    disconnectMessage: 'closed', onApiChange: () => {},
+    fontSize, options: { disableStdin: false },
+  });
+  try {
+    await act(async () => { root.render(render(14)); });
+    const terminal = terminals[before];
+    assert.equal(terminal.options.disableStdin, true, 'create/heartbeat is not attachment');
+    await act(async () => { root.render(render(18)); });
+    assert.equal(terminal.options.disableStdin, true, 'appearance must not enable a cold terminal');
+    await act(async () => { attachRemoteSession('cold-start'); });
+    assert.equal(terminal.options.disableStdin, false, 'real attachment enables input');
+    await act(async () => { workspaceState.invalidate('cold-start'); });
+    await act(async () => { root.render(render(20)); });
+    assert.equal(terminal.options.disableStdin, true, 'appearance must not unlock a locked terminal');
+    assert.equal(terminals.length, before + 1, 'appearance must retain the renderer');
+  } finally {
+    await act(async () => root.unmount()); host.remove();
+    waitingForAttachment.delete('cold-start');
   }
 });
 

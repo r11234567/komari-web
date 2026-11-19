@@ -56,8 +56,9 @@ export function configQueryCommand(observation?: InstallationObservation) {
 
 // Whitelist only the ordinary runtime contract. Install settings and privilege
 // grants must never be echoed back by the monitoring configuration form.
-export function runtimeDraft(previous?: RuntimeConfig, changes: Partial<RuntimeConfig> = {}) {
+export function runtimeDraft(previous?: RuntimeConfig, changes: Partial<RuntimeConfig> = {}, windowsGPU = false) {
   return {
+    ...(windowsGPU ? { enableGpu: changes.enableGpu ?? previous?.enableGpu ?? true } : {}),
     memoryIncludeCache: changes.memoryIncludeCache ?? previous?.memoryIncludeCache,
     detailedGpu: changes.detailedGpu ?? previous?.detailedGpu,
     getIpAddrFromNic: changes.getIpAddrFromNic ?? previous?.getIpAddrFromNic,

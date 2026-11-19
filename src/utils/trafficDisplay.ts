@@ -52,4 +52,21 @@ export function trafficResetInstant(instant: string, timezone: string): string {
   return `${new Intl.DateTimeFormat("sv-SE", { timeZone: timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date)} ${timezone || "UTC"}`;
 }
 
+export function trafficResetRemaining(instant: string, now = new Date()): string {
+  if (!instant) return "";
+  const target = new Date(instant);
+  const diffMs = target.getTime() - now.getTime();
+  if (isNaN(diffMs) || diffMs <= 0) return "";
+  const days = Math.floor(diffMs / (24 * 3600 * 1000));
+  const hours = Math.floor((diffMs % (24 * 3600 * 1000)) / (3600 * 1000));
+  if (days > 0) {
+    return `${days} 天 ${hours} 小时后`;
+  }
+  const minutes = Math.floor((diffMs % (3600 * 1000)) / (60 * 1000));
+  if (hours > 0) {
+    return `${hours} 小时 ${minutes} 分钟后`;
+  }
+  return `${Math.max(1, minutes)} 分钟后`;
+}
+
 export const TRAFFIC_ACCOUNTING_CHANGED = "komari:traffic-accounting-changed";

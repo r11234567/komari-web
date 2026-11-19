@@ -12,11 +12,21 @@ export type MetricTagged = {
   tags?: MetricTags;
 };
 
+export type MetricSourceSpan = {
+  start: string;
+  end: string;
+  source_interval_seconds: number;
+  reason?: string;
+};
+
 export type MetricPoint = MetricTagged & {
   time: string;
   value: number | null;
   count?: number;
   labels?: Record<string, string>;
+  source_interval_seconds?: number;
+  coverage?: string;
+  coverage_reason?: string;
 };
 
 export type MetricSeries = MetricTagged & {
@@ -29,6 +39,15 @@ export type MetricSeries = MetricTagged & {
   downsample_algorithm?: string;
   max_points?: number;
   interval_seconds?: number;
+  requested_interval_seconds?: number;
+  coverage?: string;
+  coverage_start?: string;
+  coverage_end?: string;
+  boundary_adjusted?: boolean;
+  summarized_through?: string;
+  accepted_through?: string;
+  sources?: MetricSourceSpan[];
+  gaps?: MetricSourceSpan[];
   count: number;
   points: MetricPoint[];
 };

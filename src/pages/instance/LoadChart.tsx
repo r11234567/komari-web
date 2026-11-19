@@ -1,4 +1,5 @@
 import { memo, type ReactNode, useEffect, useMemo, useState } from "react";
+import { usePageVisible } from "@/hooks/usePageVisible";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -42,6 +43,7 @@ import {
 } from "lucide-react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
+import { CHART_TARGET_POINTS, chartWindowHours } from "@/utils/chartWindows";
 import {
   ChartContainer,
   ChartTooltip,
@@ -76,6 +78,7 @@ import {
   formatRemainingTags,
   isPingMetric,
   metricChartBoundaryTicks,
+  metricLineRows,
   trimMetricChartBoundaryRows,
   metricSeriesColor,
   metricSeriesDataKey,
@@ -86,6 +89,8 @@ import {
   pingMetricStatKey,
   pingTaskId,
   pingTaskName,
+  formatChartTitle,
+  getMetricLabel,
   type MetricChartRow,
 } from "@/utils/metricSeries";
 import { formatBytes } from "@/utils/unitHelper";
@@ -102,12 +107,7 @@ type Aggregation =
   | "avg"
   | "min"
   | "max"
-  | "first"
-  | "last"
-  | "stddev"
-  | "p70"
-  | "p95"
-  | "p99";
+  | "last";
 type MetricKind =
   | "percent"
   | "bytes"
@@ -163,6 +163,8 @@ type RenderSeries = {
   unit?: string;
   yAxisId?: "left" | "right";
   tags?: Record<string, string>;
+  coverage?: string;
+  sourceInterval?: number;
 };
 
 type BuiltChartData = {
@@ -195,8 +197,7 @@ type MetricRangeParams =
   | { hours: number }
   | { start: string; end: string };
 
-const MAX_REALTIME_POINTS = 30 * 5;
-const HISTORY_MAX_POINTS = 700;
+const MAX_REALTIME_POINTS = 300;
 const DASHBOARD_TEMPLATE_KEY = "chartDashboardTemplate";
 const CUSTOM_RANGE_DEFAULT_DAYS = 24;
 
@@ -204,11 +205,7 @@ const AGGREGATIONS: Array<{ value: Aggregation; labelKey: string }> = [
   { value: "avg", labelKey: "chart.avg" },
   { value: "min", labelKey: "chart.sampling.min" },
   { value: "max", labelKey: "chart.sampling.max" },
-  { value: "first", labelKey: "chart.sampling.first" },
   { value: "last", labelKey: "chart.sampling.last" },
-  { value: "stddev", labelKey: "chart.sampling.stddev" },
-  { value: "p95", labelKey: "chart.sampling.p95" },
-  { value: "p99", labelKey: "chart.sampling.p99" },
 ];
 
 const DEFAULT_DASHBOARD: DashboardChart[] = [
@@ -442,6 +439,10 @@ const fallbackCatalog: MetricCatalogItem[] = [
 ];
 
 const fallbackCatalogMap = new Map(fallbackCatalog.map((item) => [item.key, item]));
+const rawOnlyMetrics = new Set([
+  "net.total.up", "net.total.down", "traffic.up", "traffic.down",
+  "process.count", "connections.tcp", "connections.udp",
+]);
 
 const formatTags = (
   metricKey: string,
@@ -488,7 +489,7 @@ const formatSeriesLabel = (
 ) => {
   const tagLabel = formatTags(metricKey, tags, pingTaskMap, t);
   if (metricKey === PING_LATENCY_METRIC && tagLabel) return tagLabel;
-  const metricLabel = getMetricLabel(metricKey, definitions);
+  const metricLabel = resolveMetricLabel(metricKey, definitions, t);
   return tagLabel ? `${metricLabel} ${tagLabel}` : metricLabel;
 };
 
@@ -534,15 +535,11 @@ const getMetricKind = (metricKey: string, unit?: string): MetricKind => {
   return "raw";
 };
 
-const getMetricLabel = (
+const resolveMetricLabel = (
   metricKey: string,
-  definitions: Map<string, MetricDefinition>,
-) => {
-  const fallback = fallbackCatalogMap.get(metricKey);
-  if (fallback) return fallback.label;
-  const def = definitions.get(metricKey);
-  return def?.description || def?.name || metricKey;
-};
+  definitions?: Map<string, MetricDefinition>,
+  t?: ReturnType<typeof useTranslation>["t"],
+) => getMetricLabel(metricKey, definitions, t, fallbackCatalogMap.get(metricKey)?.label);
 
 const chartSizeClass: Record<ChartSize, string> = {
   small: "lg:col-span-1",
@@ -556,28 +553,14 @@ const buildTimeViews = (
 ): TimeView[] => {
   const views: TimeView[] = [
     { key: "real-time", label: t("common.real_time") },
-    { key: "10m", label: t("chart.minutes", { count: 10 }), hours: 10 / 60 },
-    { key: "1h", label: t("chart.hours", { count: 1 }), hours: 1 },
   ];
-  const validRetentionDays =
-    Number.isFinite(maxMetricRetentionDays) && maxMetricRetentionDays > 0
-      ? maxMetricRetentionDays
-      : 0;
-
-  if (validRetentionDays >= 1) {
-    views.push({ key: "1d", label: t("chart.days", { count: 1 }), hours: 24 });
-  }
-  if (validRetentionDays >= 7) {
-    views.push({ key: "7d", label: t("chart.days", { count: 7 }), hours: 7 * 24 });
-  }
-  if (validRetentionDays > 0 && validRetentionDays !== 1 && validRetentionDays !== 7) {
-    const retentionHours = validRetentionDays * 24;
+  for (const hours of chartWindowHours(maxMetricRetentionDays)) {
     views.push({
-      key: `retention-${retentionHours}`,
-      label: Number.isInteger(validRetentionDays)
-        ? t("chart.days", { count: validRetentionDays })
-        : t("chart.hours", { count: retentionHours }),
-      hours: retentionHours,
+      key: hours < 24 ? `${hours}h` : `${hours / 24}d`,
+      label: hours >= 24 && Number.isInteger(hours / 24)
+        ? t("chart.days", { count: hours / 24 })
+        : t("chart.hours", { count: hours }),
+      hours,
     });
   }
 
@@ -627,6 +610,8 @@ const buildRowsFromMetricSeries = (
         ),
         unit: series.unit,
         tags,
+        coverage: series.coverage,
+        sourceInterval: Math.max(0, ...(series.sources ?? []).map(source => source.source_interval_seconds)),
       });
 
       for (const point of series.points ?? []) {
@@ -672,13 +657,14 @@ const buildRowsFromRealtime = (
           const key = `${metricKey}:${metricTagsKey(tagged.tags)}`;
           let item = seriesIndex.get(key);
           if (!item) {
+            const metricLabel = resolveMetricLabel(metricKey, undefined, t);
             const tagLabel = formatTags(metricKey, tagged.tags, pingTaskMap, t);
             const stableKey = metricSeriesKey(metricKey, tagged.tags);
             item = {
               dataKey: metricSeriesDataKey(metricKey, tagged.tags),
               stableKey,
               metricKey,
-              label: tagLabel ? `${metric.label} ${tagLabel}` : metric.label,
+              label: tagLabel ? `${metricLabel} ${tagLabel}` : metricLabel,
               color: metricSeriesColor(renderSeries.length),
               kind: metric.kind,
               unit: metric.unit,
@@ -700,7 +686,7 @@ const buildRowsFromRealtime = (
           dataKey: metricSeriesDataKey(metricKey),
           stableKey,
           metricKey,
-          label: metric.label,
+          label: resolveMetricLabel(metricKey, undefined, t),
           color: metricSeriesColor(renderSeries.length),
           kind: metric.kind,
           unit: metric.unit,
@@ -957,6 +943,7 @@ const toQueryRange = (range: CustomTimeRange) => {
 
 const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   const { t } = useTranslation();
+  const pageVisible = usePageVisible();
   const { uuid } = useParams<{ uuid: string }>();
   const { account } = useAccount();
   const { publicInfo, refresh: refreshPublicInfo } = usePublicInfo();
@@ -990,10 +977,13 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   );
   const [customQueryRevision, setCustomQueryRevision] = useState(0);
   const [customRangeError, setCustomRangeError] = useState<string | null>(null);
-  const [aggregation, setAggregation] = useLocalStorage<Aggregation>(
+  const [storedAggregation, setAggregation] = useLocalStorage<Aggregation>(
     "komari-instance-metric-aggregation",
     "avg",
   );
+  const aggregation: Aggregation = AGGREGATIONS.some((item) => item.value === storedAggregation)
+    ? storedAggregation
+    : "avg";
   const [ewmaEnabled, setEwmaEnabled] = useLocalStorage(
     "komari-instance-metric-ewma",
     false,
@@ -1008,6 +998,12 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     parseDashboardTemplate(globalDashboardTemplate),
   );
   const charts = useMemo(() => normalizeDashboard(dashboard), [dashboard]);
+  const visibleCharts = useMemo(
+    () => isRealtime ? charts : charts
+      .map((chart) => ({ ...chart, metrics: chart.metrics.filter((key) => !rawOnlyMetrics.has(key)) }))
+      .filter((chart) => chart.metrics.length > 0),
+    [charts, isRealtime],
+  );
   const [savingGlobalTemplate, setSavingGlobalTemplate] = useState(false);
   const [pingTasks, setPingTasks] = useState<PublicPingTask[]>([]);
   const [pingStats, setPingStats] = useState<PingMetricStat[]>([]);
@@ -1096,8 +1092,14 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         });
       }
     }
-    return Array.from(merged.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [definitions]);
+    return Array.from(merged.values())
+      .filter((item) => isRealtime || !rawOnlyMetrics.has(item.key))
+      .map((item) => ({
+        ...item,
+        label: resolveMetricLabel(item.key, definitionMap, t),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [definitionMap, definitions, isRealtime, t]);
 
   const customQuery = useMemo(
     () => toQueryRange(customQueryRange),
@@ -1122,8 +1124,8 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         : { hours: queryHours ?? 1 },
     [queryEnd, queryHours, queryRangeSignature, queryStart],
   );
-  const metricKeys = useMemo(() => {
-    const keys = charts.flatMap((chart) =>
+  const metricKeySignature = useMemo(() => {
+    const keys = visibleCharts.flatMap((chart) =>
       chart.metrics.filter((metricKey) => {
         if (definitionsLoaded && !definitionMap.has(metricKey)) return false;
         if (!isRealtime) return true;
@@ -1131,8 +1133,9 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         return !metric?.realtimeValue && !metric?.realtimeTaggedValues;
       }),
     );
-    return Array.from(new Set(keys)).sort();
-  }, [charts, definitionMap, definitionsLoaded, isRealtime]);
+    return JSON.stringify(Array.from(new Set(keys)).sort());
+  }, [visibleCharts, definitionMap, definitionsLoaded, isRealtime]);
+  const metricKeys = useMemo<string[]>(() => JSON.parse(metricKeySignature), [metricKeySignature]);
 
   useEffect(() => {
     if (!uuid || metricKeys.length === 0) {
@@ -1147,13 +1150,15 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     setLoading(true);
     setError(null);
 
+    if (!pageVisible || !definitionsLoaded) return;
+
     queryPublicMetrics({
         metrics: metricKeys,
         agentIds: [uuid],
         ...("start" in metricRangeParams
           ? { start: new Date(metricRangeParams.start), end: new Date(metricRangeParams.end) }
           : { hours: metricRangeParams.hours }),
-        maxPoints: HISTORY_MAX_POINTS,
+        maxPoints: CHART_TARGET_POINTS,
         aggregation,
         fillEmpty: true,
         signal: controller.signal,
@@ -1175,8 +1180,11 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     };
   }, [
     aggregation,
+    definitionsLoaded,
     metricKeys,
     metricRangeParams,
+    displayRangeHours,
+    pageVisible,
     uuid,
   ]);
 
@@ -1188,12 +1196,13 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
 
     let active = true;
     const controller = new AbortController();
+    if (!pageVisible || !definitionsLoaded) return;
     getPublicPingStats({
       agentIds: [uuid],
       ...("start" in metricRangeParams
         ? { start: new Date(metricRangeParams.start), end: new Date(metricRangeParams.end) }
         : { hours: metricRangeParams.hours }),
-      maxPoints: HISTORY_MAX_POINTS,
+      maxPoints: CHART_TARGET_POINTS,
       signal: controller.signal,
     })
       .then((result) => {
@@ -1209,8 +1218,11 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
       controller.abort(new DOMException("Chart unmounted", "AbortError"));
     };
   }, [
+    definitionsLoaded,
     metricKeys,
     metricRangeParams,
+    displayRangeHours,
+    pageVisible,
     uuid,
   ]);
 
@@ -1253,7 +1265,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
     setDashboard((current) => {
       const normalized = normalizeDashboard(current);
       const nextIndex = normalized.length + 1;
-      const title = getMetricLabel(metricKey, definitionMap);
+      const title = resolveMetricLabel(metricKey, definitionMap, t);
       return [
         ...normalized,
         {
@@ -1361,7 +1373,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
   const customInputMax = toDateTimeLocalValue(new Date());
 
   return (
-    <Flex direction="column" align="center" gap="4" className="km-load-chart w-full max-w-screen">
+    <Flex direction="column" align="center" gap="4" className="km-load-chart w-full max-w-screen" data-chart-loading={loading ? "true" : "false"} data-chart-hours={displayRangeHours ?? 1}>
       <div className="w-full overflow-x-auto px-2">
         <div className="w-max mx-auto">
           <SegmentedControl.Root value={selectedView.key} onValueChange={setViewKey}>
@@ -1529,11 +1541,11 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
         onDragEnd={handleChartDragEnd}
       >
         <SortableContext
-          items={charts.map((chart) => chart.id)}
+          items={visibleCharts.map((chart) => chart.id)}
           strategy={rectSortingStrategy}
         >
           <div className="km-load-chart-canvas grid w-full max-w-[1100px] grid-cols-1 gap-3 lg:grid-cols-3">
-            {charts.map((chart) => {
+            {visibleCharts.map((chart) => {
           const chartPingStatsMap = pingStatsMap;
           const metricBuilt = buildRowsFromMetricSeries(
             metricSeries,
@@ -1569,7 +1581,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <ChartLine className="size-4 shrink-0 text-muted-foreground" />
-                    <h2 className="truncate text-lg font-bold">{chart.title}</h2>
+                    <h2 className="truncate text-lg font-bold">{formatChartTitle(chart, t)}</h2>
                   </div>
                   <div className="mt-1 truncate text-xs text-muted-foreground">
                     {latestText}
@@ -1639,6 +1651,16 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                             <span className={cn("truncate", hidden && "line-through")}>
                               {item.label}
                             </span>
+                            {item.sourceInterval !== undefined && item.sourceInterval > 0 && (
+                              <span className="text-muted-foreground" data-testid="chart-source-precision">
+                                {t("chart.sourcePrecision", { defaultValue: "Source: {{seconds}}s", seconds: item.sourceInterval })}
+                              </span>
+                            )}
+                            {item.coverage && item.coverage !== "complete" && (
+                              <span className="text-amber-600" data-testid="chart-coverage-gap">
+                                {t("chart.coverageGap", "Some retained data cannot answer this interval")}
+                              </span>
+                            )}
                           </button>
                           {stat && (
                             <Tips
@@ -1671,7 +1693,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                           className="size-2 shrink-0 rounded-[2px]"
                           style={{ backgroundColor: metricSeriesColor(index) }}
                         />
-                        <span className="truncate">{getMetricLabel(metricKey, definitionMap)}</span>
+                        <span className="truncate">{resolveMetricLabel(metricKey, definitionMap, t)}</span>
                         <button
                           type="button"
                           title={t("chart.removeMetric", "Remove metric")}
@@ -1758,6 +1780,7 @@ const LoadChart = ({ data = [], onRealtimeActiveChange }: LoadChartProps) => {
                       <Line
                         key={item.dataKey}
                         dataKey={item.dataKey}
+                        data={metricLineRows(chartRows, item.dataKey)}
                         name={item.dataKey}
                         yAxisId={item.yAxisId}
                         stroke={item.color}

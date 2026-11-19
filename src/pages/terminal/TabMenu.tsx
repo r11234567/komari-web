@@ -8,6 +8,7 @@ import {
   Pencil,
   Search,
   X,
+  LockKeyhole,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -26,6 +27,7 @@ import {
   type ContextMenuPosition,
   type TerminalTab,
 } from "./terminalTypes";
+import { lockWorkspace } from "@/api/connect/workspace";
 
 interface TabMenuProps {
   tab: TerminalTab;
@@ -84,15 +86,22 @@ const TabMenu = ({
         align="start"
         side="bottom"
         sideOffset={0}
+        collisionPadding={8}
         
         className="min-w-[170px] !border-neutral-800 !bg-[#161616] !text-neutral-200 backdrop-blur-md"
       >
+        <DropdownMenuItem onSelect={() => lockWorkspace(tab.uuid)} className="flex items-center gap-2">
+          <LockKeyhole size={14} />
+          <span>{t("terminal.lock_workspace", "锁定此机器工作台")}</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className="flex items-center gap-2">
             <Palette size={14} />
             <span>{t("terminal.color_tab", "更改选项卡颜色")}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
+            sideOffset={4} collisionPadding={8}
             
             className="w-[160px] !border-neutral-800 !bg-[#161616] !text-neutral-200 p-2 backdrop-blur-md"
           >
@@ -171,6 +180,7 @@ const TabMenu = ({
             <span>{t("terminal.close_tabs", "关闭")}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent
+            sideOffset={4} collisionPadding={8}
             
             className="min-w-[130px] border border-neutral-800 bg-[#161616]/95 backdrop-blur-md"
           >

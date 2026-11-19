@@ -165,6 +165,8 @@
     }
   },
   "chart": {
+    "sourcePrecision": "元データの間隔：{{seconds}} 秒",
+    "coverageGap": "この間隔で集計できない保存データは欠損として表示します",
     "addChart": "グラフを追加",
     "addMetric": "メトリックを追加",
     "approximate": "概算",
@@ -230,7 +232,15 @@
     "udp_connections": "UDP",
     "usage": "使用率",
     "valid": "有効サンプル",
-    "volatility": "変動"
+    "volatility": "変動",
+    "titles": {
+      "cpu": "CPU",
+      "disk": "ディスク",
+      "gpu": "GPU",
+      "latency": "遅延",
+      "memory": "メモリ",
+      "network": "ネットワーク"
+    }
   },
   "color": {
     "amber": "アンバー",
@@ -445,6 +455,10 @@
     "title": "法的通知とコンプライアンスガイド"
   },
   "exec": {
+    "runAsRoot": "root として実行",
+    "defaultUser": "既定では komari として実行",
+    "executeAsRoot": "root として実行",
+    "rootNotAllowed": "選択したすべてのノードで root 実行が許可され、利用可能である必要があります。",
     "allCompleted": "すべてのタスクが完了しました",
     "command": "コマンドを実行",
     "commandPlaceholder": "whoami（Shift+Enter で改行）",
@@ -1258,6 +1272,8 @@
       "private_site": "プライベートサイト",
       "private_site_description": "サイトをプライベートに設定し、オンにするとデータはログイン後にのみ取得できます。",
       "script_domain": "エージェント接続アドレス",
+      "ssrf_protection_enabled": "SSRF 保護を有効化",
+      "ssrf_protection_enabled_description": "テーマとプラグインのマーケットからのダウンロード、テーマのリモートインポートと更新で、リダイレクト先を含む非公開アドレスやローカルアドレスへの接続を拒否します。無効にするとアドレス検証を省略します。",
       "script_domain_description": "インストールスクリプトの接続アドレスを定義します。複数のドメインのユーザーに便利で、他のドメインのアクセスには影響しません。空白の場合は現在のドメインを使用します。",
       "send_ip_addr_to_guest": "ゲストに一部のIPアドレスを表示",
       "send_ip_addr_to_guest_description": "未ログインの場合、common:getNodesを通じて一部のIPアドレス情報を確認できます。形式は9.*.*.* / fe80:*:*:*:*:*:*:*です。特定のテーマでIPを表示するために使用されます。",
@@ -1523,6 +1539,25 @@
   },
   "status_settings": "ステータス表示設定",
   "terminal": {
+    "lock_workspace": "このマシンのワークスペースをロック",
+    "workspace_unlock_title": "ターミナルとファイルのロック解除",
+    "workspace_cancel_unlock": "ロック解除をキャンセル",
+    "workspace_unlock_description": "利用時間は最大30分です。3分間操作しないとロックされます。ターミナルとファイルには選択したシステムアカウントの権限が適用されます。",
+    "workspace_target": "対象マシン",
+    "workspace_system_user": "対象マシンのシステムアカウント",
+    "workspace_user_placeholder": "例: alice",
+    "workspace_identity_hint": "先にアカウント設定で信頼できる認証情報を登録してください。rootにはマシン側での明示的な許可も必要です。Windowsのユーザー切り替えは未対応です。",
+    "workspace_verify_unlock": "認証してロック解除",
+    "workspace_change_user": "アカウントを変更",
+    "workspace_locked": "ワークスペースはロックされています",
+    "workspace_unlock_machine": "このマシンのロックを解除",
+    "startup_reconnecting": "接続が中断されました。元のターミナルを復元中",
+    "startup_authorizing": "このマシンのロック解除を待機中",
+    "startup_creating": "ターミナルを要求中",
+    "startup_waiting_agent": "エージェントによるターミナルの起動を待機中",
+    "startup_waiting_output": "ターミナル起動済み。最初の出力を待機中",
+    "startup_seconds": "{{count}} 秒",
+    "startup_slow_hint": "接続処理中です。認可の有効期限は引き続き適用されます。中止するにはこのタブを閉じてください。",
     "2fa_code_prompt": "2FAコードを入力してください: ",
     "2fa_prompt": "二要素認証が必要です。",
     "clients_load_failed": "サーバーの読み込みに失敗しました",
@@ -1673,6 +1708,10 @@
     "chart_loading": "グラフデータを読み込み中",
     "current_alerts": "現在のアラート",
     "data_unavailable": "データを取得できません",
+    "traffic_coarse": "この履歴の精度は {{minutes}} 分です。分単位の履歴が蓄積されると元の間隔に戻ります。",
+    "traffic_partial": "確定済みの一部の通信量を表示しています。一部のノードが未集計、またはバックグラウンドで集計中です。",
+    "traffic_data_end": "データの終端 {{time}}",
+    "traffic_today_unavailable": "本日の通信量は取得できません。確定済みの日は表示され、本日はゼロとして扱いません。",
     "latency_24h": "24時間の遅延",
     "no_recent_alert": "最近のアラートはありません",
     "recovered_today": "本日の復旧",
@@ -1877,5 +1916,28 @@
     "events": "イベント通知",
     "pluginFeatures": "プラグイン機能",
     "extensions": "外観とプラグイン"
+  },
+  "storage_update": {
+    "title": "Telemetry storage upgrade",
+    "description": "The upgrade starts automatically. Charts, Agent reporting and other operations are temporarily unavailable until it completes.",
+    "preserved": "Original history tables are preserved. Restarting resumes from durable checkpoints; a failed migration can be retried. Do not run an older server against the upgraded database.",
+    "network": "Connection interrupted: {{error}}. Checking again automatically; the server migration continues.",
+    "phase": "Current stage",
+    "working": "Migration in progress",
+    "processed": "Confirmed records: {{count}}. Total work is not yet known.",
+    "elapsed": "Elapsed: {{seconds}} seconds",
+    "retry": "Retry migration",
+    "states": {
+      "pending": "Preparing",
+      "migrating": "Migrating",
+      "completed": "Completed; reconnecting to the panel",
+      "failed": "Migration stopped; original history preserved"
+    },
+    "phases": {
+      "preparing": "Preparing",
+      "traffic_ledger": "Settling traffic ledgers",
+      "telemetry_history": "Importing historical telemetry",
+      "completed": "Completed"
+    }
   }
 }

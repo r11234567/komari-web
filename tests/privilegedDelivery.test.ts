@@ -22,10 +22,10 @@ test("out-of-order polls cannot replace a newer summary", () => {
 });
 
 test("master bounds child grants independently of root identity", () => {
-  const draft = { remoteControlEnabled: false, websshEnabled: true, executionEnabled: true };
-  assert.deepEqual(boundedRemoteSettings(draft), { remoteControlEnabled: false, websshEnabled: false, executionEnabled: false });
+  const draft = { remoteControlEnabled: false, websshEnabled: true, executionEnabled: true, rootExecutionAllowed: true };
+  assert.deepEqual(boundedRemoteSettings(draft), { remoteControlEnabled: false, websshEnabled: false, executionEnabled: false, rootExecutionAllowed: false });
   assert.deepEqual(boundedRemoteSettings({ ...draft, remoteControlEnabled: true, executionEnabled: false }),
-    { remoteControlEnabled: true, websshEnabled: true, executionEnabled: false });
+    { remoteControlEnabled: true, websshEnabled: true, executionEnabled: false, rootExecutionAllowed: true });
 });
 
 test("rescue installation is pending until independently observed, without changing Agent identity", () => {

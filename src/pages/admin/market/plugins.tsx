@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import PluginConfigDialog from "@/components/admin/PluginConfigDialog";
+import PluginPackageManager, { PluginPackageApprovalDialog } from "@/components/admin/PluginPackageManager";
 import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
 import { toast } from "sonner";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -289,7 +290,7 @@ export default function PluginMarketPage() {
     const key = `${plugin.source_id}:${plugin.short}`;
     setInstalling(key);
     try {
-      const payload = await request("/api/admin/plugin/market/install", {
+      const payload = await request<PluginInfo & { requires_approval: boolean }>("/api/admin/plugin/market/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -297,10 +298,10 @@ export default function PluginMarketPage() {
           short: plugin.short,
         }),
       });
-      toast.success(
-        payload.message ||
-          t("plugin.market_install_success", "Plugin installed"),
-      );
+      const needsApproval = payload.data?.requires_approval !== false;
+      if (payload.data && needsApproval) setPendingApproval(payload.data);
+      toast.success(t(needsApproval ? "plugin.package_review.staged" : "plugin.package_review.updated"));
+      refreshNavigation();
       await loadCatalog();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -400,13 +401,13 @@ export default function PluginMarketPage() {
     }
   };
 
-  const togglePlugin = async (plugin: PluginInfo, approved = false) => {
+  const togglePlugin = async (plugin: PluginInfo) => {
     if (togglingRef.current.has(plugin.short)) return;
     togglingRef.current.add(plugin.short);
     setToggling(new Set(togglingRef.current));
-    const enabled = approved || !plugin.enabled;
+    const enabled = !plugin.enabled;
     try {
-      const result = await setAdminPluginEnabled({ short: plugin.short, enabled, approved, signal: AbortSignal.timeout(15_000) });
+      const result = await setAdminPluginEnabled({ short: plugin.short, enabled, signal: AbortSignal.timeout(15_000) });
       if (enabled && result?.requiresPermissionApproval) {
         setPendingApproval(plugin);
         return;
@@ -425,43 +426,6 @@ export default function PluginMarketPage() {
       }
     }
   };
-  const approveAndEnable = () => {
-    if (pendingApproval) void togglePlugin(pendingApproval, true);
-  };
-
-  const permissionLabels = (plugin: PluginInfo): string[] => {
-    const labels: string[] = [];
-    const p = plugin.permissions;
-    if (!p) return labels;
-    if (p.allowSystemRPC)
-      labels.push(t("plugin.permission.allowSystemRPC", "Call system RPC"));
-    if (p.allowRoutes)
-      labels.push(t("plugin.permission.allowRoutes", "Register HTTP routes"));
-    if (p.allowHooks)
-      labels.push(
-        t("plugin.permission.allowHooks", "Modify HTTP requests/responses"),
-      );
-    if (p.allowHTMLInject)
-      labels.push(
-        t(
-          "plugin.permission.allowHTMLInject",
-          "Embed CSS/JS into every HTML page",
-        ),
-      );
-    if (p.allowExec)
-      labels.push(t("plugin.permission.allowExec", "Execute child processes"));
-    if (p.allowListen)
-      labels.push(t("plugin.permission.allowListen", "Listen on local ports"));
-    if (p.allowAllFileAccess)
-      labels.push(
-        t(
-          "plugin.permission.allowAllFileAccess",
-          "Access files outside the plugin directory",
-        ),
-      );
-    return labels;
-  };
-
   if (loading) return <Loading />;
 
   return (
@@ -472,6 +436,7 @@ export default function PluginMarketPage() {
           <Heading size="4">{t("plugin.market", "Plugin Market")}</Heading>
         </Flex>
         <Flex gap="2">
+          <PluginPackageManager compact refreshKey={installing === null ? 0 : 1} onChanged={async () => { refreshNavigation(); await loadCatalog(); }} />
           <Button variant="soft" onClick={() => setSourcesOpen(true)}>
             <Settings2 size={14} />
             {t("market.manage_sources", "Manage sources")}
@@ -486,7 +451,6 @@ export default function PluginMarketPage() {
           </IconButton>
         </Flex>
       </Flex>
-
       <Separator size="4" />
 
       <Callout.Root color="amber" size="1">
@@ -704,60 +668,7 @@ export default function PluginMarketPage() {
           onSaved={() => { refreshNavigation(); void loadCatalog(); }}
         />
       )}
-      <Dialog.Root
-        open={pendingApproval !== null}
-        onOpenChange={(open) => {
-          if (!open && !toggling.has(pendingApproval?.short || "")) setPendingApproval(null);
-        }}
-      >
-        <Dialog.Content>
-          <Dialog.Title>
-            {t("plugin.permission_title", "Permission required")}
-          </Dialog.Title>
-          <Text as="p" size="2" className="mb-2">
-            {t(
-              "plugin.permission_description",
-              "This plugin requests the following permissions:",
-            )}
-          </Text>
-          <Flex direction="column" gap="2" my="3">
-            {pendingApproval &&
-              permissionLabels(pendingApproval).length === 0 && (
-                <Text size="2" color="gray">
-                  {t(
-                    "plugin.permission_none",
-                    "This plugin requests no special permissions",
-                  )}
-                </Text>
-              )}
-            {pendingApproval &&
-              permissionLabels(pendingApproval).map((label) => (
-                <Badge
-                  key={label}
-                  color="orange"
-                  size="2"
-                  className="justify-start"
-                >
-                  {label}
-                </Badge>
-              ))}
-          </Flex>
-          <Text size="1" color="gray" className="mb-4">
-            {t(
-              "plugin.permission_default_note",
-              "Default granted: read plugin configuration, register plugin RPC, read/write files inside the plugin directory",
-            )}
-          </Text>
-          <Flex gap="2" justify="end">
-            <Button variant="soft" disabled={toggling.has(pendingApproval?.short || "")} onClick={() => setPendingApproval(null)}>
-              {t("common.cancel", "Cancel")}
-            </Button>
-            <Button disabled={toggling.has(pendingApproval?.short || "")} onClick={approveAndEnable}>
-              {t("plugin.permission_approve", "Approve & Enable")}
-            </Button>
-          </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
+      <PluginPackageApprovalDialog short={pendingApproval?.short ?? null} onClose={() => setPendingApproval(null)} onChanged={async () => { refreshNavigation(); await loadCatalog(); }} />
 
 
       {/* 源管理弹窗：与主题市场一致 */}

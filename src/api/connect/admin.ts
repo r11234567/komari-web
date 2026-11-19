@@ -94,14 +94,14 @@ export const listAdminPlugins = async (signal: AbortSignal) => {
 export const setAdminPluginEnabled = async (input: {
   short: string;
   enabled: boolean;
-  approved?: boolean;
   signal: AbortSignal;
 }) => connectUnary(
   { signal: input.signal },
   (signal, timeoutMs) => connectClients.plugin.setPluginEnabled({
     shortName: input.short,
     enabled: input.enabled,
-    permissionsApproved: input.approved ?? false,
+    // Legacy flags cannot grant execution. Enabling opens package review/2FA.
+    permissionsApproved: false,
   }, { signal, timeoutMs }),
 );
 

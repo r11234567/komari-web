@@ -9,6 +9,7 @@ import {
     Text,
     Separator,
     Badge,
+    Checkbox,
 } from "@radix-ui/themes";
 import { Play, AlertCircle, CheckCircle2, Copy, Clock, Square } from "lucide-react";
 import { toast } from "sonner";
@@ -76,6 +77,8 @@ const ExecContent = () => {
     const [command, setCommand] = useState("");
     const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
     const [executing, setExecuting] = useState(false);
+    const [runAsRoot, setRunAsRoot] = useState(false);
+    const [rootCapableNodes, setRootCapableNodes] = useState<Set<string>>(new Set());
     const [results, setResults] = useState<TaskResult[]>([]);
     const [taskId, setTaskId] = useState<string | null>(null);
     const [commandFocused, setCommandFocused] = useState(false);
@@ -144,6 +147,11 @@ const ExecContent = () => {
                         .map((agent) => agent.agentId),
                 );
                 setExecutionCapableNodes(supported);
+                setRootCapableNodes(new Set(
+                    agents
+                        .filter((agent) => agent.capabilities?.rootExecution?.available === true)
+                        .map((agent) => agent.agentId),
+                ));
                 setSelectedNodes((current) => current.filter((agentId) => supported.has(agentId)));
                 setCapabilitiesResolved(true);
             })
@@ -214,8 +222,14 @@ const ExecContent = () => {
         }
 
         const targets = selectedNodes.map((id) => id.trim());
+        const asRoot = runAsRoot;
+        if (asRoot && targets.some((id) => !rootCapableNodes.has(id))) {
+            toast.error(t("exec.rootNotAllowed"));
+            return;
+        }
+        const proofTargets = asRoot ? [...targets, "run-as:root"] : targets;
         const idempotencyKey = crypto.randomUUID();
-        setCredentialAction({ action: "execution:create", targets, title: t("exec.execute"), execute: async (authorizationToken, verificationSignal) => {
+        setCredentialAction({ action: "execution:create", targets: proofTargets, title: asRoot ? t("exec.executeAsRoot") : t("exec.execute"), execute: async (authorizationToken, verificationSignal) => {
             for (const controller of executionControllersRef.current.values()) {
                 controller.abort();
             }
@@ -229,6 +243,7 @@ const ExecContent = () => {
                 const executions = await createRemoteExecutions({
                     agentIds: targets,
                     command,
+                    runAsRoot: asRoot,
                     authorizationToken,
                     idempotencyKey,
                     signal: verificationSignal,
@@ -236,6 +251,7 @@ const ExecContent = () => {
                 if (executions.length === 0) {
                     throw new Error(t("common.unknownError"));
                 }
+                setRunAsRoot(false);
                 setTaskId(executions[0].executionId);
                 setResults(executions.map((execution) => ({
                     task_id: execution.executionId,
@@ -406,7 +422,10 @@ const ExecContent = () => {
                         <SettingCardCollapse title={t("exec.selectNodes")} defaultOpen>
                 <NodeSelector
                                 value={selectedNodes}
-                    onChange={setSelectedNodes}
+                    onChange={(nodes) => {
+                        setSelectedNodes(nodes);
+                        setRunAsRoot(false);
+                    }}
                     includeNode={capabilitiesResolved ? (node) => executionCapableNodes.has(node.uuid) : undefined}
                                 className="min-h-[200px]"
                             />
@@ -418,7 +437,17 @@ const ExecContent = () => {
                         )}
                     </div>
 
-                    <Flex justify="end" gap="2">
+                    <Flex justify="end" gap="2" wrap="wrap">
+                        <Flex align="center" gap="2" wrap="wrap">
+                            <Checkbox
+                                id="execution-run-as-root"
+                                checked={runAsRoot}
+                                disabled={executing || selectedNodes.length === 0 || selectedNodes.some((id) => !rootCapableNodes.has(id))}
+                                onCheckedChange={(checked) => setRunAsRoot(checked === true)}
+                            />
+                            <Text as="label" htmlFor="execution-run-as-root" size="2">{t("exec.runAsRoot")}</Text>
+                            {!runAsRoot && <Text size="1" color="gray">{t("exec.defaultUser")}</Text>}
+                        </Flex>
                         <Button
                             onClick={executeCommand}
                             disabled={executing || !twoFaEnabled || !command.trim() || selectedNodes.length === 0}

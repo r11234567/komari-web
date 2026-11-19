@@ -80,6 +80,7 @@ export function AgentDeploymentDialog({
   const [installation, setInstallation] = React.useState<InstallationObservation>();
   const [receivedAt, setReceivedAt] = React.useState<Timestamp>();
   const [reportedOS, setReportedOS] = React.useState("");
+  const windowsGPU = reportedOS.toLowerCase().startsWith("windows");
   const [nodeInfoError, setNodeInfoError] = React.useState("");
   const [loadedRevision, setLoadedRevision] = React.useState(0n);
   const [refreshError, setRefreshError] = React.useState("");
@@ -153,7 +154,7 @@ export function AgentDeploymentDialog({
       if (!current) return current;
       return {
         ...current,
-        runtime: create(RuntimeConfigSchema, runtimeDraft(current.runtime, changes)),
+        runtime: create(RuntimeConfigSchema, runtimeDraft(current.runtime, changes, windowsGPU)),
       };
     });
   };
@@ -165,7 +166,7 @@ export function AgentDeploymentDialog({
     controllerRef.current = controller;
     setSaving(true);
     try {
-      const runtime = create(RuntimeConfigSchema, runtimeDraft(profile.runtime));
+      const runtime = create(RuntimeConfigSchema, runtimeDraft(profile.runtime, {}, windowsGPU));
       const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
         deployment.saveDeploymentProfile(
           {
@@ -228,6 +229,7 @@ export function AgentDeploymentDialog({
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <Toggle label="包含缓冲区/缓存内存" checked={runtime?.memoryIncludeCache ?? false} onChange={(value) => updateRuntime({ memoryIncludeCache: value })} />
+                {windowsGPU && <Toggle label="启用基础 GPU 采集（Windows）" checked={runtime?.enableGpu ?? true} onChange={(value) => updateRuntime({ enableGpu: value })} />}
                 <Toggle label="启用详细 GPU 采集监控" checked={runtime?.detailedGpu ?? false} onChange={(value) => updateRuntime({ detailedGpu: value })} />
                 <Toggle
                   label="从网卡获取 IP 地址"

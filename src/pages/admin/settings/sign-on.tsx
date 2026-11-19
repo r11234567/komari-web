@@ -1,7 +1,6 @@
 import {
   SettingCardLabel,
   SettingCardSelect,
-  SettingCardShortTextInput,
   SettingCardSwitch,
 } from "@/components/admin/SettingCard";
 import { updateSettingsWithToast, useSettings } from "@/lib/api";
@@ -9,6 +8,7 @@ import { Button, Text } from "@radix-ui/themes";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
 import AgentCredentialLifecycle from "@/components/admin/AgentCredentialLifecycle";
+import ApiTokenManager from "@/components/admin/ApiTokenManager";
 import React from "react";
 import { Link } from "react-router-dom";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
@@ -41,12 +41,11 @@ function SignOnGate() {
 }
 
 import { renderProviderInputs } from "@/utils/renderProviders";
-import { toast } from "sonner";
 
 function SignOnSettingsBody() {
   // Machine authorization management must remain reachable even if an
   // unrelated OAuth provider catalogue is empty or temporarily unavailable.
-  return <><AgentCredentialLifecycle /><SignOnProviderSettings /></>;
+  return <><AgentCredentialLifecycle /><ApiTokenManager /><SignOnProviderSettings /></>;
 }
 
 function SignOnProviderSettings() {
@@ -187,57 +186,6 @@ function SignOnProviderSettings() {
         handleSave: handleOidcSave,
         t,
       })}
-      <SettingCardLabel>API</SettingCardLabel>
-      <ApiCard />
     </>
   );
-}
-
-const ApiCard = () => {
-  const { settings } = useSettings();
-  const { t } = useTranslation();
-  const [apiValues, setApiValues] = React.useState<string>(settings?.api_key || "" );
-
-  // 生成32位随机字符串
-  const generateRandomString = () => {
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    return "komari-" + Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  };
-
-  // 处理生成按钮点击
-  const handleGenerateApiKey = () => {
-    const newApiKey = generateRandomString();
-    setApiValues(newApiKey);
-  };
-
-  // 初始化API值
-  React.useEffect(() => {
-    if (settings?.api_key) {
-      setApiValues(settings.api_key);
-    }
-  }, [settings?.api_key]);
-
-  return (
-    <SettingCardShortTextInput
-        title={t("settings.api.title")}
-        description={t("settings.api.description")}
-        value={apiValues}
-        onChange={(e) => setApiValues(e.target.value)}
-        OnSave={async (values) => {
-          if (!values) {
-            await updateSettingsWithToast({ api_key: "" }, t);
-            return;
-          }
-          if (values.length < 12) {
-            toast.error(t("settings.api.key_length_error"));
-            return;
-          }
-          await updateSettingsWithToast({ api_key: values }, t);
-        }}
-      >
-        <div className="flex flex-row gap-2 justify-start items-center">
-          <Button variant="soft" color="green" onClick={handleGenerateApiKey}>{t('common.generate')}</Button>
-        </div>
-      </SettingCardShortTextInput>
-  )
 }

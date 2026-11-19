@@ -18,10 +18,12 @@ import {emitStatus,streamCalls} from './connect.ts';
 
 const dom=globalThis.workspaceTestDOM;
 const i18n=i18next.createInstance();
+const english=JSON.parse(readFileSync(new URL('../../src/i18n/locales/en.json',import.meta.url),'utf8'));
 await i18n.init({lng:'en',fallbackLng:'en',resources:{en:{translation:{
+ ...english,
  'account':{'native_otp':{provider:'Credential',no_provider:'Choose credential',begin:'Send code',enter_code:'Verification code',verify:'Verify',cancel:'Restart'}},
  'nodeCard':{offline:'Offline'},
- 'terminal':{resource_monitor:{waiting:'Waiting for data',title:'Resource monitor'}},
+ 'terminal':{...english.terminal,resource_monitor:{waiting:'Waiting for data',title:'Resource monitor'}},
 }}},interpolation:{escapeValue:false}});
 function wrap(child:ReturnType<typeof h>){return h(I18nextProvider,{i18n},h(Theme,{accentColor:'blue',appearance:'dark'},h(TerminalPageBoundary,null,child)));}
 function button(text:string){const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent===text);assert.ok(b,'missing button '+text);return b;}
@@ -47,7 +49,7 @@ test('file-only workspace verifies above the editor portal with themed interacti
    const setter=Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!;
    setter.call(input,'alice');input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));
   });
-  await act(async()=>button('验证并解锁').click());await settle();
+  await act(async()=>button('Verify and unlock').click());await settle();
   const begin=button('Send code');assert.ok(begin.classList.contains('rt-Button'),'OTP action lost theme');
   await act(async()=>begin.click());await settle();
   const code=document.querySelector<HTMLInputElement>('input[autocomplete="one-time-code"]');assert.ok(code,'OTP input hidden or not rendered');
@@ -99,34 +101,34 @@ test('collected workspace reopens with an explicit lock screen instead of an ine
  const original=makeGrant(agent,'before-close'),sibling=makeGrant(other,'sibling');
  workspaceState.install(original);workspaceState.install(sibling);
  const host=document.createElement('div');document.body.appendChild(host);const root=createRoot(host);
- const surface=()=>h(Theme,null,h(WorkspaceSurface,{agentId:agent},h('div',{'data-terminal-screen':true,style:{background:'black'}},'')));
+ const surface=()=>h(I18nextProvider,{i18n},h(Theme,null,h(WorkspaceSurface,{agentId:agent},h('div',{'data-terminal-screen':true,style:{background:'black'}},''))));
  const revoked:string[]=[];
  const collect=()=>workspaceState.collectUnused(id=>{revoked.push(id);workspaceState.invalidate(id);});
  try{
   await act(async()=>root.render(surface()));
-  assert.equal(host.textContent?.includes('工作台已锁定'),false);
+  assert.equal(host.textContent?.includes('Workspace locked'),false);
   await act(async()=>root.render(null));
   now+=59999;await act(async()=>collect());
   assert.deepEqual(revoked,[]);assert.equal(original.controller.signal.aborted,false);
   await act(async()=>root.render(surface()));
   now+=2;await act(async()=>collect());
   assert.deepEqual(revoked,[],'reopening before cleanup must cancel collection');
-  assert.equal(host.textContent?.includes('工作台已锁定'),false);
+  assert.equal(host.textContent?.includes('Workspace locked'),false);
   await act(async()=>root.render(null));
   now+=60000;await act(async()=>collect());
   assert.deepEqual(revoked,[agent]);assert.equal(original.controller.signal.aborted,true);
   assert.equal(workspaceState.knownAgents.has(agent),false,'exercise real collection, not ordinary expiry');
   assert.equal(workspaceState.promptAgent,undefined,'cleanup must remain silent');
   await act(async()=>root.render(surface()));
-  assert.ok(host.textContent?.includes('工作台已锁定'),'collected workspace reopened as black screen without lock');
+  assert.ok(host.textContent?.includes('Workspace locked'),'collected workspace reopened as black screen without lock');
   assert.ok(host.querySelector('[inert]'),'collected terminal accepts interaction');
   await assert.rejects(workspaceState.authorize(agent),/Workspace locked/);
   assert.equal(workspaceState.promptAgent,undefined,'reopen must not automatically start 2FA');
-  const unlock=Array.from(host.querySelectorAll('button')).find(b=>b.textContent==='解锁此机器');assert.ok(unlock);
+  const unlock=Array.from(host.querySelectorAll('button')).find(b=>b.textContent==='Unlock this machine');assert.ok(unlock);
   await act(async()=>unlock.click());
   assert.equal(workspaceState.promptAgent,agent);assert.equal(workspaceState.pending.has(agent),true);
   await act(async()=>workspaceState.install(makeGrant(agent,'after-explicit-unlock')));
-  assert.equal(host.textContent?.includes('工作台已锁定'),false);
+  assert.equal(host.textContent?.includes('Workspace locked'),false);
   assert.equal(host.querySelector('[inert]'),null);
   assert.equal(workspaceState.grants.get(other),sibling);assert.equal(sibling.controller.signal.aborted,false);
  }finally{
