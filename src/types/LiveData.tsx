@@ -39,7 +39,7 @@ export type Record = {
       memory_total: number;
       memory_used: number;
       utilization: number;
-      temperature: number;
+      temperature: number | null;
     }[];
   };
   uptime: number;
