@@ -34,7 +34,10 @@ import { useSettings } from "@/lib/api";
 import UploadDialog from "@/components/UploadDialog";
 import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 import {
+  adminThemeManifestPath,
+  adminThemePreviewPath,
   getThemeConfigurationType,
+  isSplitPanelMode,
   normalizeThemeManifest,
   THEME_CONFIGURATION_MANAGED,
 } from "@/utils/themeConfiguration";
@@ -102,8 +105,9 @@ const ThemePage = () => {
       }
       try {
         // 强制不缓存
-        const resp = await fetch(`/themes/${themeShort}/komari-theme.json`, {
-          cache: "no-cache",
+        const resp = await fetch(adminThemeManifestPath(themeShort), {
+          cache: "no-store",
+          credentials: "same-origin",
         });
         if (!resp.ok) {
           setActiveThemeHasConfig(false);
@@ -411,6 +415,23 @@ const ThemePage = () => {
         </Flex>
       </Flex>
 
+      <Callout.Root
+        color={isSplitPanelMode(settings) ? "green" : "amber"}
+        size="1"
+      >
+        <Callout.Text>
+          {isSplitPanelMode(settings)
+            ? t(
+                "theme.split_origin_notice",
+                "Split Panel listener (KOMARI_PANEL_LISTEN) is active: third-party themes run exclusively on the public status origin and cannot access management cookies, Passkeys, or control-plane endpoints.",
+              )
+            : t(
+                "theme.shared_origin_notice",
+                "Single-port shared-origin mode: public themes and the management console share one browser Origin for out-of-the-box compatibility. Server-side authorization and step-up checks enforce privilege boundaries; set KOMARI_PANEL_LISTEN with a separate domain for browser-enforced Origin isolation.",
+              )}
+        </Callout.Text>
+      </Callout.Root>
+
       {/* 主题卡片网格 */}
       {themes.length === 0 ? (
         <Box className="text-center py-12">
@@ -438,7 +459,7 @@ const ThemePage = () => {
               >
                 {theme.preview ? (
                   <img
-                    src={`/themes/${theme.short}/${theme.preview}`}
+                    src={adminThemePreviewPath(theme.short)}
                     alt={theme.name}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -545,7 +566,7 @@ const ThemePage = () => {
             <Box className="aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative">
               {selectedTheme?.preview ? (
                 <img
-                  src={`/themes/${selectedTheme.short}/${selectedTheme.preview}`}
+                  src={adminThemePreviewPath(selectedTheme.short)}
                   alt={selectedTheme.name}
                   className="w-full h-full object-cover"
                 />

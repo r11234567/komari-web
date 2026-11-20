@@ -29,10 +29,13 @@ import { listAdminPlugins } from "@/api/connect/admin";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import type { PluginInfo } from "@/types/plugin";
 import { preloadAdminRoute, scheduleAdminWarmup } from "@/utils/adminPreload";
+import { useSettings } from "@/lib/api";
 import {
+  adminThemeManifestPath,
   getThemeConfigurationType,
   normalizeThemeManifest,
   normalizeThemeRedirectTarget,
+  resolvePublicSiteHref,
   THEME_CONFIGURATION_MANAGED,
   THEME_CONFIGURATION_RAW,
   THEME_CONFIGURATION_REDIRECT,
@@ -71,7 +74,9 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
     location.pathname === "/admin/theme_managed" ||
     location.pathname === "/admin/plugins/config";
   const { publicInfo } = usePublicInfo();
+  const { settings } = useSettings();
   const { refreshVersion } = useAdminNavigation();
+  const publicHomeHref = resolvePublicSiteHref(settings, "/");
   //const navigate = useNavigate();
   // 获取版本信息
   const versionInfo = publicInfo?.version ? {
@@ -114,8 +119,9 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
         return;
       }
       try {
-        const resp = await fetch(`/themes/${currentTheme}/komari-theme.json`, {
-          cache: "no-cache",
+        const resp = await fetch(adminThemeManifestPath(currentTheme), {
+          cache: "no-store",
+          credentials: "same-origin",
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = normalizeThemeManifest(await resp.json());
@@ -390,9 +396,12 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
             : []),
         ];
       }
+      if (item.labelKey === "common.home" && item.path === "/") {
+        return [{ ...item, path: publicHomeHref }];
+      }
       return [item];
     });
-  }, [extraMenuItems, pluginMenuItems]);
+  }, [extraMenuItems, pluginMenuItems, publicHomeHref]);
   const bottomStartPath = mergedBaseMenuItems.find(
     (item) => item.bottom,
   )?.path;
@@ -506,7 +515,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
               >
                 <TablerMenu2 />
               </IconButton>
-              <a href="/" target="_blank" rel="noopener noreferrer">
+              <a href={publicHomeHref} target="_blank" rel="noopener noreferrer">
                 <label className="text-xl font-bold">Komari</label>
               </a>
               {updateAvailable && releasesSince.length > 0 && (

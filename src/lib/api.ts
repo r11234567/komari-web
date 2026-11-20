@@ -19,6 +19,10 @@ export interface SettingsResponse {
   metric_rollup_minute_retention_minutes?: number;
   metric_rollup_five_minute_retention_minutes?: number;
   metric_rollup_hour_retention_hours?: number;
+  panel_isolation_mode?: "split" | "single_origin" | string;
+  panel_listen_enabled?: boolean;
+  public_origin?: string;
+  panel_origin?: string;
   CreatedAt: string;
   UpdatedAt: string;
   [key: string]: any;

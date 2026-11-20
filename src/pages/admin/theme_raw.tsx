@@ -3,6 +3,7 @@ import { Callout, Box } from "@radix-ui/themes";
 import Loading from "@/components/loading";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import {
+  adminThemeManifestPath,
   getRawThemeHtml,
   normalizeThemeManifest,
 } from "@/utils/themeConfiguration";
@@ -28,8 +29,9 @@ const ThemeRaw = () => {
       setError(null);
 
       try {
-        const resp = await fetch(`/themes/${theme}/komari-theme.json`, {
-          cache: "no-cache",
+        const resp = await fetch(adminThemeManifestPath(theme), {
+          cache: "no-store",
+          credentials: "same-origin",
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -72,7 +74,7 @@ const ThemeRaw = () => {
       <iframe
         title="Theme raw content"
         srcDoc={html}
-        sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+        sandbox="allow-forms allow-modals allow-popups allow-scripts"
         className="km-theme-raw-frame h-full min-h-[calc(100vh-96px)] w-full border-0"
       />
     </Box>

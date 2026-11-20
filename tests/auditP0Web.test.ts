@@ -184,3 +184,43 @@ test("Account page requires 2FA verification before entry when 2FA is enabled", 
   const gateSource = readFileSync(new URL("../src/components/admin/AccountTwoFactorGate.tsx", import.meta.url), "utf8");
   assert.match(gateSource, /\/api\/admin\/2fa\/verify/);
 });
+
+test("P3A: Admin UI loads theme manifests and previews via /api/admin/theme, isolates raw theme iframe, and discloses origin mode", async () => {
+  const {
+    adminThemeManifestPath,
+    adminThemePreviewPath,
+    isSplitPanelMode,
+    normalizeThemeManifest,
+    resolvePublicSiteHref,
+    resolvePublicSiteOrigin,
+  } = await import("../src/utils/themeConfiguration.ts");
+
+  assert.equal(adminThemeManifestPath("adhesive-note"), "/api/admin/theme/adhesive-note/manifest");
+  assert.equal(adminThemePreviewPath("adhesive-note"), "/api/admin/theme/adhesive-note/preview");
+  assert.equal(isSplitPanelMode({ panel_isolation_mode: "split" }), true);
+  assert.equal(isSplitPanelMode({ panel_isolation_mode: "single_origin" }), false);
+  assert.equal(resolvePublicSiteOrigin({ public_origin: "https://status.example.com/" }), "https://status.example.com");
+  assert.equal(resolvePublicSiteHref({ public_origin: "https://status.example.com" }, "/"), "https://status.example.com/");
+  assert.equal(resolvePublicSiteHref({}, "/"), "/");
+
+  const wrapped = normalizeThemeManifest({ status: "success", data: { short: "junimo", name: "Junimo" } });
+  assert.equal(wrapped?.short, "junimo");
+  assert.equal(wrapped?.schemaVersion, 1);
+
+  for (const rel of [
+    "../src/components/admin/AdminPanelBar.tsx",
+    "../src/pages/admin/theme_managed.tsx",
+    "../src/pages/admin/theme_raw.tsx",
+    "../src/pages/admin/settings/theme.tsx",
+  ]) {
+    const src = readFileSync(new URL(rel, import.meta.url), "utf8");
+    assert.doesNotMatch(src, /\/themes\/\$\{/);
+  }
+
+  const rawSource = readFileSync(new URL("../src/pages/admin/theme_raw.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(rawSource, /allow-same-origin/);
+
+  const themeSettingsSource = readFileSync(new URL("../src/pages/admin/settings/theme.tsx", import.meta.url), "utf8");
+  assert.match(themeSettingsSource, /isSplitPanelMode/);
+  assert.match(themeSettingsSource, /KOMARI_PANEL_LISTEN/);
+});

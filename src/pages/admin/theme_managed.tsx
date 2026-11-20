@@ -7,6 +7,7 @@ import Loading from "@/components/loading";
 import { useTranslation } from "react-i18next";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import {
+  adminThemeManifestPath,
   getThemeConfigurationType,
   normalizeThemeManifest,
   THEME_CONFIGURATION_MANAGED,
@@ -51,8 +52,9 @@ const ThemeManaged: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const resp = await fetch(`/themes/${theme}/komari-theme.json`, {
-          cache: "no-cache",
+        const resp = await fetch(adminThemeManifestPath(theme), {
+          cache: "no-store",
+          credentials: "same-origin",
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = normalizeThemeManifest(await resp.json());
