@@ -6,6 +6,15 @@
     "readme_open_in_new_tab": "Buka di tab baru"
   },
   "account": {
+    "passkey": {
+      "title": "Passkey",
+      "name": "Nama passkey",
+      "add": "Tambahkan passkey",
+      "show": "Tampilkan passkey",
+      "empty": "Belum ada passkey terdaftar",
+      "added": "Passkey ditambahkan",
+      "deleted": "Passkey dihapus"
+    },
     "2fa_disabled": "Autentikasi dua faktor dinonaktifkan",
     "2fa_enabled": "Autentikasi dua faktor diaktifkan",
     "2fa_otp_input_prompt": "Silakan masukkan kode satu kali dari aplikasi autentikator Anda",
@@ -544,6 +553,7 @@
     "title": "Log"
   },
   "login": {
+    "passkey": "Masuk dengan passkey",
     "desc": "Masuk ke panel kontrol Komari.",
     "login_with": "Masuk dengan {{provider}}",
     "login_with_github": "Masuk dengan GitHub",

@@ -6,6 +6,15 @@
     "readme_open_in_new_tab": "在新标签页中打开"
   },
   "account": {
+    "passkey": {
+      "title": "通行密钥",
+      "name": "密钥名称",
+      "add": "添加通行密钥",
+      "show": "查看通行密钥",
+      "empty": "尚未注册通行密钥",
+      "added": "已添加通行密钥",
+      "deleted": "已删除通行密钥"
+    },
     "native_otp": {
       "title": "可信联系方式",
       "description": "绑定用户邮箱或 TG 私聊 ID，用于原生通知验证码。复用通知渠道的发送配置，不会修改告警收件人，也不会关闭 TOTP。验证码 3 分钟有效；未完成验证前，同一收件人每分钟最多发送一次。",
@@ -566,6 +575,7 @@
     "title": "日志"
   },
   "login": {
+    "passkey": "使用通行密钥登录",
     "desc": "登录到 Komari 控制面板。",
     "login_with": "使用 {{provider}} 登录",
     "login_with_github": "使用 GitHub 登录",

@@ -12,6 +12,8 @@ import { TablerSettings } from "./Icones/Tabler";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { useNativePasswordLogin } from "@/hooks/useNativePasswordLogin";
+import { usePasskeyStatus } from "@/hooks/usePasskeyStatus";
+import { loginWithPasskey } from "@/utils/nativePasskey";
 import PasswordCredentialStep from "@/components/PasswordCredentialStep";
 import {
   clearConsolePasskeyIntent,
@@ -54,12 +56,33 @@ export const LoginForm = ({
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState("");
-  const login = useNativePasswordLogin(async () => {
+  const onAuthenticated = async () => {
     await refresh();
     if (onLoginSuccess) onLoginSuccess();
     else window.location.assign("/admin/dashboard");
-  }, passwordMode);
-  const isLoading = login.busy;
+  };
+  const login = useNativePasswordLogin(onAuthenticated, passwordMode);
+  const nativePasskey = usePasskeyStatus();
+  const pendingPasskey = React.useRef<AbortController | null>(null);
+  const [passkeyBusy, setPasskeyBusy] = React.useState(false);
+  React.useEffect(() => () => pendingPasskey.current?.abort(), []);
+  async function startPasskey() {
+    if (pendingPasskey.current) return;
+    const abort = new AbortController();
+    pendingPasskey.current = abort;
+    setPasskeyBusy(true);
+    setErrorMsg("");
+    try {
+      await loginWithPasskey(username.trim(), abort.signal);
+      if (!abort.signal.aborted) await onAuthenticated();
+    } catch (error) {
+      if (!abort.signal.aborted) setErrorMsg(error instanceof Error ? error.message : "Passkey login failed");
+    } finally {
+      pendingPasskey.current = null;
+      if (!abort.signal.aborted) setPasskeyBusy(false);
+    }
+  }
+  const isLoading = login.busy || passkeyBusy;
   const fieldId = React.useId().replace(/:/g, "");
   const passwordLoginEnabled = !publicInfo?.disable_password_login;
   const isFormValid =
@@ -150,6 +173,10 @@ export const LoginForm = ({
             </Button>}
           </>
         )}
+        {nativePasskey && !login.pending && <Button type="button" variant="soft" disabled={isLoading} onClick={() => void startPasskey()}>
+          {t("login.passkey", "Sign in with a passkey")}
+        </Button>}
+        {!passwordLoginEnabled && errorMsg && <Text role="alert" color="red">{errorMsg}</Text>}
         {!login.pending && publicInfo?.oauth_enable && (
           <Button
             onClick={() => {
@@ -188,7 +215,8 @@ const LoginDialogContent = ({
   const [t] = useTranslation();
   const [open, setOpen] = React.useState(autoOpen);
   const passwordLoginEnabled = !publicInfo?.disable_password_login;
-  const onlyOAuthLogin = !!publicInfo?.oauth_enable && !passwordLoginEnabled;
+  const nativePasskey = usePasskeyStatus();
+  const onlyOAuthLogin = nativePasskey === false && !!publicInfo?.oauth_enable && !passwordLoginEnabled;
 
   React.useEffect(() => {
     if (autoOpen) {

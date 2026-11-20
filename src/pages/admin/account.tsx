@@ -19,6 +19,7 @@ import SensitiveActionDialog, { type SensitiveAction } from "@/components/Sensit
 import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential_pb";
 import { credentialHeader } from "@/api/connect/trustedCredential";
 import { restCredentialResource } from "@/utils/credentialAction";
+import NativePasskeys from "@/components/admin/NativePasskeys";
 import NativeCredentialContacts from "@/components/admin/NativeCredentialContacts";
 
 const Account = () => {
@@ -286,6 +287,7 @@ const InnerLayout = () => {
             </Dialog.Content>
           </Dialog.Root>
         </Flex>
+        <NativePasskeys key={account?.uuid} />
         <NativeCredentialContacts />
         <Flex direction="column" className="km-account-2fa gap-2">
           <label className="font-bold text-2xl">2FA</label>

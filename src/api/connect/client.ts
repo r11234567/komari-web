@@ -14,6 +14,7 @@ import { MetricsService } from "@komari/proto/komari/metrics/v1/metrics_pb";
 import { ExecutionService } from "@komari/proto/komari/exec/v1/exec_pb";
 import { WebSSHService } from "@komari/proto/komari/webssh/v1/webssh_pb";
 import { PluginService } from "@komari/proto/komari/plugin/v1/plugin_pb";
+import { PasskeyLoginService, PasskeyManagementService } from "@komari/proto/komari/credential/v1/passkey_pb";
 import { TrustedCredentialService, PasswordLoginService } from "@komari/proto/komari/credential/v1/credential_pb";
 import { FileService } from "@komari/proto/komari/file/v1/file_pb";
 import { EnrollmentService, EnrollmentAdminService } from "@komari/proto/komari/enrollment/v1/enrollment_pb";
@@ -87,6 +88,8 @@ export const connectClients = {
   plugin,
   credential,
   passwordLogin,
+  passkeyLogin: createClient(PasskeyLoginService, transport),
+  passkeyManagement: createClient(PasskeyManagementService, transport),
   enrollment,
   enrollmentAdmin,
   privilegedDelivery,

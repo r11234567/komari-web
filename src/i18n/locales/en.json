@@ -6,6 +6,15 @@
     "readme_open_in_new_tab": "Open in new tab"
   },
   "account": {
+    "passkey": {
+      "title": "Passkeys",
+      "name": "Passkey name",
+      "add": "Add passkey",
+      "show": "Show passkeys",
+      "empty": "No passkeys registered",
+      "added": "Passkey added",
+      "deleted": "Passkey deleted"
+    },
     "native_otp": {
       "title": "Trusted contact methods",
       "description": "Bind your email or private Telegram user ID for native verification codes. Delivery reuses notification transport settings without changing alert recipients or disabling TOTP. Codes expire after 3 minutes. Until verification succeeds, each recipient permits one send per minute.",
@@ -566,6 +575,7 @@
     "title": "Log"
   },
   "login": {
+    "passkey": "Sign in with a passkey",
     "desc": "Log in to the Komari control panel.",
     "login_with": "Login with {{provider}}",
     "login_with_github": "Login with GitHub",
