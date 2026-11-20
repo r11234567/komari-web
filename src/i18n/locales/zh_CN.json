@@ -1014,11 +1014,6 @@
     "title": "会话管理"
   },
   "settings": {
-    "api": {
-      "description": "使用API密钥可以访问并操作所有资源，包括不限于远程控制、修改设置和账号密码等，请谨慎保管。留空表示取消API密钥功能。",
-      "key_length_error": "API 密钥长度至少为12",
-      "title": "API密钥"
-    },
     "custom": {
       "body": "自定义 Body",
       "body_description": "在页面底部添加自定义内容",

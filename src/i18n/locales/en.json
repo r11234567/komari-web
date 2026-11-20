@@ -1014,11 +1014,6 @@
     "title": "Sessions"
   },
   "settings": {
-    "api": {
-      "description": "API keys can be used to access and operate all resources, including but not limited to remote control, modification of settings, and account passwords. Please keep them safe. Leaving this field blank will disable the API key function.",
-      "key_length_error": "The API key must be at least 12 characters long",
-      "title": "API key"
-    },
     "custom": {
       "body": "Custom Body",
       "body_description": "Add custom content to the bottom of the page",

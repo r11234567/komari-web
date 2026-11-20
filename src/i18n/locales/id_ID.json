@@ -939,11 +939,6 @@
     "title": "Sesi"
   },
   "settings": {
-    "api": {
-      "description": "Kunci API dapat digunakan untuk mengakses dan mengelola semua sumber daya, termasuk namun tidak terbatas pada kontrol jarak jauh, pengaturan, dan kata sandi akun. Harap simpan dengan aman. Biarkan kosong untuk menonaktifkan fungsi kunci API.",
-      "key_length_error": "Kunci API harus minimal 12 karakter",
-      "title": "Kunci API"
-    },
     "custom": {
       "body": "Konten Kustom",
       "body_description": "Tambahkan konten kustom di bagian bawah halaman",
