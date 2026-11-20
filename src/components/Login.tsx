@@ -12,6 +12,8 @@ import { TablerSettings } from "./Icones/Tabler";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { useNativePasswordLogin } from "@/hooks/useNativePasswordLogin";
+import { usePasskeyStatus } from "@/hooks/usePasskeyStatus";
+import { loginWithPasskey } from "@/utils/nativePasskey";
 import PasswordCredentialStep from "@/components/PasswordCredentialStep";
 import {
   clearConsolePasskeyIntent,
@@ -31,6 +33,7 @@ type LoginFormProps = {
   onLoginSuccess?: () => void;
   oauthReturnTo?: string;
   passwordMode?: "inline";
+  nativePasskey?: boolean;
   onPasswordLoginStart?: () => void;
   onOAuthLoginStart?: () => void;
   onPasskeyLoginStart?: () => void;
@@ -44,6 +47,7 @@ export const LoginForm = ({
   onLoginSuccess,
   oauthReturnTo,
   passwordMode = "inline",
+  nativePasskey: nativePasskeyProp,
   onPasswordLoginStart,
   onOAuthLoginStart,
   onPasskeyLoginStart,
@@ -54,12 +58,33 @@ export const LoginForm = ({
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState("");
-  const login = useNativePasswordLogin(async () => {
+  const onAuthenticated = async () => {
     await refresh();
     if (onLoginSuccess) onLoginSuccess();
     else window.location.assign("/admin/dashboard");
-  }, passwordMode);
-  const isLoading = login.busy;
+  };
+  const login = useNativePasswordLogin(onAuthenticated, passwordMode);
+  const nativePasskey = usePasskeyStatus(nativePasskeyProp);
+  const pendingPasskey = React.useRef<AbortController | null>(null);
+  const [passkeyBusy, setPasskeyBusy] = React.useState(false);
+  React.useEffect(() => () => pendingPasskey.current?.abort(), []);
+  async function startPasskey() {
+    if (pendingPasskey.current) return;
+    const abort = new AbortController();
+    pendingPasskey.current = abort;
+    setPasskeyBusy(true);
+    setErrorMsg("");
+    try {
+      await loginWithPasskey(username.trim(), abort.signal);
+      if (!abort.signal.aborted) await onAuthenticated();
+    } catch (error) {
+      if (!abort.signal.aborted) setErrorMsg(error instanceof Error ? error.message : "Passkey login failed");
+    } finally {
+      pendingPasskey.current = null;
+      if (!abort.signal.aborted) setPasskeyBusy(false);
+    }
+  }
+  const isLoading = login.busy || passkeyBusy;
   const fieldId = React.useId().replace(/:/g, "");
   const passwordLoginEnabled = !publicInfo?.disable_password_login;
   const isFormValid =
@@ -91,28 +116,31 @@ export const LoginForm = ({
         if (!isLoading) {
           if (login.pending) void (login.challenge ? login.verify() : login.beginFactor());
           else if (isFormValid) void handleLogin();
+          else if (!passwordLoginEnabled && nativePasskey) void startPasskey();
         }
       }}
     >
       <Flex direction="column" gap="3">
+        {(passwordLoginEnabled || nativePasskey) && (
+          <label hidden={login.pending}>
+            <Text as="div" size="2" mb="1" weight="bold">
+              {t("login.username")}
+            </Text>
+            <TextField.Root
+              className="km-login-input"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              id={`login-username-${fieldId}`}
+              name="username"
+              autoComplete="username"
+              placeholder="admin"
+              disabled={isLoading}
+              autoFocus
+            />
+          </label>
+        )}
         {passwordLoginEnabled && (
           <>
-            <label hidden={login.pending}>
-              <Text as="div" size="2" mb="1" weight="bold">
-                {t("login.username")}
-              </Text>
-              <TextField.Root
-                className="km-login-input"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                id={`login-username-${fieldId}`}
-                name="username"
-                autoComplete="username"
-                placeholder="admin"
-                disabled={isLoading}
-                autoFocus
-              />
-            </label>
             <label hidden={login.pending}>
               <Text as="div" size="2" mb="1" weight="bold">
                 {t("login.password")}
@@ -150,6 +178,10 @@ export const LoginForm = ({
             </Button>}
           </>
         )}
+        {nativePasskey && !login.pending && <Button type="button" variant="soft" disabled={isLoading} onClick={() => void startPasskey()}>
+          {t("login.passkey", "Sign in with a passkey")}
+        </Button>}
+        {!passwordLoginEnabled && errorMsg && <Text role="alert" color="red">{errorMsg}</Text>}
         {!login.pending && publicInfo?.oauth_enable && (
           <Button
             onClick={() => {
@@ -188,7 +220,8 @@ const LoginDialogContent = ({
   const [t] = useTranslation();
   const [open, setOpen] = React.useState(autoOpen);
   const passwordLoginEnabled = !publicInfo?.disable_password_login;
-  const onlyOAuthLogin = !!publicInfo?.oauth_enable && !passwordLoginEnabled;
+  const nativePasskey = usePasskeyStatus();
+  const onlyOAuthLogin = nativePasskey === false && !!publicInfo?.oauth_enable && !passwordLoginEnabled;
 
   React.useEffect(() => {
     if (autoOpen) {
@@ -287,6 +320,7 @@ const LoginDialogContent = ({
           </Flex>
         </Dialog.Description>
         <LoginForm
+          nativePasskey={nativePasskey}
           onPasskeyLoginStart={() => {
             markConsolePasskeyIntent(window.location.pathname + window.location.search);
           }}

@@ -6,6 +6,15 @@
     "readme_open_in_new_tab": "新しいタブで開く"
   },
   "account": {
+    "passkey": {
+      "title": "パスキー",
+      "name": "パスキー名",
+      "add": "パスキーを追加",
+      "show": "パスキーを表示",
+      "empty": "登録済みのパスキーはありません",
+      "added": "パスキーを追加しました",
+      "deleted": "パスキーを削除しました"
+    },
     "2fa_disabled": "二要素認証は無効になっています",
     "2fa_enabled": "二要素認証が有効になりました",
     "2fa_otp_input_prompt": "認証アプリが生成したワンタイムパスワードを入力してください",
@@ -544,6 +553,7 @@
     "title": "ログ"
   },
   "login": {
+    "passkey": "パスキーでログイン",
     "desc": "Komari コントロールパネルにログインします。",
     "login_with": "{{provider}} でログイン",
     "login_with_github": "GitHubでログイン",

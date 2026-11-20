@@ -6,6 +6,15 @@
     "readme_open_in_new_tab": "在新標籤頁中開啟"
   },
   "account": {
+    "passkey": {
+      "title": "通行密鑰",
+      "name": "密鑰名稱",
+      "add": "新增通行密鑰",
+      "show": "查看通行密鑰",
+      "empty": "尚未註冊通行密鑰",
+      "added": "已新增通行密鑰",
+      "deleted": "已刪除通行密鑰"
+    },
     "2fa_disabled": "雙重身份驗證已禁用",
     "2fa_enabled": "雙重身份驗證已啟用",
     "2fa_otp_input_prompt": "請輸入您的身份驗證應用生成的動態口令",
@@ -544,6 +553,7 @@
     "title": "日誌"
   },
   "login": {
+    "passkey": "使用通行密鑰登入",
     "desc": "登入到 Komari 控制面板。",
     "login_with": "使用 {{provider}} 登入",
     "login_with_github": "使用 GitHub 登入",
