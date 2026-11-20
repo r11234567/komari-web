@@ -29,14 +29,75 @@ export interface ThemeConfiguration {
 export const normalizeThemeManifest = (value: unknown): ThemeManifest | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 
-  const manifest = value as Record<string, unknown>;
-  const declared = manifest.schemaVersion;
+  let candidate = value as Record<string, unknown>;
+  if (
+    candidate.status === "success" &&
+    candidate.data &&
+    typeof candidate.data === "object" &&
+    !Array.isArray(candidate.data)
+  ) {
+    candidate = candidate.data as Record<string, unknown>;
+  }
+
+  const declared = candidate.schemaVersion;
   const schemaVersion =
     typeof declared === "number" && Number.isInteger(declared) && declared > 0
       ? declared
       : THEME_MANIFEST_SCHEMA_VERSION;
 
-  return { ...manifest, schemaVersion } as ThemeManifest;
+  return { ...candidate, schemaVersion } as ThemeManifest;
+};
+
+export const adminThemeManifestPath = (themeShort: string): string =>
+  `/api/admin/theme/${encodeURIComponent(themeShort.trim())}/manifest`;
+
+export const adminThemePreviewPath = (themeShort: string): string =>
+  `/api/admin/theme/${encodeURIComponent(themeShort.trim())}/preview`;
+
+export const isSplitPanelMode = (
+  settings?: {
+    panel_isolation_mode?: unknown;
+    panel_listen_enabled?: unknown;
+    [key: string]: unknown;
+  } | null,
+): boolean =>
+  settings?.panel_isolation_mode === "split" ||
+  settings?.panel_listen_enabled === true;
+
+export const resolvePublicSiteOrigin = (
+  settings?: {
+    public_origin?: unknown;
+    [key: string]: unknown;
+  } | null,
+  fallbackOrigin?: string,
+): string => {
+  const raw =
+    typeof settings?.public_origin === "string"
+      ? settings.public_origin.trim()
+      : "";
+  if (raw) {
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.origin;
+      }
+    } catch {
+      // Ignore malformed origin and use fallback.
+    }
+  }
+  return fallbackOrigin ?? "";
+};
+
+export const resolvePublicSiteHref = (
+  settings?: {
+    public_origin?: unknown;
+    [key: string]: unknown;
+  } | null,
+  subPath = "/",
+): string => {
+  const normalizedPath = subPath.startsWith("/") ? subPath : `/${subPath}`;
+  const origin = resolvePublicSiteOrigin(settings);
+  return origin ? `${origin}${normalizedPath}` : normalizedPath;
 };
 
 export const getThemeConfigurationType = (

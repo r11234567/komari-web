@@ -18,6 +18,7 @@ import UploadDialog from "@/components/UploadDialog";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import { credentialHeader } from "@/api/connect/trustedCredential";
 import { restCredentialResource } from "@/utils/credentialAction";
+import { resolvePublicSiteOrigin } from "@/utils/themeConfiguration";
 import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 
 export default function SiteSettings() {
@@ -219,7 +220,7 @@ export default function SiteSettings() {
             title={t("settings.site.temporary_share_current_link")}
             value={
               settings.tempory_share_token
-                ? `${window.location.origin}/?temp_key=${settings.tempory_share_token}`
+                ? `${resolvePublicSiteOrigin(settings, window.location.origin)}/?temp_key=${settings.tempory_share_token}`
                 : ""
             }
             showSaveButton={false}
@@ -231,7 +232,7 @@ export default function SiteSettings() {
               onClick={() => {
                 if (!settings.tempory_share_token) return;
                 navigator.clipboard.writeText(
-                  `${window.location.origin}/?temp_key=${settings.tempory_share_token}`,
+                  `${resolvePublicSiteOrigin(settings, window.location.origin)}/?temp_key=${settings.tempory_share_token}`,
                 );
                 toast.success(t("common.copy"));
               }}
