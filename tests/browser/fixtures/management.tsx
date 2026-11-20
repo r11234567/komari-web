@@ -15,7 +15,7 @@ import ApiTokenManager from "../../../src/components/admin/ApiTokenManager";
 
 // This harness never connects to a real panel. All identities/data are synthetic.
 const params = new URLSearchParams(location.search);
-const state = { calls: [] as { action: string; proof: boolean }[], tokenRevoked: false, legacy: true };
+const state = { calls: [] as { action: string; proof: boolean }[], tokenRevoked: false };
 Object.assign(window, { managementAudit: state });
 const packages = ["example-otp", "example-passkey"].map((shortName, i) => create(PluginPackageSchema, {
   plugin: { shortName, version: "1.0.0", permissions: { allowRoutes: true } },
@@ -31,7 +31,7 @@ connectClients.plugin.decidePluginPackage = async request => {
   return {} as Awaited<ReturnType<typeof connectClients.plugin.decidePluginPackage>>;
 };
 connectClients.apiToken.listApiTokens = async () => create(ListApiTokensResponseSchema, {
-  total: 1, page: 1, legacyApiKeyEnabled: state.legacy,
+  total: 1, page: 1,
   tokens: [{ id: "synthetic-token", name: "Fixture reader", scopes: ["nodes:read"], allAgents: true,
     expiresAt: { seconds: 2000000000n }, revokedAt: state.tokenRevoked ? { seconds: 1793680000n } : undefined }],
 });
@@ -40,10 +40,7 @@ connectClients.apiToken.revokeApiToken = async request => {
   state.calls.push({ action: "revoke-token", proof: !!request.twoFactor }); state.tokenRevoked = true;
   return {} as Awaited<ReturnType<typeof connectClients.apiToken.revokeApiToken>>;
 };
-connectClients.apiToken.disableLegacyApiKey = async request => {
-  state.calls.push({ action: "disable-legacy", proof: !!request.twoFactor }); state.legacy = false;
-  return {} as Awaited<ReturnType<typeof connectClients.apiToken.disableLegacyApiKey>>;
-};
+
 await i18next.use(initReactI18next).init({ lng: params.get("lng") || "zh-CN", fallbackLng: "en", resources: { en: { translation: en }, "zh-CN": { translation: zh } } });
 createRoot(document.getElementById("root")!).render(<Theme><div style={{ maxWidth: 1000, margin: "32px auto" }}>
   {params.get("screen") === "tokens" ? <ApiTokenManager /> : <PluginPackageManager compact onChanged={() => {}} />}

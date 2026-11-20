@@ -939,11 +939,6 @@
     "title": "會話管理"
   },
   "settings": {
-    "api": {
-      "description": "使用API金鑰可以訪問並操作所有資源，包括不限於遠端控制、修改設定和帳號密碼等，請謹慎保管。留空表示取消API金鑰功能。",
-      "key_length_error": "API 金鑰長度至少為12",
-      "title": "API金鑰"
-    },
     "custom": {
       "body": "自定義 Body",
       "body_description": "在頁面底部新增自定義內容",

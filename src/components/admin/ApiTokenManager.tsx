@@ -72,12 +72,6 @@ export default function ApiTokenManager() {
     <Heading size="4">{t("api_tokens.title")}</Heading>
     <Text size="2" color="gray">{t("api_tokens.description")}</Text>
     {error && <Text role="alert" color="red">{error}</Text>}
-    {data?.legacyApiKeyEnabled && <Card><Flex direction="column" gap="2">
-      <Text color="orange">{t("api_tokens.legacy_warning")}</Text>
-      <Button color="orange" variant="soft" disabled={blocked} onClick={() => setConfirmation({ title: t("api_tokens.disable_legacy"), description: t("api_tokens.disable_legacy_confirm"), label: t("api_tokens.disable_legacy"),
-        execute: async signal => { await connectClients.apiToken.disableLegacyApiKey({}, { signal }); if (!signal.aborted) await reload(signal); },
-      })}>{t("api_tokens.disable_legacy")}</Button>
-    </Flex></Card>}
     {issuedSecret && <Card><Flex direction="column" gap="2">
       <Text weight="bold">{t("api_tokens.save_secret")}</Text>
       <TextField.Root aria-label={t("api_tokens.new_secret")} readOnly value={issuedSecret} autoComplete="off" />

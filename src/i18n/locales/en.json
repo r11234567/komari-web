@@ -1014,11 +1014,6 @@
     "title": "Sessions"
   },
   "settings": {
-    "api": {
-      "description": "API keys can be used to access and operate all resources, including but not limited to remote control, modification of settings, and account passwords. Please keep them safe. Leaving this field blank will disable the API key function.",
-      "key_length_error": "The API key must be at least 12 characters long",
-      "title": "API key"
-    },
     "custom": {
       "body": "Custom Body",
       "body_description": "Add custom content to the bottom of the page",
@@ -2127,9 +2122,6 @@
     "rotate_title": "Rotate {{name}} · {{scopes}} · {{range}} · expires {{expiry}}",
     "nodes_read": "Read node information",
     "metrics_read": "Read historical metrics and probe results",
-    "legacy_warning": "The legacy global API key is enabled with its original administrator permissions. Disable it after migrating callers.",
-    "disable_legacy": "Disable legacy key",
-    "disable_legacy_confirm": "Existing callers using the global key will immediately lose access. Disable it?",
     "save_secret": "Save the secret now. It cannot be displayed again after closing.",
     "new_secret": "New API token secret",
     "copy_secret": "Copy secret",
