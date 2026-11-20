@@ -118,24 +118,26 @@ export const LoginForm = ({
       }}
     >
       <Flex direction="column" gap="3">
+        {(passwordLoginEnabled || nativePasskey) && (
+          <label hidden={login.pending}>
+            <Text as="div" size="2" mb="1" weight="bold">
+              {t("login.username")}
+            </Text>
+            <TextField.Root
+              className="km-login-input"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              id={`login-username-${fieldId}`}
+              name="username"
+              autoComplete="username"
+              placeholder="admin"
+              disabled={isLoading}
+              autoFocus
+            />
+          </label>
+        )}
         {passwordLoginEnabled && (
           <>
-            <label hidden={login.pending}>
-              <Text as="div" size="2" mb="1" weight="bold">
-                {t("login.username")}
-              </Text>
-              <TextField.Root
-                className="km-login-input"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                id={`login-username-${fieldId}`}
-                name="username"
-                autoComplete="username"
-                placeholder="admin"
-                disabled={isLoading}
-                autoFocus
-              />
-            </label>
             <label hidden={login.pending}>
               <Text as="div" size="2" mb="1" weight="bold">
                 {t("login.password")}
