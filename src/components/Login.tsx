@@ -33,6 +33,7 @@ type LoginFormProps = {
   onLoginSuccess?: () => void;
   oauthReturnTo?: string;
   passwordMode?: "inline";
+  nativePasskey?: boolean;
   onPasswordLoginStart?: () => void;
   onOAuthLoginStart?: () => void;
   onPasskeyLoginStart?: () => void;
@@ -46,6 +47,7 @@ export const LoginForm = ({
   onLoginSuccess,
   oauthReturnTo,
   passwordMode = "inline",
+  nativePasskey: nativePasskeyProp,
   onPasswordLoginStart,
   onOAuthLoginStart,
   onPasskeyLoginStart,
@@ -62,7 +64,7 @@ export const LoginForm = ({
     else window.location.assign("/admin/dashboard");
   };
   const login = useNativePasswordLogin(onAuthenticated, passwordMode);
-  const nativePasskey = usePasskeyStatus();
+  const nativePasskey = usePasskeyStatus(nativePasskeyProp);
   const pendingPasskey = React.useRef<AbortController | null>(null);
   const [passkeyBusy, setPasskeyBusy] = React.useState(false);
   React.useEffect(() => () => pendingPasskey.current?.abort(), []);
@@ -114,6 +116,7 @@ export const LoginForm = ({
         if (!isLoading) {
           if (login.pending) void (login.challenge ? login.verify() : login.beginFactor());
           else if (isFormValid) void handleLogin();
+          else if (!passwordLoginEnabled && nativePasskey) void startPasskey();
         }
       }}
     >
@@ -317,6 +320,7 @@ const LoginDialogContent = ({
           </Flex>
         </Dialog.Description>
         <LoginForm
+          nativePasskey={nativePasskey}
           onPasskeyLoginStart={() => {
             markConsolePasskeyIntent(window.location.pathname + window.location.search);
           }}

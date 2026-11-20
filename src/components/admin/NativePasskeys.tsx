@@ -5,13 +5,22 @@ import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential
 import type { PasskeySummary } from "@komari/proto/komari/credential/v1/passkey_pb";
 import { connectClients } from "@/api/connect/client";
 import TrustedCredentialVerification from "@/components/TrustedCredentialVerification";
+import { useAccount } from "@/contexts/AccountContext";
 import { usePasskeyStatus } from "@/hooks/usePasskeyStatus";
 import { registerPasskey } from "@/utils/nativePasskey";
 
 type Action = { kind: "list" } | { kind: "register"; name: string } | { kind: "delete"; id: string };
 
+function formatPasskeyTimestamp(ts?: { seconds: bigint }): string {
+  if (!ts) return "";
+  const ms = Number(ts.seconds) * 1000;
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  return new Date(ms).toLocaleString();
+}
+
 export default function NativePasskeys() {
   const { t } = useTranslation();
+  const { refresh } = useAccount();
   const enabled = usePasskeyStatus();
   const [rows, setRows] = useState<PasskeySummary[]>([]);
   const [listed, setListed] = useState(false);
@@ -41,6 +50,7 @@ export default function NativePasskeys() {
       const key = await registerPasskey(op.name, token, password, signal);
       setBootstrap(false); setName(""); setPassword("");
       setRows(old => [...old, key]); setMessage(t("account.passkey.added", "Passkey added"));
+      await refresh();
     } else {
       await client.deletePasskey({ credentialId: op.id, authorizationToken: token }, { signal });
       setRows(old => old.filter(k => k.credentialId !== op.id));
@@ -68,7 +78,21 @@ export default function NativePasskeys() {
     <Flex gap="2"><Button type="button" disabled={!name.trim() || busy || !!action || (bootstrap && !password)} onClick={() => void startRegistration()}>{t("account.passkey.add", "Add passkey")}</Button>
       <Button type="button" variant="soft" disabled={bootstrap || !!action || busy} onClick={() => { setMessage(""); setAction({ kind: "list" }); }}>{t("account.passkey.show", "Show passkeys")}</Button></Flex>
     {listed && !rows.length && <Text>{t("account.passkey.empty", "No passkeys registered")}</Text>}
-    {rows.map(k => <Flex key={k.credentialId} gap="2" align="center"><Text>{k.displayName}</Text><Button variant="soft" color="red" type="button" disabled={!!action || busy} onClick={() => { setMessage(""); setAction({ kind: "delete", id: k.credentialId }); }}>{t("common.delete", "Delete")}</Button></Flex>)}
+    {rows.map(k => {
+      const created = formatPasskeyTimestamp(k.createdAt);
+      const lastUsed = formatPasskeyTimestamp(k.lastUsedAt);
+      return <Flex key={k.credentialId} gap="2" align="center" justify="between">
+        <Flex direction="column">
+          <Text weight="medium">{k.displayName}</Text>
+          {(created || lastUsed) && <Text size="1" color="gray">
+            {created ? `${t("account.passkey.created", "Created")}: ${created}` : ""}
+            {created && lastUsed ? " · " : ""}
+            {lastUsed ? `${t("account.passkey.last_used", "Last used")}: ${lastUsed}` : ""}
+          </Text>}
+        </Flex>
+        <Button variant="soft" color="red" type="button" disabled={!!action || busy} onClick={() => { setMessage(""); setAction({ kind: "delete", id: k.credentialId }); }}>{t("common.delete", "Delete")}</Button>
+      </Flex>;
+    })}
     {action && <Flex direction="column" gap="2">
       <TrustedCredentialVerification key={resource} purpose={CredentialPurpose.MANAGE_CREDENTIALS} resource={resource} onAuthorized={(token, signal) => perform(action, token, signal)} />
       <Button type="button" variant="soft" onClick={() => setAction(null)}>{t("common.cancel", "Cancel")}</Button>
