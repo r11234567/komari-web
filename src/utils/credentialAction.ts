@@ -86,3 +86,37 @@ export function resolveExecutionDefaults(spec: {
     } satisfies ExecutionCredentialSpec,
   };
 }
+
+export const DEFAULT_RESCUE_TIMEOUT_SECONDS = 5 * 60;
+export const DEFAULT_RESCUE_MAX_OUTPUT_BYTES = 256 * 1024;
+
+export interface RescueCredentialSpec {
+  arguments?: readonly string[];
+  timeoutSeconds?: number;
+  maxOutputBytes?: number;
+  sshPort?: number;
+}
+
+export async function rescueSpecDigest(spec: RescueCredentialSpec): Promise<string> {
+  const payload = [
+    "v1",
+    spec.arguments ? [...spec.arguments] : [],
+    Math.trunc(spec.timeoutSeconds ?? 0),
+    Math.trunc(spec.maxOutputBytes ?? 0),
+    Math.trunc(spec.sshPort ?? 0),
+  ];
+  return `spec:${await sha256Hex(canonicalJson(payload))}`;
+}
+
+export async function rescueCredentialTargets(
+  agentId: string,
+  action: number,
+  spec: RescueCredentialSpec,
+): Promise<string[]> {
+  return [
+    agentId,
+    String(Math.trunc(action)),
+    String(Math.trunc(spec.sshPort ?? 0)),
+    await rescueSpecDigest(spec),
+  ];
+}

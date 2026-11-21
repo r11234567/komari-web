@@ -5,8 +5,12 @@ import {
   credentialActionResource,
   DEFAULT_EXECUTION_MAX_OUTPUT_BYTES,
   DEFAULT_EXECUTION_TIMEOUT_SECONDS,
+  DEFAULT_RESCUE_MAX_OUTPUT_BYTES,
+  DEFAULT_RESCUE_TIMEOUT_SECONDS,
   executionCredentialTargets,
   executionSpecDigest,
+  rescueCredentialTargets,
+  rescueSpecDigest,
   resolveExecutionDefaults,
   restCredentialResource,
 } from "../src/utils/credentialAction.ts";
@@ -70,5 +74,27 @@ test("execution spec digest binds command, args, sorted env, cwd, limits and roo
   assert.notDeepEqual(
     defaultTargets,
     await executionCredentialTargets(["agent-1"], { command: "uname -a", runAsRoot: false }),
+  );
+});
+
+test("rescue spec digest binds arguments, timeout, maxOutputBytes and sshPort deterministically", async () => {
+  const spec = {
+    arguments: ["--dry-run"],
+    timeoutSeconds: DEFAULT_RESCUE_TIMEOUT_SECONDS,
+    maxOutputBytes: DEFAULT_RESCUE_MAX_OUTPUT_BYTES,
+    sshPort: 2222,
+  };
+  const expectedPayload = '["v1",["--dry-run"],300,262144,2222]';
+  const expectedDigest = `spec:${createHash("sha256").update(expectedPayload).digest("hex")}`;
+  assert.equal(await rescueSpecDigest(spec), expectedDigest);
+  assert.deepEqual(await rescueCredentialTargets("agent-1", 4, spec), [
+    "agent-1",
+    "4",
+    "2222",
+    expectedDigest,
+  ]);
+  assert.notEqual(
+    await rescueSpecDigest({ ...spec, arguments: ["--force"] }),
+    expectedDigest,
   );
 });
