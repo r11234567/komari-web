@@ -155,7 +155,11 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
           t("theme.manage_with_name", {
             name: currentTheme === "default" ? "" : currentTheme,
           });
-        const icon: string = cfg.icon || "Palette"; // fallback icon
+        const icon: string =
+          typeof cfg.icon === "string" &&
+          Object.prototype.hasOwnProperty.call(iconMap, cfg.icon)
+            ? cfg.icon
+            : "Palette"; // fallback icon
         const item: ExtendedMenuItem = {
           labelKey: rawLabel,
           rawLabel,

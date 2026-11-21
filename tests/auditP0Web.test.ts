@@ -94,8 +94,9 @@ test("Audit Feature 1: /bind-login completes a full login then obtains a reusabl
   // /bind uses route interception to bind-login
   assert.match(bindSource, /BindAuthGate/);
   assert.match(bindSource, /bindLoginPath/);
-  // The login form stays a normal full-login form for password, OAuth, and passkey plugins.
-  assert.match(loginSource, /\.km-passkey-login/);
+  // The login form stays a normal native login form without retired plugin DOM hooks.
+  assert.match(loginSource, /loginWithPasskey/);
+  assert.doesNotMatch(loginSource, /\.km-passkey-login/);
   assert.match(loginSource, /oauthLoginURL/);
   assert.doesNotMatch(loginSource, /\/api\/bind\/ticket/);
   // The session is exchanged for a ticket only after the login page observes a completed login.

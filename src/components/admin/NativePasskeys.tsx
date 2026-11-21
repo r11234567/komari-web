@@ -55,6 +55,7 @@ export default function NativePasskeys() {
       await client.deletePasskey({ credentialId: op.id, authorizationToken: token }, { signal });
       setRows(old => old.filter(k => k.credentialId !== op.id));
       setMessage(t("account.passkey.deleted", "Passkey deleted"));
+      await refresh();
     }
     setAction(null);
   }
