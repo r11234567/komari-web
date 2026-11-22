@@ -3,10 +3,14 @@ import { Theme } from "@radix-ui/themes";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import MiniPingChart from "../../../src/components/MiniPingChart";
+import { getPublicPingStats } from "../../../src/api/connect/public";
 
 // Render the production chart, public API adapter, transport and read queue.
 // Only fetch responses and the visibility transition are synthetic.
 const state = { queries: 0, summaries: 0, aborted: 0 };
+const { promise: summariesReleased, resolve: releaseSummaries } = Promise.withResolvers<void>();
+const { promise: summaryLaneFull, resolve: markSummaryLaneFull } = Promise.withResolvers<void>();
+let summaryBlockers = 0;
 window.fetch = async (input, init) => {
   const path = String(input);
   if (path.endsWith("/QueryMetrics")) {
@@ -19,7 +23,13 @@ window.fetch = async (input, init) => {
       });
     }
   } else if (path.endsWith("/GetPingStats")) {
-    state.summaries++;
+    if (summaryBlockers < 4) {
+      summaryBlockers++;
+      if (summaryBlockers === 4) markSummaryLaneFull();
+      await summariesReleased;
+    } else {
+      state.summaries++;
+    }
   } else if (!path.endsWith("/ListPingTasks")) {
     throw new Error(`Unexpected fixture request ${path}`);
   }
@@ -27,10 +37,19 @@ window.fetch = async (input, init) => {
 };
 Object.assign(window, { historyAudit: {
   state,
+  releaseSummaries,
   visible(value: boolean) {
     Object.defineProperty(document, "visibilityState", { configurable: true, value: value ? "visible" : "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
   },
 } });
 await i18n.use(initReactI18next).init({ lng: "en", resources: { en: { translation: {} } } });
+// Fill the independent summary lane before mounting the chart. Its initial
+// summary must be queued while the chart's metric request is already running.
+const summarySignal = new AbortController().signal;
+const summaryRequests = Array.from({ length: 4 }, () =>
+  getPublicPingStats({ agentIds: ["synthetic-summary-lane"], hours: 1, signal: summarySignal }),
+);
+void Promise.allSettled(summaryRequests);
+await summaryLaneFull;
 createRoot(document.getElementById("root")!).render(<Theme><MiniPingChart uuid="synthetic-history-node" /></Theme>);
