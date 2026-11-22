@@ -84,7 +84,7 @@ export interface DashboardAlertLatest {
   title: string;
   node_name?: string;
   node_uuid?: string;
-  task_id?: number;
+  task_id?: string;
   task_name?: string;
   occurred_at?: string;
   due_at?: string;
@@ -159,7 +159,7 @@ export interface DashboardLatencyJitterRankItem {
 export interface DashboardPacketLossRankItem {
   uuid: string;
   name: string;
-  task_id: number;
+  task_id: string;
   task_name: string;
   loss_rate: number;
   lost: number;

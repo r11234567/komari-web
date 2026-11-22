@@ -153,7 +153,7 @@ const alertLatest = (item?: ProtoAlertItem): DashboardAlertLatest | undefined =>
     title: item.title,
     node_name: textOrUndefined(item.nodeName),
     node_uuid: textOrUndefined(item.nodeUuid),
-    task_id: item.taskId ? Number(item.taskId) : undefined,
+    task_id: item.taskId ? item.taskId.toString() : undefined,
     task_name: textOrUndefined(item.taskName),
     occurred_at: isoOrUndefined(item.occurredAt),
     due_at: isoOrUndefined(item.dueAt),
@@ -312,7 +312,7 @@ const chartsData = (charts?: ProtoCharts): DashboardChartsData => ({
     ranking: (charts?.packetLoss?.ranking ?? []).map((item) => ({
       uuid: item.uuid,
       name: item.name,
-      task_id: Number(item.taskId),
+      task_id: item.taskId.toString(),
       task_name: item.taskName,
       loss_rate: item.lossRate,
       lost: item.lost,

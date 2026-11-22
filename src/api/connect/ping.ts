@@ -4,7 +4,7 @@ import { connectClients, connectUnary } from "@/api/connect/client";
 // snake_case flags. The adapter keeps that shape so the task pages render
 // unchanged while the transport moves to Connect.
 export interface PingTaskInput {
-  id?: number;
+  id?: string;
   name?: string;
   target?: string;
   type?: string;
@@ -15,7 +15,7 @@ export interface PingTaskInput {
 }
 
 export interface PingTaskRecord extends PingTaskInput {
-  id: number;
+  id: string;
   name: string;
   target: string;
   type: string;
@@ -43,7 +43,7 @@ export async function listPingTasks(signal?: AbortSignal): Promise<PingTaskRecor
     connectClients.pingTask.listPingTasks({}, { signal: requestSignal, timeoutMs }),
   );
   return response.tasks.map((task) => ({
-    id: Number(task.id),
+    id: task.id.toString(),
     name: task.name,
     target: task.target,
     type: task.type,
@@ -62,7 +62,7 @@ export async function createPingTask(input: {
   clients: string[];
   default_on: boolean;
   signal?: AbortSignal;
-}): Promise<number> {
+}): Promise<string> {
   const response = await connectUnary({ signal: anySignal(input.signal) }, (requestSignal, timeoutMs) =>
     connectClients.pingTask.createPingTask(
       {
@@ -76,7 +76,7 @@ export async function createPingTask(input: {
       { signal: requestSignal, timeoutMs },
     ),
   );
-  return Number(response.taskId);
+  return response.taskId.toString();
 }
 
 export const updatePingTasks = (tasks: PingTaskInput[], signal?: AbortSignal) => connectUnary(
@@ -87,7 +87,7 @@ export const updatePingTasks = (tasks: PingTaskInput[], signal?: AbortSignal) =>
   ),
 );
 
-export const deletePingTasks = (ids: number[], signal?: AbortSignal) => connectUnary(
+export const deletePingTasks = (ids: string[], signal?: AbortSignal) => connectUnary(
   { signal: anySignal(signal) },
   (requestSignal, timeoutMs) => connectClients.pingTask.deletePingTasks(
     { ids: ids.map((id) => BigInt(id)) },
@@ -96,16 +96,12 @@ export const deletePingTasks = (ids: number[], signal?: AbortSignal) => connectU
 );
 
 export const reorderPingTasks = (
-  weights: Record<string | number, number>,
+  weights: Record<string, number>,
   signal?: AbortSignal,
 ) => connectUnary(
   { signal: anySignal(signal) },
   (requestSignal, timeoutMs) => connectClients.pingTask.reorderPingTasks(
-    {
-      weights: Object.fromEntries(
-        Object.entries(weights).map(([id, weight]) => [String(id), weight]),
-      ),
-    },
+    { weights },
     { signal: requestSignal, timeoutMs },
   ),
 );

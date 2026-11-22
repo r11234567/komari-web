@@ -42,7 +42,7 @@ interface ConfigSelectionOption {
 }
 
 interface PingTaskResponse {
-  id?: number;
+  id?: string;
   name?: string;
   weight?: number;
 }

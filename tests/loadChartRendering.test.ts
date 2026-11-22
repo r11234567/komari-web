@@ -13,9 +13,21 @@ test("history windows retain all standard views and continue beyond 30 days", ()
 });
 
 import {
+  comparePingTaskOrder,
   formatChartTitle,
   getMetricLabel,
 } from "../src/utils/metricSeries.ts";
+
+test("ping chart sorts adjacent uint64 task IDs without rounding", () => {
+  const left = "9007199254740992";
+  const right = "9007199254740993";
+  const tasks = new Map([
+    [right, { id: right, name: "right" }],
+    [left, { id: left, name: "left" }],
+  ]);
+  assert.ok(comparePingTaskOrder({ task_id: left }, { task_id: right }, tasks) < 0);
+  assert.ok(comparePingTaskOrder({ task_id: right }, { task_id: left }, tasks) > 0);
+});
 
 const locales = {
   en: JSON.parse(
