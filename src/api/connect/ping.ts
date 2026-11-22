@@ -28,7 +28,7 @@ export interface PingTaskRecord extends PingTaskInput {
 const anySignal = (signal?: AbortSignal) => signal ?? new AbortController().signal;
 
 const toProto = (task: PingTaskInput) => ({
-  id: task.id ?? 0,
+  id: BigInt(task.id ?? 0),
   name: task.name ?? "",
   target: task.target ?? "",
   type: task.type ?? "",
@@ -43,7 +43,7 @@ export async function listPingTasks(signal?: AbortSignal): Promise<PingTaskRecor
     connectClients.pingTask.listPingTasks({}, { signal: requestSignal, timeoutMs }),
   );
   return response.tasks.map((task) => ({
-    id: task.id,
+    id: Number(task.id),
     name: task.name,
     target: task.target,
     type: task.type,
@@ -76,7 +76,7 @@ export async function createPingTask(input: {
       { signal: requestSignal, timeoutMs },
     ),
   );
-  return response.taskId;
+  return Number(response.taskId);
 }
 
 export const updatePingTasks = (tasks: PingTaskInput[], signal?: AbortSignal) => connectUnary(
@@ -90,7 +90,7 @@ export const updatePingTasks = (tasks: PingTaskInput[], signal?: AbortSignal) =>
 export const deletePingTasks = (ids: number[], signal?: AbortSignal) => connectUnary(
   { signal: anySignal(signal) },
   (requestSignal, timeoutMs) => connectClients.pingTask.deletePingTasks(
-    { ids },
+    { ids: ids.map((id) => BigInt(id)) },
     { signal: requestSignal, timeoutMs },
   ),
 );
@@ -103,7 +103,7 @@ export const reorderPingTasks = (
   (requestSignal, timeoutMs) => connectClients.pingTask.reorderPingTasks(
     {
       weights: Object.fromEntries(
-        Object.entries(weights).map(([id, weight]) => [Number(id), weight]),
+        Object.entries(weights).map(([id, weight]) => [String(id), weight]),
       ),
     },
     { signal: requestSignal, timeoutMs },

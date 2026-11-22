@@ -91,7 +91,7 @@ test('terminal page shares a single real live provider with editor portal and pr
  // Supplement actual component execution with route wiring checks; never a substitute for it.
  const source=readFileSync(new URL('../../src/pages/terminal/index.tsx',import.meta.url),'utf8');
  assert.match(source,/<TerminalPageBoundary><TerminalWorkbench \/><\/TerminalPageBoundary>/);
- assert.match(source,/<TerminalPageBoundary><TerminalLegacy \/><\/TerminalPageBoundary>/);
+ assert.doesNotMatch(source,/TerminalLegacy/);
 });
 
 test('collected workspace reopens with an explicit lock screen instead of an inert black terminal',async(t)=>{

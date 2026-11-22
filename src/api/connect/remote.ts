@@ -2,7 +2,7 @@ import { workspaceAccess, rememberWorkspaceSession, workspaceSessionAccess, work
 import { durationFromMs } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { Execution, ExecutionEvent } from "@komari/proto/komari/exec/v1/exec_pb";
-import type { FileCommand, SessionClosed, SessionEvent } from "@komari/proto/komari/webssh/v1/webssh_pb";
+import type { SessionClosed, SessionEvent } from "@komari/proto/komari/webssh/v1/webssh_pb";
 import { connectClients, connectUnary } from "./client";
 import { createTerminalEventAcknowledger } from "../../utils/terminalTransport";
 import { resolveExecutionDefaults } from "../../utils/credentialAction";
@@ -80,7 +80,8 @@ export async function* watchRemoteExecution(input: {
         executionId: input.executionId,
         afterSequence,
       }, { signal, timeoutMs })) {
-        if (response.event) afterSequence = response.event.sequence;
+        if (response.heartbeat || !response.event) continue;
+        afterSequence = response.event.sequence;
         yield response;
       }
       return;
@@ -172,20 +173,6 @@ export const sendRemoteSessionResize = (input: {
     command: { case: "resize", value: { rows: input.rows, columns: input.columns } },
   }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
 ));
-
-export const sendRemoteFileCommand = (input: {
-  sessionId: string;
-  sequence: bigint;
-  command: FileCommand;
-  signal: AbortSignal;
-}) => connectUnary(
-  { signal: input.signal, timeoutMs: 30_000 },
-  (signal, timeoutMs) => connectClients.webssh.sendSessionCommand({
-    sessionId: input.sessionId,
-    sequence: input.sequence,
-    command: { case: "file", value: input.command },
-  }, { ...workspaceSessionAccess(input.sessionId, signal), timeoutMs }),
-);
 
 export const acknowledgeRemoteSessionEvents = (input: {
   sessionId: string;
