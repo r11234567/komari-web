@@ -1,24 +1,11 @@
 import { useEffect, useState, type CSSProperties } from "react";
+import {
+  isAllowedInlineSvgUrl,
+  isSafeIconImageUrl,
+  sanitizeSvg,
+} from "@/utils/inlineSvgSanitizer";
 
 const MAX_INLINE_SVG_BYTES = 64 * 1024;
-const BLOCKED_ELEMENTS = new Set([
-  "animate",
-  "animatecolor",
-  "animatemotion",
-  "animatetransform",
-  "canvas",
-  "discard",
-  "embed",
-  "foreignobject",
-  "iframe",
-  "link",
-  "mpath",
-  "object",
-  "script",
-  "set",
-  "style",
-  "video",
-]);
 
 interface InlineSvgIconProps {
   src: string;
@@ -27,62 +14,6 @@ interface InlineSvgIconProps {
   style?: CSSProperties;
   loading?: "eager" | "lazy";
 }
-
-const isSvgUrl = (src: string) => /\.svg$/i.test(src.split(/[?#]/, 1)[0]);
-
-const hasUnsafeReference = (value: string) =>
-  /(?:javascript:|data:text\/html|url\(\s*(?!#))/i.test(value);
-
-const sanitizeSvg = (source: string): string | null => {
-  const document = new DOMParser().parseFromString(source, "image/svg+xml");
-  const root = document.documentElement;
-  if (
-    !root ||
-    root.localName?.toLowerCase() !== "svg" ||
-    document.querySelector("parsererror")
-  ) {
-    return null;
-  }
-
-  const elements = [root, ...Array.from(root.querySelectorAll("*"))];
-  for (const element of elements) {
-    const tagName = element.localName?.toLowerCase();
-    if (tagName && BLOCKED_ELEMENTS.has(tagName)) {
-      element.remove();
-      continue;
-    }
-    if (
-      tagName === "style" &&
-      hasUnsafeReference(element.textContent || "")
-    ) {
-      element.remove();
-      continue;
-    }
-
-    for (const attribute of Array.from(element.attributes)) {
-      const name = attribute.name.toLowerCase();
-      const value = attribute.value.trim();
-      if (name.startsWith("on") || name === "src") {
-        element.removeAttribute(attribute.name);
-        continue;
-      }
-      if (name === "href" || name === "xlink:href") {
-        if (!value.startsWith("#")) element.removeAttribute(attribute.name);
-        continue;
-      }
-      if (hasUnsafeReference(value)) {
-        element.removeAttribute(attribute.name);
-      }
-    }
-  }
-
-  root.setAttribute("width", "100%");
-  root.setAttribute("height", "100%");
-  root.style.display = "block";
-  root.style.width = "100%";
-  root.style.height = "100%";
-  return root.outerHTML;
-};
 
 const readResponseText = async (response: Response) => {
   const contentLength = Number(response.headers.get("content-length"));
@@ -131,7 +62,7 @@ export default function InlineSvgIcon({
   } | null>(null);
 
   useEffect(() => {
-    if (!isSvgUrl(src)) {
+    if (!isAllowedInlineSvgUrl(src)) {
       setInlineSvg(null);
       return;
     }
@@ -140,7 +71,10 @@ export default function InlineSvgIcon({
     setInlineSvg(null);
     const loadSvg = async () => {
       try {
-        const response = await fetch(src, { signal: controller.signal });
+        const response = await fetch(src, {
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error(`Failed to load SVG icon: ${response.status}`);
         const markup = sanitizeSvg(await readResponseText(response));
         if (!markup) throw new Error("Invalid SVG icon");
@@ -163,11 +97,16 @@ export default function InlineSvgIcon({
         aria-hidden={alt ? undefined : true}
       >
         <span
+          className="[&>svg]:block [&>svg]:h-full [&>svg]:w-full"
           style={{ display: "inline-flex", width: "100%", height: "100%" }}
           dangerouslySetInnerHTML={{ __html: inlineSvg.markup }}
         />
       </span>
     );
+  }
+
+  if (!isSafeIconImageUrl(src)) {
+    return null;
   }
 
   return <img src={src} alt={alt} className={className} style={style} loading={loading} />;

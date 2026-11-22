@@ -23,6 +23,11 @@ import {
 import { Power, RefreshCw, ShieldAlert, Square } from "lucide-react";
 import { toast } from "sonner";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
+import {
+  DEFAULT_RESCUE_MAX_OUTPUT_BYTES,
+  DEFAULT_RESCUE_TIMEOUT_SECONDS,
+  rescueCredentialTargets,
+} from "@/utils/credentialAction";
 import { connectUnary } from "@/api/connect/client";
 import { DEFAULT_STREAM_DEADLINE_MS } from "@/api/connect/deadline";
 import { useConnect } from "@/contexts/ConnectContext";
@@ -168,7 +173,12 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     }
   };
 
-  const start = async (authorizationToken: string, verificationSignal: AbortSignal) => {
+  const start = async (
+    authorizationToken: string,
+    verificationSignal: AbortSignal,
+    boundAction: RescueAction = action,
+    boundSshPort: number = action === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0,
+  ) => {
     if (!agentId) throw new Error("请选择节点");
     const controller = new AbortController();
     statusController.current?.abort();
@@ -180,11 +190,11 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         rescue.createRescueSession(
           {
             agentId,
-            action,
+            action: boundAction,
             arguments: [],
-            sshPort: action === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0,
-            timeout: durationFromMs(5 * 60_000),
-            maxOutputBytes: 256n * 1024n,
+            sshPort: boundSshPort,
+            timeout: durationFromMs(DEFAULT_RESCUE_TIMEOUT_SECONDS * 1000),
+            maxOutputBytes: BigInt(DEFAULT_RESCUE_MAX_OUTPUT_BYTES),
             idempotencyKey: crypto.randomUUID(),
             twoFactor: create(TwoFactorProofSchema, {
               authorizationToken,
@@ -296,7 +306,27 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
               <Square size="15" />取消任务
             </Button>
           ) : (
-            <Button {...(selectedAction.destructive ? { color: "red" as const } : {})} disabled={busy} onClick={() => setCredentialAction({ action: "rescue:create", targets: [agentId, String(action), String(action === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0)], title: `执行${selectedAction.label}`, execute: start })}>
+            <Button
+              {...(selectedAction.destructive ? { color: "red" as const } : {})}
+              disabled={busy}
+              onClick={() => {
+                const capturedAction = action;
+                const resolvedPort = capturedAction === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0;
+                void rescueCredentialTargets(agentId, capturedAction, {
+                  arguments: [],
+                  timeoutSeconds: DEFAULT_RESCUE_TIMEOUT_SECONDS,
+                  maxOutputBytes: DEFAULT_RESCUE_MAX_OUTPUT_BYTES,
+                  sshPort: resolvedPort,
+                }).then((targets) => {
+                  setCredentialAction({
+                    action: "rescue:create",
+                    targets,
+                    title: `执行${selectedAction.label}`,
+                    execute: (token, signal) => start(token, signal, capturedAction, resolvedPort),
+                  });
+                });
+              }}
+            >
               {action === RescueAction.RESTORE_NETWORK ? <RefreshCw size="15" /> : <Power size="15" />}
               执行{selectedAction.label}
             </Button>

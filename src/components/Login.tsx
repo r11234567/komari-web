@@ -15,11 +15,6 @@ import { useNativePasswordLogin } from "@/hooks/useNativePasswordLogin";
 import { usePasskeyStatus } from "@/hooks/usePasskeyStatus";
 import { loginWithPasskey } from "@/utils/nativePasskey";
 import PasswordCredentialStep from "@/components/PasswordCredentialStep";
-import {
-  clearConsolePasskeyIntent,
-  consumeConsolePasskeyIntent,
-  markConsolePasskeyIntent,
-} from "@/utils/consolePasskeyIntent";
 
 type LoginDialogProps = {
   trigger?: React.ReactNode | string;
@@ -34,7 +29,6 @@ type LoginFormProps = {
   oauthReturnTo?: string;
   passwordMode?: "inline";
   nativePasskey?: boolean;
-  onPasswordLoginStart?: () => void;
   onOAuthLoginStart?: () => void;
   onPasskeyLoginStart?: () => void;
 };
@@ -48,7 +42,6 @@ export const LoginForm = ({
   oauthReturnTo,
   passwordMode = "inline",
   nativePasskey: nativePasskeyProp,
-  onPasswordLoginStart,
   onOAuthLoginStart,
   onPasskeyLoginStart,
 }: LoginFormProps) => {
@@ -70,6 +63,7 @@ export const LoginForm = ({
   React.useEffect(() => () => pendingPasskey.current?.abort(), []);
   async function startPasskey() {
     if (pendingPasskey.current) return;
+    onPasskeyLoginStart?.();
     const abort = new AbortController();
     pendingPasskey.current = abort;
     setPasskeyBusy(true);
@@ -96,7 +90,6 @@ export const LoginForm = ({
       return;
     }
 
-    onPasswordLoginStart?.();
     setErrorMsg("");
     if (await login.start(username, password)) setPassword("");
   };
@@ -104,13 +97,6 @@ export const LoginForm = ({
   return (
     <form
       className={`km-login-form${login.pending ? " km-password-factor-pending" : ""}`}
-      onClickCapture={(event) => {
-        const target = event.target;
-        if (target instanceof Element && target.closest(".km-passkey-login")) {
-          if (login.pending) { event.preventDefault(); event.stopPropagation(); return; }
-          onPasskeyLoginStart?.();
-        }
-      }}
       onSubmit={(event) => {
         event.preventDefault();
         if (!isLoading) {
@@ -230,7 +216,6 @@ const LoginDialogContent = ({
   }, [autoOpen]);
 
   const finishLogin = React.useCallback(() => {
-    clearConsolePasskeyIntent();
     setOpen(false);
     if (onLoginSuccess) {
       onLoginSuccess();
@@ -238,15 +223,6 @@ const LoginDialogContent = ({
       window.location.assign("/admin/dashboard");
     }
   }, [onLoginSuccess]);
-
-  React.useEffect(() => {
-    if (loading || error || account?.logged_in !== true) return;
-    // The plugin reloads after login. LoginForm is no longer mounted at that
-    // point, so the dialog must restore this page's pending navigation itself.
-    if (consumeConsolePasskeyIntent(window.location.pathname + window.location.search)) {
-      finishLogin();
-    }
-  }, [account?.logged_in, loading, error, finishLogin]);
 
   if (loading) {
     return <Button disabled>{t("loading")}</Button>;
@@ -276,7 +252,6 @@ const LoginDialogContent = ({
 
   if (onlyOAuthLogin && !autoOpen) {
     const redirect = () => {
-      clearConsolePasskeyIntent();
       window.location.href = oauthLoginURL();
     };
     if (typeof trigger === "string") {
@@ -305,7 +280,6 @@ const LoginDialogContent = ({
       open={open}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
-        if (!nextOpen) clearConsolePasskeyIntent();
       }}
     >
       <Dialog.Trigger>
@@ -321,11 +295,6 @@ const LoginDialogContent = ({
         </Dialog.Description>
         <LoginForm
           nativePasskey={nativePasskey}
-          onPasskeyLoginStart={() => {
-            markConsolePasskeyIntent(window.location.pathname + window.location.search);
-          }}
-          onOAuthLoginStart={() => clearConsolePasskeyIntent()}
-          onPasswordLoginStart={() => clearConsolePasskeyIntent()}
           onLoginSuccess={finishLogin}
         />
       </Dialog.Content>
