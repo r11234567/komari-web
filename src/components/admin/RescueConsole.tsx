@@ -148,6 +148,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         { signal, timeoutMs: DEFAULT_STREAM_DEADLINE_MS },
       );
       for await (const message of stream) {
+        if (message.heartbeat) continue;
         if (message.session) setSession(message.session);
         if (message.event) {
           if (message.event.output.length > 0) {

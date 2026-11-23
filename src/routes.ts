@@ -290,10 +290,6 @@ export const routes: RouteObject[] = [
     element: React.createElement(lazy(() => import("./pages/terminal"))),
   },
   {
-    path: "/terminal-legacy",
-    element: React.createElement(lazy(() => import("./pages/terminal/TerminalLegacy"))),
-  },
-  {
     path: "/manage/*",
     element: React.createElement(lazy(() => import("./pages/manage"))),
   },

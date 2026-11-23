@@ -45,7 +45,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-const getTaskSortableId = (task: { id?: number; name?: string; target?: string }) =>
+const getTaskSortableId = (task: { id?: string; name?: string; target?: string }) =>
   task.id !== undefined
     ? `id-${task.id}`
     : `tmp-${task.name ?? ""}-${task.target ?? ""}`;

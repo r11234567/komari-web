@@ -145,3 +145,11 @@ test("isAbortError correctly identifies Connect and DOM abort errors", () => {
   assert.equal(isAbortError(null), false);
   assert.equal(isAbortError(undefined), false);
 });
+test("latency alert links retain a full-width ping task ID", () => {
+  assert.equal(
+    dashboardAlertDetailPath("latency_loss", {
+      title: "loss", node_uuid: "node-1", task_id: "18446744073709551615",
+    }),
+    "/admin/notification/ping-loss?node=node-1&task=18446744073709551615",
+  );
+});

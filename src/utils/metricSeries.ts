@@ -136,7 +136,7 @@ export const comparePingTaskOrder = (
       if (weightDelta !== 0) return weightDelta;
     }
 
-    const idDelta = leftTask.id - rightTask.id;
+    const idDelta = String(leftTask.id).localeCompare(String(rightTask.id), undefined, { numeric: true });
     if (idDelta !== 0) return idDelta;
   } else if (leftTask) {
     return -1;

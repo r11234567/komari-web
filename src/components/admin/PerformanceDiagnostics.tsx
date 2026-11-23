@@ -87,6 +87,7 @@ export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
           { signal, timeoutMs: DEFAULT_STREAM_DEADLINE_MS },
         );
         for await (const msg of stream) {
+          if (msg.heartbeat) continue;
           if (msg.event) {
             if (msg.event.output && msg.event.output.length > 0) {
               setOutput((prev) => prev + new TextDecoder().decode(msg.event!.output));

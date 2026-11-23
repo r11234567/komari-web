@@ -9,26 +9,9 @@ import { useTerminalPage } from "./useTerminalPage";
 import { DEFAULT_TERMINAL_FONT_FAMILY } from "./terminalDefaults";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useXtermjsSettings } from "@/hooks/useXtermjsSettings";
-import TerminalLegacy from "./TerminalLegacy";
 import TerminalPageBoundary from "./TerminalPageBoundary";
 
 const FileEditorDialog = lazy(() => import("./FileEditorDialog"));
-
-const isWorkbenchEnabled = () => {
-  try {
-    if (typeof window === "undefined") return true;
-    const search = new URLSearchParams(window.location.search);
-    if (search.get("legacy") === "1" || search.get("workbench") === "0") {
-      return false;
-    }
-    if (window.localStorage.getItem("terminal.workbench") === "false") {
-      return false;
-    }
-  } catch {
-    // Ignore restricted environment
-  }
-  return true;
-};
 
 const TerminalWorkbench = () => {
   const {
@@ -211,11 +194,8 @@ const TerminalWorkbench = () => {
   );
 };
 
-export const TerminalPage = () => {
-  if (!isWorkbenchEnabled()) {
-    return <TerminalPageBoundary><TerminalLegacy /></TerminalPageBoundary>;
-  }
-  return <TerminalPageBoundary><TerminalWorkbench /></TerminalPageBoundary>;
-};
+export const TerminalPage = () => (
+  <TerminalPageBoundary><TerminalWorkbench /></TerminalPageBoundary>
+);
 
 export default TerminalPage;

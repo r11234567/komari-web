@@ -4,7 +4,7 @@ import { listPingTasks } from "@/api/connect/ping";
 export interface PingTask {
   clients?: string[];
   default_on?: boolean;
-  id?: number;
+  id?: string;
   interval?: number;
   target?: string;
   type?: string;

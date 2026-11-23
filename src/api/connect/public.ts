@@ -61,7 +61,7 @@ export const listPublicPingTasks = async (signal: AbortSignal) => {
     (requestSignal, timeoutMs) => connectClients.metrics.listPingTasks({}, { signal: requestSignal, timeoutMs }),
   );
   return response.tasks.map<PublicPingTask>((task) => ({
-    id: Number(task.taskId),
+    id: task.taskId.toString(),
     name: task.name,
     type: task.type,
     interval: task.interval ? Number(task.interval.seconds) : 0,

@@ -52,7 +52,7 @@ import { toast } from "sonner";
 type PingLossNotification = {
   id: number;
   client: string;
-  task_id: number;
+  task_id: string;
   enable: boolean;
   window_seconds: number;
   loss_threshold: number;
@@ -68,7 +68,7 @@ type AlertTarget = {
   client: string;
   clientName: string;
   serverOrder: number;
-  taskId: number;
+  taskId: string;
   task: PingTask;
   rule?: PingLossNotification;
 };
@@ -91,7 +91,14 @@ const defaultForm: FormState = {
   cooldownMinutes: 5,
 };
 
-const targetKey = (client: string, taskId: number) => `${client}:${taskId}`;
+const targetKey = (client: string, taskId: string) => `${client}:${taskId}`;
+
+const notificationTaskID = (id: string) => {
+  const numeric = Number(id);
+  return Number.isSafeInteger(numeric)
+    ? { task_id: numeric }
+    : { task_id_decimal: id };
+};
 
 const parseResponse = async (response: Response) => {
   const data = await response.json().catch(() => null);
@@ -111,8 +118,8 @@ const buildAlertTargets = (
   );
   const tasksById = new Map(
     tasks
-      .filter((task) => typeof task.id === "number")
-      .map((task) => [task.id as number, task]),
+      .filter((task) => task.id !== undefined)
+      .map((task) => [task.id, task]),
   );
   const rulesByTarget = new Map<string, PingLossNotification>();
   for (const rule of rules) {
@@ -123,7 +130,7 @@ const buildAlertTargets = (
   const targets: AlertTarget[] = [];
   const seen = new Set<string>();
   for (const task of tasks) {
-    if (typeof task.id !== "number") continue;
+    if (task.id === undefined) continue;
     for (const client of new Set(task.clients || [])) {
       const nodeEntry = nodesById.get(client);
       if (!nodeEntry) continue;
@@ -211,7 +218,7 @@ const PingLossContent = () => {
   const [selected, setSelected] = React.useState<string[]>([]);
   const routeState = searchParams.get("state")?.trim() || "";
   const routeNode = searchParams.get("node")?.trim() || "";
-  const routeTask = Number(searchParams.get("task") || 0);
+  const routeTask = searchParams.get("task") || "";
 
   const refresh = React.useCallback(async () => {
     setLoading(true);
@@ -219,7 +226,14 @@ const PingLossContent = () => {
     try {
       const response = await fetch("/api/admin/notification/ping-loss/");
       const data = await parseResponse(response);
-      setRules(Array.isArray(data?.data) ? data.data : []);
+      const entries = data?.data as (Omit<PingLossNotification, "task_id"> & {
+        task_id: number; task_id_decimal?: string;
+      })[] | undefined;
+      setRules(Array.isArray(entries) ? entries.flatMap((rule) => {
+        const id = rule.task_id_decimal ||
+          (Number.isSafeInteger(rule.task_id) ? String(rule.task_id) : "");
+        return id ? [{ ...rule, task_id: id, task: rule.task && { ...rule.task, id } }] : [];
+      }) : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -679,7 +693,7 @@ const ConfigurationDialog = ({
     const notifications = activeTargets.map((target) => ({
       ...(target.rule ? { id: target.rule.id } : {}),
       client: target.client,
-      task_id: target.taskId,
+      ...notificationTaskID(target.taskId),
       enable: form.enable,
       window_seconds: Math.round(form.windowMinutes * 60),
       loss_threshold: form.lossThreshold,

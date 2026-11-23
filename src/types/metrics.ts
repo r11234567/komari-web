@@ -60,7 +60,7 @@ export type QueryMetricsResponse = {
 };
 
 export type PublicPingTask = {
-  id: number;
+  id: string;
   weight?: number;
   name: string;
   type?: string;
