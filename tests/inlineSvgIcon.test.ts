@@ -225,7 +225,8 @@ test("sanitizeSvg blocks namespace-prefixed href, entity whitespace, style escap
 test("sanitizeSvg preserves clean SVG icons and local gradient/clip references", () => {
   const env = makeEnv();
   const valid = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-    <title>Demo Icon</title>
+    <title>Demo Icon<g><path d='M8 8'/></g></title>
+    <desc>Detailed description<circle r='2'/></desc>
     <defs><clipPath id="clip_0"><rect x="0" y="0" width="24" height="24"/></clipPath></defs>
     <g clip-path="url(#clip_0)"><path d="M4 12 L20 12" stroke="currentColor" stroke-width="2"/></g>
   </svg>`;
@@ -234,6 +235,7 @@ test("sanitizeSvg preserves clean SVG icons and local gradient/clip references",
   assert.ok(cleaned);
   assert.match(cleaned, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 24 24" fill="none" width="100%" height="100%"/);
   assert.match(cleaned, /<title>Demo Icon<\/title>/);
+  assert.match(cleaned, /<desc>Detailed description<\/desc>/);
   assert.match(cleaned, /<clipPath id="clip_0">/);
   assert.match(cleaned, /clip-path="url\(#clip_0\)"/);
   assert.match(cleaned, /stroke="currentColor"/);
