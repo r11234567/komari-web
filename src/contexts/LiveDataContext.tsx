@@ -209,7 +209,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
         try {
           const stream = browser.watchAgentStatus(
             { agentIds: [], afterEventId },
-            { signal: streamController.signal, timeoutMs: 0 },
+            { signal: streamController.signal, timeoutMs: 0, headers: { "X-Komari-Stream-Heartbeat": "1" } },
           );
           setShowCallout(true);
           for await (const event of stream) {
