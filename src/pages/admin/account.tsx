@@ -19,6 +19,7 @@ import SensitiveActionDialog, { type SensitiveAction } from "@/components/Sensit
 import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential_pb";
 import { credentialHeader } from "@/api/connect/trustedCredential";
 import { restCredentialResource } from "@/utils/credentialAction";
+import { buildEnableTwoFactorRequest } from "@/utils/accountTwoFactor";
 import NativePasskeys from "@/components/admin/NativePasskeys";
 import NativeCredentialContacts from "@/components/admin/NativeCredentialContacts";
 
@@ -294,7 +295,12 @@ const InnerLayout = () => {
           {account?.["2fa_enabled"] ? (
             <TwoFactorEnabled />
           ) : (
-            <TwoFactorDisabled onEnabled={() => setTwoFaVerified(true)} />
+            <TwoFactorDisabled
+              accountUuid={account?.uuid}
+              requiresStepUp={Boolean(account?.trusted_2fa_enabled)}
+              onRequestSensitiveAction={setSensitiveAction}
+              onEnabled={() => setTwoFaVerified(true)}
+            />
           )}
           <label className="font-bold text-2xl mt-2">
             {t("settings.sso.title")}
@@ -380,7 +386,17 @@ const InnerLayout = () => {
     </Flex>
   );
 };
-const TwoFactorDisabled = ({ onEnabled }: { onEnabled?: () => void }) => {
+const TwoFactorDisabled = ({
+  accountUuid,
+  requiresStepUp = false,
+  onRequestSensitiveAction,
+  onEnabled,
+}: {
+  accountUuid?: string;
+  requiresStepUp?: boolean;
+  onRequestSensitiveAction?: (request: SensitiveAction) => void;
+  onEnabled?: () => void;
+}) => {
   const { t } = useTranslation();
   const { refresh } = useAccount();
   const [saving, setSaving] = React.useState(false);
@@ -390,53 +406,88 @@ const TwoFactorDisabled = ({ onEnabled }: { onEnabled?: () => void }) => {
   const [code, setCode] = React.useState<string>("");
 
   React.useEffect(() => {
-    if (isOpen) {
-      setIsLoading(true);
-      fetch("/api/admin/2fa/generate", {
-        method: "POST",
-        credentials: "same-origin",
-      })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(t("account.qr_fetch_error"));
-          }
-          return response.blob();
-        })
-        .then((blob) => {
-          const url = URL.createObjectURL(blob);
-          setQRCode(url);
-        })
-        .catch((err) => toast.error(err.message))
-        .finally(() => setIsLoading(false));
+    if (!isOpen) {
+      return;
     }
-  }, [isOpen]);
+    let active = true;
+    let createdUrl: string | null = null;
+    setIsLoading(true);
+    fetch("/api/admin/2fa/generate", {
+      method: "POST",
+      credentials: "same-origin",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(t("account.qr_fetch_error"));
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        createdUrl = URL.createObjectURL(blob);
+        if (active) {
+          setQRCode(createdUrl);
+        } else {
+          URL.revokeObjectURL(createdUrl);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          toast.error(err.message);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [isOpen, t]);
+
+  const submitEnable = async (
+    submittedCode: string,
+    credentialToken?: string,
+    signal?: AbortSignal,
+  ) => {
+    const { url, init } = buildEnableTwoFactorRequest(submittedCode, credentialToken, signal);
+    const res = await fetch(url, init);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || `Failed to enable 2FA (${res.status})`);
+    }
+    await res.json().catch(() => ({}));
+    toast.success(t("common.updated_successfully"));
+    setIsOpen(false);
+    setCode("");
+    onEnabled?.();
+    await refresh();
+  };
 
   const handleEnable2fa = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!code) {
+    const trimmedCode = code.trim();
+    if (!trimmedCode) {
       toast.error(t("account.otp_empty_error"));
       return;
     }
+    if (requiresStepUp && onRequestSensitiveAction) {
+      setIsOpen(false);
+      onRequestSensitiveAction({
+        action: "account:enable_2fa",
+        targets: [accountUuid ?? ""],
+        resource: restCredentialResource("POST", "/api/admin/2fa/enable"),
+        title: t("account.enable_2fa"),
+        execute: (token, signal) => submitEnable(trimmedCode, token, signal),
+      });
+      return;
+    }
     setSaving(true);
-    fetch(`/api/admin/2fa/enable?code=${encodeURIComponent(code)}`, {
-      method: "POST",
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(
-            data.message || `Failed to enable 2FA (${res.status})`
-          );
-        }
-        return res.json();
-      })
-      .then(() => {
-        toast.success(t("common.updated_successfully"));
-        setIsOpen(false);
-        onEnabled?.();
-        refresh();
-      })
-      .catch((err) => toast.error(err.message))
+    void submitEnable(trimmedCode)
+      .catch((err) => toast.error(err instanceof Error ? err.message : String(err)))
       .finally(() => setSaving(false));
   };
 

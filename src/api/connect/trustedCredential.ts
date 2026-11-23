@@ -1,6 +1,7 @@
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { TrustedCredentialService } from "@komari/proto/komari/credential/v1/credential_pb";
+import { credentialHeader } from "../../utils/credentialHeader.ts";
 
 // Independent of workspace-aware clients: verification must be possible while
 // the workspace is locked. All proofs stay in memory and use the live cookie.
@@ -11,5 +12,5 @@ export const trustedCredentialClient = createClient(TrustedCredentialService, cr
   fetch: (input, init) => fetch(input, { ...init, credentials: "same-origin" }),
 }));
 
-export const credentialHeader = "X-Komari-Credential-Authorization";
+export { credentialHeader };
 export const workspaceCredentialResource = (agentId: string, systemUser: string) => `workspace:${JSON.stringify([agentId, systemUser])}`;

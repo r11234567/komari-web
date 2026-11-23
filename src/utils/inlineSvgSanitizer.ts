@@ -196,7 +196,7 @@ function copySafeChildren(
       }
       continue;
     }
-    if (child.nodeType !== 1 /* ELEMENT_NODE */) {
+    if (isTextOnlyTag || child.nodeType !== 1 /* ELEMENT_NODE */) {
       continue;
     }
     const childEl = child as Element;
