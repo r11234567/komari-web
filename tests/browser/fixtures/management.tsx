@@ -12,6 +12,10 @@ import { ListApiTokensResponseSchema } from "@komari/proto/komari/admin/v1/api_t
 import { ListAgentsResponseSchema } from "@komari/proto/komari/browser/v1/browser_pb";
 import PluginPackageManager from "../../../src/components/admin/PluginPackageManager";
 import ApiTokenManager from "../../../src/components/admin/ApiTokenManager";
+import { HistoryExportCard } from "../../../src/components/admin/HistoryExportCard";
+import { AccountProvider } from "../../../src/contexts/AccountContext";
+import { ConnectProvider } from "../../../src/contexts/ConnectContext";
+import { NodeListProvider } from "../../../src/contexts/NodeListContext";
 
 // This harness never connects to a real panel. All identities/data are synthetic.
 const params = new URLSearchParams(location.search);
@@ -42,7 +46,11 @@ connectClients.apiToken.revokeApiToken = async request => {
 };
 
 await i18next.use(initReactI18next).init({ lng: params.get("lng") || "zh-CN", fallbackLng: "en", resources: { en: { translation: en }, "zh-CN": { translation: zh } } });
+const screen = params.get("screen");
+if (screen === "exports") await import("../../../src/global.css");
 createRoot(document.getElementById("root")!).render(<Theme><div style={{ maxWidth: 1000, margin: "32px auto" }}>
-  {params.get("screen") === "tokens" ? <ApiTokenManager /> : <PluginPackageManager compact onChanged={() => {}} />}
+  {screen === "exports" ? (
+    <ConnectProvider><AccountProvider><NodeListProvider><HistoryExportCard /></NodeListProvider></AccountProvider></ConnectProvider>
+  ) : screen === "tokens" ? <ApiTokenManager /> : <PluginPackageManager compact onChanged={() => {}} />}
 </div></Theme>);
 if (params.has("open")) setTimeout(() => document.querySelector<HTMLButtonElement>("button")?.click(), 500);

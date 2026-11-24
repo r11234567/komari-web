@@ -2,6 +2,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export class AdminRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 export async function requestAdminData<T>(
   input: RequestInfo | URL,
   fallbackMessage: string,
@@ -26,7 +32,7 @@ export async function requestAdminData<T>(
     payload.status !== "success" ||
     !("data" in payload)
   ) {
-    throw new Error(message);
+    throw new AdminRequestError(message, response.status);
   }
 
   return payload.data as T;
