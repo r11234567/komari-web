@@ -161,7 +161,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
             setOutput((current) => current + new TextDecoder().decode(event.output));
           }
           setSession((current) =>
-            current ? { ...current, state: event.state } : current,
+            current ? { ...current, state: event.state, error: event.error ?? current.error } : current,
           );
         }
       }
@@ -354,7 +354,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
             </Text>
             {sshAccess.sshdState && (
               <Text size="2" color={sshAccess.sshdState.limitation ? "orange" : "gray"}>
-                {sshAccess.sshdState.reachable ? "节点本机已识别目标端口的 SSH 服务" : "节点本机未确认目标端口的 SSH 服务"}
+                {sshAccess.sshdState.reachable ? "节点报告目标端口已监听" : "节点本机未确认目标端口的 SSH 服务"}
                 {sshAccess.sshdState.listenAddresses.length > 0 && `，检测到的监听地址：${sshAccess.sshdState.listenAddresses.join(", ")}`}
                 {sshAccess.sshdState.limitation && `。${sshAccess.sshdState.limitation}`}
               </Text>
