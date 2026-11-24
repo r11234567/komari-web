@@ -378,7 +378,8 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         )}
         <Flex gap="2" justify="end" wrap="wrap">
           {session && !terminal ? (
-            <Button color="red" variant="soft" onClick={() => setCredentialAction({ action: "rescue:cancel", targets: [session.sessionId], title: t("rescue.cancel_task"), execute: cancel })}>
+            <Button color="red" variant="soft" disabled={session.action === RescueAction.REVOKE_TEMPORARY_SSH_ACCESS}
+              onClick={() => setCredentialAction({ action: "rescue:cancel", targets: [session.sessionId], title: t("rescue.cancel_task"), execute: cancel })}>
               <Square size="15" />{t("rescue.cancel_task")}
             </Button>
           ) : (
