@@ -1562,6 +1562,9 @@
       "width_third": "1/3"
     },
     "reverse_proxy": {
+      "agent_cloudflare_proxy": "Agent 经 Cloudflare 橙云",
+      "agent_cloudflare_proxy_help": "Agent 的终端和文件操作双向流使用 gRPC。在 Cloudflare 启用 gRPC 后，重启已升级的 Agent 即可应用。",
+      "agent_cloudflare_proxy_docs": "Cloudflare 部署说明",
       "binary_label": "二进制路径",
       "certificate_domains": "证书域名",
       "certificate_expires": "证书到期时间",

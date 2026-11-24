@@ -3,7 +3,7 @@ import {
   SettingCard,
   SettingCardLabel,
 } from "@/components/admin/SettingCard";
-import { useSettings } from "@/lib/api";
+import { updateSettingsWithToast, useSettings } from "@/lib/api";
 import {
   CLOUDFLARED_STOP_CONFIRM_TEXT,
   getCloudflaredStatus,
@@ -69,6 +69,7 @@ export default function GeneralConnectivitySettings() {
           )}
         </Text>
       </div>
+      <AgentCloudflareProxySetting />
       <Tabs.Root
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as ReverseProxyTab)}
@@ -96,6 +97,48 @@ export default function GeneralConnectivitySettings() {
         </Tabs.Content>
       </Tabs.Root>
     </Flex>
+  );
+}
+
+function AgentCloudflareProxySetting() {
+  const { t } = useTranslation();
+  const { settings, loading } = useSettings();
+  const [saving, setSaving] = React.useState(false);
+  const label = t("settings.reverse_proxy.agent_cloudflare_proxy");
+
+  async function save(enabled: boolean) {
+    setSaving(true);
+    try {
+      await updateSettingsWithToast({ agent_cloudflare_proxy: enabled }, t);
+    } catch {
+      // The shared settings helper displays the save error.
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SettingCard
+      title={label}
+      description={t("settings.reverse_proxy.agent_cloudflare_proxy_help")}
+    >
+      <SettingCard.Action>
+        <Switch
+          aria-label={label}
+          checked={settings.agent_cloudflare_proxy === true}
+          disabled={loading || saving}
+          onCheckedChange={(value) => void save(value)}
+        />
+      </SettingCard.Action>
+      <a
+        className="self-start text-sm text-[var(--accent-11)] underline"
+        href="https://github.com/r11234567/komari/blob/main/docs/cloudflare-agent-grpc.md"
+        target="_blank"
+        rel="noreferrer"
+      >
+        {t("settings.reverse_proxy.agent_cloudflare_proxy_docs")}
+      </a>
+    </SettingCard>
   );
 }
 
