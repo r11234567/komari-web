@@ -17,6 +17,7 @@ import {
   Button,
   Card,
   Flex,
+  Link,
   Select,
   Text,
   TextArea,
@@ -35,6 +36,7 @@ import {
 import { connectUnary } from "@/api/connect/client";
 import { DEFAULT_STREAM_DEADLINE_MS } from "@/api/connect/deadline";
 import { useConnect } from "@/contexts/ConnectContext";
+import { temporarySSHHelpURL } from "@/utils/temporarySSHHelp";
 
 const actions = [
   { value: RescueAction.TEMPORARY_SSH_ACCESS, key: "grant_ssh", destructive: false },
@@ -78,6 +80,7 @@ const terminalStates = new Set([
 export function RescueConsole({ agentId }: { agentId?: string }) {
   const { deployment, rescue } = useConnect();
   const { t, i18n } = useTranslation();
+  const outputId = React.useId();
   const [available, setAvailable] = React.useState(false);
   const [statusLoaded, setStatusLoaded] = React.useState(false);
   const [statusError, setStatusError] = React.useState<{ message?: string }>();
@@ -329,6 +332,38 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   const isRevoke = action === RescueAction.REVOKE_TEMPORARY_SSH_ACCESS;
   const fixedPort = helperStatus?.sshAccessPort ?? 0;
   const enrollmentKeyId = helperStatus?.sshEnrollmentKeyId ?? "";
+  const diagnostic = helperStatus?.sshWindowError;
+  const diagnosticCode = isGrant && !fixedPort
+    ? diagnostic?.code || (helperStatus?.sshWindowSupported ? "SSH_STATUS_UNAVAILABLE" : "SSH_HELPER_UPDATE_REQUIRED")
+    : undefined;
+  const sshHelpURL = temporarySSHHelpURL(i18n.resolvedLanguage || i18n.language || "en", diagnosticCode);
+  const resultLines = [];
+  if (diagnosticCode) {
+    resultLines.push(`${t(helperStatus?.sshWindowSupported ? "rescue.ssh_not_configured" : "rescue.ssh_upgrade")} [${diagnosticCode}]`);
+    if (diagnostic?.message) resultLines.push(diagnostic.message);
+  }
+  if (session?.error) resultLines.push(session.error.message);
+  if (listener) {
+    resultLines.push(t(listener.reachable ? "rescue.ssh_listening" : "rescue.ssh_not_confirmed"));
+    if (listener.listenAddresses.length > 0) {
+      resultLines.push(t("rescue.ssh_listen_addresses", { addresses: listener.listenAddresses.join(", ") }));
+    }
+    if (listener.limitation) resultLines.push(listener.limitation);
+  }
+  if (latestWindow) {
+    resultLines.push(t("rescue.ssh_receipt", {
+      port: latestWindow.port,
+      status: t(!latestWindow.granted ? "rescue.ssh_window_closed" : windowExpired
+        ? "rescue.ssh_expired" : helperStatus?.sshRevokePending ? "rescue.ssh_revoke_pending" : "rescue.ssh_kernel_written"),
+    }));
+  }
+  if (activeWindow?.expiresAt) {
+    resultLines.push(t("rescue.ssh_window_until", {
+      source: activeWindow.sourceIp, time: timestampDate(activeWindow.expiresAt).toLocaleString(i18n.resolvedLanguage),
+    }));
+  }
+  if (output) resultLines.push(output);
+  const helperOutput = resultLines.join("\n");
   const runLabel = isGrant && activeWindow
     ? t("rescue.ssh_replace")
     : t("rescue.run_action", { action: t("rescue.action_" + selectedAction.key) });
@@ -361,7 +396,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
           </Select.Content>
         </Select.Root>
         <Text size="2" color={selectedAction.destructive ? "red" : "gray"}>{t("rescue.detail_" + selectedAction.key)}</Text>
-        {isGrant && (fixedPort ? (
+        {isGrant && fixedPort > 0 && (
           <Flex direction="column" gap="2">
             <Text size="2">{t("rescue.ssh_fixed_port", { port: fixedPort })}</Text>
             <label>
@@ -369,10 +404,14 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
               <TextField.Root value={sourceIp} maxLength={45} spellCheck={false} autoComplete="off"
                 onChange={(event) => setSourceIp(event.target.value)} />
             </label>
+            <Text size="2" color="gray">
+              {t("rescue.ssh_nat_hint")} <code>curl -4 -fsS https://api.ipify.org</code>
+            </Text>
           </Flex>
-        ) : (
-          <Text size="2" color="gray">{t(helperStatus?.sshWindowSupported ? "rescue.ssh_not_configured" : "rescue.ssh_upgrade")}</Text>
-        ))}
+        )}
+        {(isGrant || isRevoke) && (
+          <Link size="2" href={sshHelpURL} target="_blank" rel="noopener noreferrer">{t("rescue.ssh_docs")}</Link>
+        )}
         {isRevoke && !activeWindow && (
           <Text size="2" color="gray">{t("rescue.ssh_no_window")}</Text>
         )}
@@ -420,42 +459,18 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
             {t("rescue.session_state", { state: t(stateText[session.state] || "common.unknown"), session: session.sessionId })}
           </Text>
         )}
-        {session?.error && <Text size="2" color="red">{session.error.message}</Text>}
-        {(sshAccess || latestWindow) && (
-          <Flex direction="column" gap="1" role="status">
-            {listener && (
-              <Flex direction="column" gap="1">
-                <Text size="2" color={listener.limitation ? "orange" : "gray"}>
-                  {t(listener.reachable ? "rescue.ssh_listening" : "rescue.ssh_not_confirmed")}
-                </Text>
-                {listener.listenAddresses.length > 0 && (
-                  <Text size="2" color="gray">{t("rescue.ssh_listen_addresses", { addresses: listener.listenAddresses.join(", ") })}</Text>
-                )}
-                {listener.limitation && <Text size="2" color="orange">{listener.limitation}</Text>}
-              </Flex>
-            )}
-            {latestWindow && (
-              <>
-                <Text size="2">{t("rescue.ssh_receipt", {
-                  port: latestWindow.port,
-                  status: t(windowExpired ? "rescue.ssh_expired" : helperStatus?.sshRevokePending
-                    ? "rescue.ssh_revoke_pending" : latestWindow.granted ? "rescue.ssh_kernel_written" : "rescue.ssh_window_closed"),
-                })}</Text>
-                {activeWindow?.expiresAt && (
-                  <Text size="2">{t("rescue.ssh_window_until", {
-                    source: activeWindow.sourceIp, time: timestampDate(activeWindow.expiresAt).toLocaleString(i18n.resolvedLanguage),
-                  })}</Text>
-                )}
-              </>
-            )}
+        {(resultLines.length > 0 || session) && (
+          <Flex direction="column" gap="1">
+            <Text as="label" size="2" htmlFor={outputId}>{t("rescue.output")}</Text>
+            <TextArea
+              id={outputId}
+              readOnly
+              value={helperOutput}
+              rows={Math.min(10, Math.max(2, helperOutput.split("\n").length))}
+              style={{ fontFamily: "monospace" }}
+            />
           </Flex>
         )}
-        <TextArea
-          readOnly
-          value={output}
-          placeholder={t("rescue.output")}
-          style={{ minHeight: "180px", fontFamily: "monospace" }}
-        />
       </Flex>
     </Card>
   );

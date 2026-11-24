@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { alertKinds } from "../src/utils/notificationRouting.ts";
 import { rescueSpecDigest } from "../src/utils/credentialAction.ts";
+import { temporarySSHHelpURL } from "../src/utils/temporarySSHHelp.ts";
 
 type Catalog = { [key: string]: string | Catalog };
 
@@ -27,6 +28,18 @@ const pages = [
   "pages/admin/settings/notification.tsx",
   "api/credentialLifecycle.ts",
 ];
+
+test("temporary SSH help follows the UI language and opens the matching diagnosis", () => {
+  const root = "https://github.com/r11234567/komari/blob/main/docs/";
+  for (const locale of ["zh_CN", "zh-TW"]) {
+    assert.equal(temporarySSHHelpURL(locale, "SSH_CONFIG_MISSING"), `${root}temporary-ssh.zh-CN.md#ssh_config_missing`);
+  }
+  for (const locale of ["en", "id_ID", "ja_JP"]) {
+    assert.equal(temporarySSHHelpURL(locale, "SSH_NFT_RULES_INVALID"), `${root}temporary-ssh.md#ssh_nft_rules_invalid`);
+  }
+  assert.equal(temporarySSHHelpURL("zh_CN"), `${root}temporary-ssh.zh-CN.md#申请并验证`);
+  assert.equal(temporarySSHHelpURL("en", "UNKNOWN_CODE"), `${root}temporary-ssh.md#request-and-confirm-access`);
+});
 
 test("temporary SSH binds the fixed port, IPv6 source, prior grant and enrollment to its 2FA proof", async () => {
   const base = { timeoutSeconds: 300, maxOutputBytes: 262144 };
