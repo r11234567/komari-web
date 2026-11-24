@@ -35,6 +35,7 @@ import {
 } from "@/api/connect/dashboard";
 import { ChartContainer } from "@/components/ui/chart";
 import {
+  dashboardTrafficPlot,
   type DashboardAlertKind,
   type DashboardAlertSummary,
   type DashboardChartsData,
@@ -868,14 +869,15 @@ export function TrafficTrendPanel({
   axisWidth: number;
 }) {
   const { t } = useTranslation();
+  const plot = React.useMemo(() => trend && dashboardTrafficPlot(trend, status), [trend, status]);
   const ticks = React.useMemo(
-    () => (trend ?? [])
+    () => (plot ?? [])
       .filter((bucket) => {
         const date = new Date(bucket.timestamp);
         return date.getMinutes() === 0 && date.getHours() % 2 === 0;
       })
       .map((bucket) => bucket.timestamp),
-    [trend],
+    [plot],
   );
   const tickFormatter = React.useCallback((value: number) => {
     const date = new Date(value);
@@ -889,7 +891,7 @@ export function TrafficTrendPanel({
     <section className="@container flex h-full min-w-0 flex-col rounded-md border bg-[var(--color-panel-solid)] p-3">
       <PanelHeader
         title={t("admin_dashboard.today_traffic")}
-        description={t("admin_dashboard.hourly_traffic_hint")}
+        description={t("admin_dashboard.hourly_traffic_hint", { minutes: (status?.intervalSeconds ?? 900) / 60 })}
         responsive
         trailing={(
           <div className="mt-0.5 flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
@@ -900,7 +902,9 @@ export function TrafficTrendPanel({
       />
       {status && status.coverage !== "complete" && status.coverage !== "unavailable" ? (
         <p role="status" data-testid="traffic-coverage" className="mb-2 text-xs text-muted-foreground">
-          {status.intervalSeconds !== status.requestedIntervalSeconds ? t("admin_dashboard.traffic_coarse", { minutes: status.intervalSeconds / 60 }) : t("admin_dashboard.traffic_partial")}
+          {status.intervalSeconds !== status.requestedIntervalSeconds
+            ? t("admin_dashboard.traffic_coarse", { minutes: status.intervalSeconds / 60 })
+            : t(status.warning === "minute_history_unavailable" ? "admin_dashboard.traffic_minute_gap" : "admin_dashboard.traffic_partial")}
           {status.dataEnd ? ` · ${t("admin_dashboard.traffic_data_end", { time: new Date(status.dataEnd).toLocaleString() })}` : ""}
         </p>
       ) : null}
@@ -908,7 +912,7 @@ export function TrafficTrendPanel({
         <div className="flex min-h-[220px] flex-1 items-center justify-center text-sm text-[var(--red-11)]">
           {t("admin_dashboard.data_unavailable")}
         </div>
-      ) : trend ? (
+      ) : plot ? (
         <ChartContainer
           config={{
             up: { label: t("admin_dashboard.upload"), color: "var(--accent-9)" },
@@ -916,7 +920,7 @@ export function TrafficTrendPanel({
           }}
           className="min-h-[220px] w-full flex-1 aspect-auto"
         >
-          <LineChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <LineChart data={plot} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
             <XAxis
               dataKey="timestamp"

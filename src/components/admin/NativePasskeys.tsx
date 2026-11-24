@@ -39,7 +39,13 @@ export default function NativePasskeys() {
       .catch(() => {});
     return () => { controller.abort(); active.current?.abort(); };
   }, [enabled]);
-  if (!enabled) return null;
+  if (enabled === undefined) return null;
+  if (!enabled) {
+    return <Flex direction="column" gap="2">
+      <Heading size="4">{t("account.passkey.title", "Passkeys")}</Heading>
+      <Text size="2" color="gray">{t("account.passkey.unavailable")}</Text>
+    </Flex>;
+  }
 
   async function perform(op: Action, token: string, signal: AbortSignal) {
     const client = connectClients.passkeyManagement;

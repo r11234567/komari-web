@@ -22,6 +22,7 @@ export interface DashboardTrafficTrend {
   dataEnd?: string;
   catchingUp: boolean;
   missingClients: number;
+  warning?: string;
 }
 
 export function dashboardBillingPlotValue(day: DashboardTrafficDay): number | null {
@@ -35,6 +36,23 @@ export interface DashboardTrafficBucket {
   down: number;
 }
 
+export function dashboardTrafficPlot(trend: DashboardTrafficBucket[], status?: DashboardTrafficTrend | null) {
+  if (status?.warning !== "minute_history_unavailable" || status.intervalSeconds !== status.requestedIntervalSeconds || !trend.length) {
+    return trend;
+  }
+  const first = trend[0].timestamp;
+  const step = status.intervalSeconds * 1000;
+  const count = Math.ceil(24 * 60 * 60 * 1000 / step);
+  if (step <= 0 || count > 2048 || count <= trend.length) return trend;
+  return [
+    ...Array.from({ length: count - trend.length }, (_, index) => ({
+      timestamp: first - (count - trend.length - index) * step,
+      up: null,
+      down: null,
+    })),
+    ...trend,
+  ];
+}
 export interface DashboardTrafficRankItem {
   uuid: string;
   name: string;
