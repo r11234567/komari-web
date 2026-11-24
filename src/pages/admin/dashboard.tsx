@@ -451,14 +451,14 @@ export default function AdminDashboard() {
           <Link to="/admin/billing" className="block h-full min-w-0 text-inherit no-underline">
             <SummaryPanel
               icon={<CircleDollarSign size={18} />}
-              label={t("admin_dashboard.cost_center", "成本中心")}
+              label={t("billing.title")}
               value={billing ? formatBillingMoney(billing.summary.month.total, billingCurrency) : "-"}
               tone="green"
             >
               {billing ? (
                 <div className="flex items-center justify-between gap-3">
-                  <span>{t("admin_dashboard.cost_year", "本年")} {formatBillingMoney(billing.summary.year.total, billingCurrency)}</span>
-                  <span>{t("admin_dashboard.remaining_value", "剩余价值")} {formatBillingMoney(billing.summary.remaining_value, billingCurrency)}</span>
+                  <span>{t("admin_dashboard.cost_year")} {formatBillingMoney(billing.summary.year.total, billingCurrency)}</span>
+                  <span>{t("admin_dashboard.remaining_value")} {formatBillingMoney(billing.summary.remaining_value, billingCurrency)}</span>
                 </div>
               ) : <span>{t("admin_dashboard.data_unavailable")}</span>}
             </SummaryPanel>

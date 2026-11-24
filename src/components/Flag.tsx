@@ -72,7 +72,7 @@ const Flag = React.memo(({ flag, size }: FlagProps) => {
   }
 
   // 构建本地图片路径
-  imgSrc = `/assets/flags/${resolvedFlagFileName}.svg`;
+  imgSrc = `${import.meta.env.BASE_URL}assets/flags/${resolvedFlagFileName}.svg`;
   // 构建 alt 文本和 aria-label
   const { t } = useTranslation();
   altText = t("common.region_flag_alt", { name: resolvedFlagFileName });

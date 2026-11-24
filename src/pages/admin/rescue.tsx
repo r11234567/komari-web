@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { Flex, Text, Tabs } from "@radix-ui/themes";
 import { Activity, ShieldAlert } from "lucide-react";
@@ -8,6 +9,7 @@ import { RescueConsole } from "@/components/admin/RescueConsole";
 import { PerformanceDiagnostics } from "@/components/admin/PerformanceDiagnostics";
 
 function RescuePageInner() {
+  const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const initialAgent = params.get("agent") ?? "";
   const [selectedAgent, setSelectedAgent] = React.useState<string>(initialAgent);
@@ -32,7 +34,7 @@ function RescuePageInner() {
     <div className="max-w-3xl mx-auto p-6 flex flex-col gap-6">
       <Flex align="center" gap="2">
         <ShieldAlert size={20} />
-        <Text size="5" weight="bold">救援模式与性能诊断</Text>
+        <Text size="5" weight="bold">{t("rescue.page_title")}</Text>
       </Flex>
 
       <div className="rounded-md border p-4">
@@ -48,13 +50,13 @@ function RescuePageInner() {
             <Tabs.Trigger value="diagnostics">
               <Flex align="center" gap="1">
                 <Activity size={14} />
-                性能诊断
+                {t("rescue.diagnostics")}
               </Flex>
             </Tabs.Trigger>
             <Tabs.Trigger value="rescue">
               <Flex align="center" gap="1">
                 <ShieldAlert size={14} />
-                救援模式
+                {t("rescue.title")}
               </Flex>
             </Tabs.Trigger>
           </Tabs.List>
@@ -70,7 +72,7 @@ function RescuePageInner() {
       )}
 
       {!selectedAgent && (
-        <Text size="2" color="gray">请先选择一台机器。</Text>
+        <Text size="2" color="gray">{t("rescue.choose_machine")}</Text>
       )}
     </div>
   );
