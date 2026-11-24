@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { visualizer } from "rollup-plugin-visualizer";
-import { VitePWA } from "vite-plugin-pwa";
+import { VitePWA, type ManifestOptions } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
 import type { UserConfig } from "vite";
@@ -12,6 +12,9 @@ import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
+const publicManifest: Partial<ManifestOptions> = JSON.parse(
+  fs.readFileSync(path.join(configDir, "public/manifest.json"), "utf8"),
+);
 
 export default defineConfig(({ mode }) => {
   const buildTime = new Date().toISOString();
@@ -34,28 +37,13 @@ export default defineConfig(({ mode }) => {
         registerType: "autoUpdate",
         includeManifestIcons: false,
         manifest: {
-          name: "Komari Monitor",
-          short_name: "Komari Monitor",
-          description: "A simple server monitor tool",
-          theme_color: "#2563eb",
-          background_color: "#ffffff",
-          display: "standalone",
+          ...publicManifest,
           scope: base,
           start_url: base,
-          icons: [
-            {
-              src: `${base}assets/pwa-icon.png`,
-              sizes: "192x192",
-              type: "image/png",
-              purpose: "maskable any",
-            },
-            {
-              src: `${base}assets/pwa-icon.png`,
-              sizes: "512x512",
-              type: "image/png",
-              purpose: "maskable any",
-            },
-          ],
+          icons: publicManifest.icons?.map((icon) => ({
+            ...icon,
+            src: `${base}${icon.src.replace(/^\//, "")}`,
+          })),
         },
         workbox: {
           cleanupOutdatedCaches: true,
