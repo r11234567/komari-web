@@ -967,7 +967,7 @@
       "invalid_response": "Server mengembalikan informasi basis data yang tidak valid",
       "load_error": "Gagal memuat informasi basis data",
       "local_total": "Total Basis Data Lokal",
-      "local_total_description": "Basis data utama dan basis data pemantauan yang disimpan secara lokal",
+      "local_total_description": "Total basis data utama, basis data pemantauan lokal, dan arsip dingin",
       "locations": {
         "external": "Eksternal",
         "local": "Lokal"
@@ -1727,7 +1727,7 @@
     "database_breakdown": "Rincian penggunaan basis data",
     "database_breakdown_hint": "Basis data utama, pemantauan, dan berkas runtime",
     "database_file": "Berkas basis data",
-    "database_files": "Berkas basis data",
+    "database_files": "Berkas basis data dan arsip",
     "database_read_failed": "Gagal membaca informasi basis data",
     "database_composition": "Komposisi berkas saat ini",
     "database_usage": "Penggunaan basis data",
@@ -1735,7 +1735,8 @@
     "download": "Unduh",
     "external_storage": "Penyimpanan eksternal",
     "history_preparing": "Riwayat trafik sedang disiapkan dan akan tampil otomatis.",
-    "hourly_traffic_hint": "Total unggah dan unduh dalam interval 20 menit",
+    "traffic_minute_gap": "Interval lama tanpa data per menit ditampilkan sebagai celah.",
+    "hourly_traffic_hint": "Total unggah dan unduh dalam interval {{minutes}} menit",
     "last_compaction": "Pemadatan terakhir",
     "load_failed": "Gagal memuat dasbor",
     "main_database": "Basis data utama",

@@ -967,7 +967,7 @@
       "invalid_response": "伺服器返回了無效的資料庫資訊",
       "load_error": "讀取資料庫資訊失敗",
       "local_total": "本機資料庫合計",
-      "local_total_description": "主資料庫與儲存在本機的監控資料庫佔用",
+      "local_total_description": "主資料庫、本機監控資料庫與冷封存的總佔用",
       "locations": {
         "external": "外部",
         "local": "本機"
@@ -1741,7 +1741,7 @@
     "database_breakdown": "資料庫佔用明細",
     "database_breakdown_hint": "主資料庫、監控資料庫及執行檔案",
     "database_file": "資料庫檔案",
-    "database_files": "資料庫檔案",
+    "database_files": "資料庫與封存檔案",
     "database_read_failed": "資料庫資訊讀取失敗",
     "database_composition": "目前檔案組成",
     "database_usage": "資料庫佔用",
@@ -1749,7 +1749,8 @@
     "download": "下載",
     "external_storage": "外部儲存",
     "history_preparing": "歷史流量統計準備中，完成後會自動顯示完整趨勢。",
-    "hourly_traffic_hint": "每 20 分鐘上傳與下載流量",
+    "traffic_minute_gap": "較早區段缺少分鐘資料，圖中對應區段留空。",
+    "hourly_traffic_hint": "每 {{minutes}} 分鐘上傳與下載流量",
     "last_compaction": "最近封塊",
     "load_failed": "儀表板載入失敗",
     "main_database": "主資料庫",

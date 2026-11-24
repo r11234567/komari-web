@@ -1,6 +1,6 @@
 import * as React from "react";
 import { create } from "@bufbuild/protobuf";
-import { durationFromMs } from "@bufbuild/protobuf/wkt";
+import { durationFromMs, timestampDate } from "@bufbuild/protobuf/wkt";
 import {
   OperationState,
   TwoFactorProofSchema,
@@ -10,6 +10,7 @@ import {
   NetworkIsolationMode,
   type RescueHelperStatus,
   type RescueSession,
+  type TemporarySSHAccess,
 } from "@komari/proto/komari/rescue/v1/rescue_pb";
 import {
   Button,
@@ -33,7 +34,7 @@ import { DEFAULT_STREAM_DEADLINE_MS } from "@/api/connect/deadline";
 import { useConnect } from "@/contexts/ConnectContext";
 
 const actions = [
-  { value: RescueAction.TEMPORARY_SSH_ACCESS, label: "临时开放 SSH", detail: "在指定端口（默认 22）开放 15 分钟的 SSH 公网访问，超时自动关闭。仅手动触发。", destructive: false },
+  { value: RescueAction.TEMPORARY_SSH_ACCESS, label: "临时开放 SSH", detail: "临时放行节点防火墙上的 TCP 端口（默认 22），最长 15 分钟。请使用节点的直连地址和已有的 SSH 服务。", destructive: false },
   { value: RescueAction.REVOKE_TEMPORARY_SSH_ACCESS, label: "关闭临时 SSH", detail: "立即撤销临时 SSH 访问规则。", destructive: false },
   { value: RescueAction.ROLLBACK_PRIVILEGED_CONFIG, label: "回滚特权配置", detail: "在机器上撤销最近一次特权配置变更，无需面板连接。", destructive: true },
   { value: RescueAction.SHUTDOWN, label: "关闭 VPS", detail: "立即关闭操作系统。恢复需要云厂商控制台或物理电源。", destructive: true },
@@ -81,6 +82,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   const [credentialAction, setCredentialAction] = React.useState<SensitiveAction | null>(null);
   const [sshPort, setSshPort] = React.useState("22");
   const [session, setSession] = React.useState<RescueSession>();
+  const [sshAccess, setSSHAccess] = React.useState<TemporarySSHAccess>();
   const [output, setOutput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const statusController = React.useRef<AbortController | null>(null);
@@ -113,6 +115,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     setStatusError("");
     setHelperStatus(undefined);
     setSession(undefined);
+    setSSHAccess(undefined);
     setOutput("");
     if (!agentId) return;
 
@@ -148,14 +151,17 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         { signal, timeoutMs: DEFAULT_STREAM_DEADLINE_MS },
       );
       for await (const message of stream) {
+        if (signal.aborted) break;
         if (message.heartbeat) continue;
         if (message.session) setSession(message.session);
-        if (message.event) {
-          if (message.event.output.length > 0) {
-            setOutput((current) => current + new TextDecoder().decode(message.event!.output));
+        const event = message.event;
+        if (event) {
+          if (event.sshAccess) setSSHAccess(event.sshAccess);
+          if (event.output.length > 0) {
+            setOutput((current) => current + new TextDecoder().decode(event.output));
           }
           setSession((current) =>
-            current ? { ...current, state: message.event!.state } : current,
+            current ? { ...current, state: event.state, error: event.error ?? current.error } : current,
           );
         }
       }
@@ -185,6 +191,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     statusController.current?.abort();
     statusController.current = controller;
     setBusy(true);
+    setSSHAccess(undefined);
     setOutput("");
     try {
       const response = await connectUnary({ signal: AbortSignal.any([controller.signal, verificationSignal]) }, (signal, timeoutMs) =>
@@ -339,6 +346,22 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
           </Text>
         )}
         {session?.error && <Text size="2" color="red">{session.error.message}</Text>}
+        {sshAccess && (
+          <Flex direction="column" gap="1" role="status">
+            <Text size="2">
+              上次回执：TCP {sshAccess.port} {sshAccess.granted ? "节点防火墙已放行" : sshAccess.sshdState ? "临时放行失败" : "临时放行已撤销"}
+              {sshAccess.granted && sshAccess.expiresAt && `，最晚于 ${timestampDate(sshAccess.expiresAt).toLocaleString()} 到期`}
+            </Text>
+            {sshAccess.sshdState && (
+              <Text size="2" color={sshAccess.sshdState.limitation ? "orange" : "gray"}>
+                {sshAccess.sshdState.reachable ? "节点报告目标端口已监听" : "节点本机未确认目标端口的 SSH 服务"}
+                {sshAccess.sshdState.listenAddresses.length > 0 && `，检测到的监听地址：${sshAccess.sshdState.listenAddresses.join(", ")}`}
+                {sshAccess.sshdState.limitation && `。${sshAccess.sshdState.limitation}`}
+              </Text>
+            )}
+            {sshAccess.granted && <Text size="2" color="gray">请从客户端使用节点直连地址验证连接。云安全组、NAT 和公网路由需单独核对。</Text>}
+          </Flex>
+        )}
         <TextArea
           readOnly
           value={output}

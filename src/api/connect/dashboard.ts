@@ -35,7 +35,7 @@ const byteCount = (value: bigint) => {
 };
 
 const trafficTrendWindow = durationFromMs(24 * 60 * 60 * 1000);
-const trafficTrendInterval = durationFromMs(20 * 60 * 1000);
+const trafficTrendInterval = durationFromMs(15 * 60 * 1000);
 
 const trafficBucketLabel = (date: Date) => {
   const part = (value: number) => String(value).padStart(2, "0");
@@ -61,8 +61,9 @@ export async function requestTrafficTrend(signal: AbortSignal): Promise<Dashboar
   return {
     buckets,
     coverage: response.coverage || "complete",
-    intervalSeconds: Number(response.interval?.seconds ?? 1200n),
-    requestedIntervalSeconds: Number(response.requestedInterval?.seconds ?? 1200n),
+    intervalSeconds: Number(response.interval?.seconds ?? trafficTrendInterval.seconds),
+    requestedIntervalSeconds: Number(response.requestedInterval?.seconds ?? trafficTrendInterval.seconds),
+    warning: response.warning,
     accountingThrough: response.accountingThrough ? timestampDate(response.accountingThrough).toISOString() : undefined,
     dataEnd: response.dataEnd ? timestampDate(response.dataEnd).toISOString() : undefined,
     catchingUp: response.catchingUp,

@@ -7,10 +7,31 @@ import {
   dashboardOnlinePercent,
   dashboardRuntimeStorageTotal,
   dashboardTrafficAxisWidth,
+  dashboardTrafficPlot,
   shortDashboardDay,
   isAbortError,
   type DashboardData,
 } from "../src/utils/dashboard.ts";
+
+test("keeps the 24-hour grid and renders missing quarter hours as null", () => {
+  const step = 15 * 60 * 1000;
+  const latest = Date.UTC(2026, 10, 24, 13, 45);
+  const rows = [
+    { hour: "13:30", timestamp: latest - step, up: 0, down: 0 },
+    { hour: "13:45", timestamp: latest, up: 100, down: 60 },
+  ];
+  const status = {
+    buckets: rows, coverage: "partial", intervalSeconds: 900, requestedIntervalSeconds: 900,
+    catchingUp: false, missingClients: 0, warning: "minute_history_unavailable",
+  };
+  const plotted = dashboardTrafficPlot(rows, status);
+  assert.equal(plotted.length, 96);
+  assert.equal(plotted[0].timestamp, latest - 95 * step);
+  assert.equal(plotted[93].up, null);
+  assert.equal(plotted[94].up, 0);
+  assert.deepEqual(plotted.slice(94), rows);
+  assert.equal(dashboardTrafficPlot(rows, { ...status, intervalSeconds: 3600 }), rows);
+});
 
 test("billing plot preserves real zero and leaves unavailable days as gaps", () => {
   const day = { day: "2026-11-11", up: 1, down: 2, billable: 3 };

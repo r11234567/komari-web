@@ -32,6 +32,8 @@ import {
   type PendingEnrollment,
   type EnrollmentCandidate,
 } from "@komari/proto/komari/enrollment/v1/enrollment_pb";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { SignatureAlgorithm, type PublicKey } from "@komari/proto/komari/security/v1/security_pb";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import {
   getStoredBindTicket,
@@ -101,6 +103,8 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
   const [allServers, setAllServers] = React.useState<SimpleNode[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [approving, setApproving] = React.useState(false);
+  const [approvedAgent, setApprovedAgent] = React.useState("");
+  const [panelKeys, setPanelKeys] = React.useState<PublicKey[]>();
 
   // Reusable two-minute authorization window created after a completed login.
   const [bindTicket, setBindTicket] = React.useState<string | null>(initialTicket);
@@ -121,6 +125,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
 
   // Ticket live countdown timer
   React.useEffect(() => {
+    if (approvedAgent) return;
     const updateCountdown = () => {
       const remaining = getBindTicketRemainingSeconds();
       setTicketTimeLeft(remaining);
@@ -134,7 +139,27 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [location.hash, location.pathname, location.search, navigate]);
+  }, [approvedAgent, location.hash, location.pathname, location.search, navigate]);
+
+  React.useEffect(() => {
+    if (!approvedAgent) return;
+    const controller = new AbortController();
+    void connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
+      connectClients.enrollment.getTrustBundle({ agentId: approvedAgent }, { signal, timeoutMs }),
+    ).then(
+      ({ signingKeys }) => {
+        if (controller.signal.aborted) return;
+        const now = Date.now();
+        setPanelKeys(signingKeys.filter((key) =>
+          key.algorithm === SignatureAlgorithm.ED25519 && key.keyId && key.value.length === 32 &&
+          (!key.notBefore || timestampDate(key.notBefore).getTime() <= now) &&
+          (!key.notAfter || timestampDate(key.notAfter).getTime() > now),
+        ));
+      },
+      () => { if (!controller.signal.aborted) setPanelKeys([]); },
+    );
+    return () => controller.abort();
+  }, [approvedAgent]);
 
   const lookup = React.useCallback(async (lookupCode: string, overrideTicket?: string) => {
     const trimmed = lookupCode.trim().toUpperCase();
@@ -248,7 +273,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
         ),
       );
       toast.success(`机器已成功注册：${response.agentId}`);
-      window.location.assign("/admin/servers");
+      setApprovedAgent(response.agentId);
     } catch (err) {
       const failure = describeBindError(err, "注册失败");
       toast.error(failure.message);
@@ -273,7 +298,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
     setConfirmBindOpen(false);
     const controller = new AbortController();
     try {
-      await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
+      const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
         connectClients.enrollmentAdmin.approveEnrollment(
           {
             userCode: code,
@@ -283,7 +308,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
         ),
       );
       toast.success("已成功绑定到已有机器");
-      window.location.assign("/admin/servers");
+      setApprovedAgent(response.agentId || bindTarget);
     } catch (err) {
       const failure = describeBindError(err, "绑定失败");
       toast.error(failure.message);
@@ -327,6 +352,29 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
 
   const st = enrollment ? stateLabel(enrollment.state) : null;
   const isPending = enrollment?.state === EnrollmentState.PENDING;
+
+  if (approvedAgent) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <Card>
+          <Flex direction="column" gap="3" p="4">
+            <Text size="4" weight="bold">机器绑定已批准</Text>
+            <Text size="2">节点 <code>{approvedAgent}</code></Text>
+            <Text size="2" color="gray">若正在以 root 配置主机操作，请从已核验的面板复制下列公钥信息。</Text>
+            {panelKeys === undefined ? <Text size="2" role="status">正在读取面板签名公钥…</Text> : panelKeys.length === 0 ? (
+              <Text size="2" color="orange" role="status">暂时无法读取有效的面板签名公钥。绑定审批已完成。</Text>
+            ) : panelKeys.map((key) => (
+              <div key={key.keyId} className="rounded bg-[var(--gray-a3)] p-3 font-mono text-xs break-all">
+                <div>Panel signing key ID: {key.keyId}</div>
+                <div>Panel Ed25519 public key (base64): {btoa(String.fromCharCode(...key.value))}</div>
+              </div>
+            ))}
+            <Button variant="soft" onClick={() => navigate("/admin/servers")}>返回服务器管理</Button>
+          </Flex>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto p-6 flex flex-col gap-6">

@@ -12,6 +12,7 @@
       "add": "Add passkey",
       "show": "Show passkeys",
       "empty": "No passkeys registered",
+      "unavailable": "Passkeys are unavailable at this address. Open the HTTPS admin address and check the server’s KOMARI_PASSKEY_ORIGIN and KOMARI_PASSKEY_RP_ID settings.",
       "added": "Passkey added",
       "deleted": "Passkey deleted"
     },
@@ -1042,7 +1043,7 @@
       "invalid_response": "The server returned invalid database information",
       "load_error": "Failed to load database information",
       "local_total": "Local Database Total",
-      "local_total_description": "Main database and locally stored monitoring database",
+      "local_total_description": "Main database, local monitoring database, and cold archives",
       "locations": {
         "external": "External",
         "local": "Local"
@@ -1890,7 +1891,7 @@
     "database_breakdown": "Database usage details",
     "database_breakdown_hint": "Main database, monitoring database, and runtime files",
     "database_file": "Database file",
-    "database_files": "Database files",
+    "database_files": "Database and archive files",
     "database_read_failed": "Failed to read database information",
     "database_composition": "Current file composition",
     "database_usage": "Database usage",
@@ -1898,7 +1899,8 @@
     "download": "Down",
     "external_storage": "External storage",
     "history_preparing": "Historical traffic is being prepared. The full trend will appear automatically.",
-    "hourly_traffic_hint": "Upload and download totals in 20-minute intervals",
+    "traffic_minute_gap": "Earlier intervals have no retained minute data. The chart shows gaps where fine-grained totals are unavailable.",
+    "hourly_traffic_hint": "Upload and download totals in {{minutes}}-minute intervals",
     "last_compaction": "Last compaction",
     "load_failed": "Failed to load dashboard",
     "main_database": "Main database",
