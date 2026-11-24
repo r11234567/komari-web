@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { alertKinds } from "../src/utils/notificationRouting.ts";
+import { rescueSpecDigest } from "../src/utils/credentialAction.ts";
 
 type Catalog = { [key: string]: string | Catalog };
 
@@ -26,6 +27,19 @@ const pages = [
   "pages/admin/settings/notification.tsx",
   "api/credentialLifecycle.ts",
 ];
+
+test("temporary SSH binds the fixed port, IPv6 source, prior grant and enrollment to its 2FA proof", async () => {
+  const base = { timeoutSeconds: 300, maxOutputBytes: 262144 };
+  const sshWindow = { sourceIp: "2001:db8::5", previousGrantId: "A".repeat(32), enrollmentKeyId: "enrollment-one" };
+  const spec = { ...base, sshPort: 8658, sshWindow };
+  const proof = await rescueSpecDigest(spec);
+  assert.equal(proof, "spec:66a43c7f3021d669ee7c2269649a7f92990151ced25a2611c663c7eb008bf794");
+  assert.notEqual(await rescueSpecDigest({ ...spec, sshPort: 22 }), proof);
+  for (const change of [{ sourceIp: "2001:db8::6" }, { previousGrantId: "" }, { enrollmentKeyId: "enrollment-two" }]) {
+    assert.notEqual(await rescueSpecDigest({ ...spec, sshWindow: { ...sshWindow, ...change } }), proof);
+  }
+  assert.equal(await rescueSpecDigest(base), "spec:b2e20441b364b97ae585eedfb992f562bebb76bb0ef268c97020bf7a645b74e4");
+});
 
 test("the localized admin pages have their own translations in all supported languages", () => {
   const used = new Set([
