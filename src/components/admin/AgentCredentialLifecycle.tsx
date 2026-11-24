@@ -5,6 +5,7 @@ import { CredentialPurpose } from "@komari/proto/komari/credential/v1/credential
 import TrustedCredentialVerification from "@/components/TrustedCredentialVerification";
 import { applyCredentialLifecycle, credentialActionPath, loadCredentialLifecycle, validCredentialPolicy } from "@/api/credentialLifecycle";
 import type { CredentialLifecycle, CredentialLifecycleAction, CredentialPolicy } from "@/api/credentialLifecycle";
+import { agentCredentialFallback } from "@/i18n/agentCredentialFallback";
 
 const fields: { key: keyof Omit<CredentialPolicy, "revision">; min: number; max: number }[] = [
   { key: "idle_days", min: 1, max: 30 },
@@ -15,8 +16,9 @@ const fields: { key: keyof Omit<CredentialPolicy, "revision">; min: number; max:
 function date(value: string | null, locale?: string) { return value ? new Date(value).toLocaleString(locale) : "—"; }
 
 export default function AgentCredentialLifecycle() {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage;
+  const { t: translate, i18n, ready } = useTranslation();
+  const t = ready ? translate : agentCredentialFallback.t;
+  const locale = (ready ? i18n : agentCredentialFallback).resolvedLanguage;
   const [data, setData] = useState<CredentialLifecycle>();
   const [policy, setPolicy] = useState<CredentialPolicy>();
   const [page, setPage] = useState(1);

@@ -178,7 +178,7 @@ const osConfigs: OSConfig[] = [
   },
 ];
 
-const osImageURL = (file: string) => import.meta.env.BASE_URL + "assets/logo/" + file;
+const osImageURL = (file: string) => `${import.meta.env?.BASE_URL ?? "/"}assets/logo/${file}`;
 
 // 默认配置
 const defaultOSConfig: OSConfig = {
