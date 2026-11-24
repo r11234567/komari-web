@@ -1562,6 +1562,9 @@
       "title": "Dashboard configuration"
     },
     "reverse_proxy": {
+      "agent_cloudflare_proxy": "Cloudflare proxy for Agents",
+      "agent_cloudflare_proxy_help": "Use gRPC for Agent terminal and file-operation streams. Enable gRPC in Cloudflare, then restart upgraded Agents to apply the setting.",
+      "agent_cloudflare_proxy_docs": "Cloudflare deployment guide",
       "binary_label": "Binary",
       "certificate_domains": "Certificate domains",
       "certificate_expires": "Certificate expiry",

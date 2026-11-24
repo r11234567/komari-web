@@ -18,6 +18,18 @@ test("reverse proxy separates built-in HTTPS and Cloudflare Tunnel", () => {
   assert.match(page, /<CloudflareTunnelPanel \/>/);
 });
 
+test("orange-cloud Agent setting has a deployment guide and every admin language", () => {
+  assert.match(page, /<AgentCloudflareProxySetting \/>/);
+  assert.match(page, /updateSettingsWithToast\(\{ agent_cloudflare_proxy: enabled \}, t\)/);
+  assert.match(page, /\/docs\/cloudflare-agent-grpc\.md/);
+  for (const filename of localeFiles) {
+    const locale = JSON.parse(readFileSync(`src/i18n/locales/${filename}`, "utf8"));
+    for (const key of ["agent_cloudflare_proxy", "agent_cloudflare_proxy_help", "agent_cloudflare_proxy_docs"]) {
+      assert.ok(locale.settings.reverse_proxy[key]?.trim(), `${filename}: ${key}`);
+    }
+  }
+});
+
 test("built-in HTTPS reads certificates only from server paths", () => {
   assert.match(page, /certificate_paths/);
   assert.match(page, /https_certificate_path/);

@@ -1422,6 +1422,9 @@
       "transparent_theme_hint": "Latar tema masih opak. Gunakan rgba(...) atau hsla(...)."
     },
     "reverse_proxy": {
+      "agent_cloudflare_proxy": "Proksi Cloudflare untuk Agent",
+      "agent_cloudflare_proxy_help": "Gunakan gRPC untuk aliran dua arah terminal dan operasi berkas Agent. Aktifkan gRPC di Cloudflare, lalu mulai ulang Agent yang telah diperbarui.",
+      "agent_cloudflare_proxy_docs": "Panduan penerapan Cloudflare",
       "binary_label": "Binary",
       "certificate_domains": "Domain sertifikat",
       "certificate_expires": "Masa berlaku sertifikat",

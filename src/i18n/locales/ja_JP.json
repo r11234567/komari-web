@@ -1422,6 +1422,9 @@
       "transparent_theme_hint": "テーマ背景はまだ不透明です。rgba(...) または hsla(...) を使用してください。"
     },
     "reverse_proxy": {
+      "agent_cloudflare_proxy": "Agent の Cloudflare プロキシ",
+      "agent_cloudflare_proxy_help": "Agent のターミナルとファイル操作の双方向ストリームに gRPC を使用します。Cloudflare で gRPC を有効にし、更新済みの Agent を再起動してください。",
+      "agent_cloudflare_proxy_docs": "Cloudflare の設定ガイド",
       "binary_label": "バイナリ",
       "certificate_domains": "証明書のドメイン",
       "certificate_expires": "証明書の有効期限",

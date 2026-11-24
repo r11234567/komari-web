@@ -1422,6 +1422,9 @@
       "transparent_theme_hint": "主題背景仍然不透明，請改用 rgba(...) 或 hsla(...)。"
     },
     "reverse_proxy": {
+      "agent_cloudflare_proxy": "Agent 經 Cloudflare 橙雲",
+      "agent_cloudflare_proxy_help": "Agent 的終端機和檔案操作雙向串流使用 gRPC。在 Cloudflare 啟用 gRPC 後，重新啟動已升級的 Agent 即可套用。",
+      "agent_cloudflare_proxy_docs": "Cloudflare 部署說明",
       "binary_label": "二進位路徑",
       "certificate_domains": "憑證網域",
       "certificate_expires": "憑證到期時間",

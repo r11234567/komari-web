@@ -23,6 +23,7 @@ export interface SettingsResponse {
   panel_listen_enabled?: boolean;
   public_origin?: string;
   panel_origin?: string;
+  agent_cloudflare_proxy?: boolean;
   CreatedAt: string;
   UpdatedAt: string;
   [key: string]: any;
