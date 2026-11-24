@@ -95,16 +95,24 @@ export interface RescueCredentialSpec {
   timeoutSeconds?: number;
   maxOutputBytes?: number;
   sshPort?: number;
+  sshWindow?: {
+    sourceIp: string;
+    previousGrantId: string;
+    enrollmentKeyId: string;
+  };
 }
 
 export async function rescueSpecDigest(spec: RescueCredentialSpec): Promise<string> {
   const payload = [
-    "v1",
+    spec.sshWindow ? "v2" : "v1",
     spec.arguments ? [...spec.arguments] : [],
     Math.trunc(spec.timeoutSeconds ?? 0),
     Math.trunc(spec.maxOutputBytes ?? 0),
     Math.trunc(spec.sshPort ?? 0),
   ];
+  if (spec.sshWindow) {
+    payload.push([spec.sshWindow.sourceIp, spec.sshWindow.previousGrantId, spec.sshWindow.enrollmentKeyId]);
+  }
   return `spec:${await sha256Hex(canonicalJson(payload))}`;
 }
 

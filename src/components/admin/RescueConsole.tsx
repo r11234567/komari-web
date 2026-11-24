@@ -8,6 +8,7 @@ import {
 import {
   RescueAction,
   NetworkIsolationMode,
+  ExpiryMechanism,
   type RescueHelperStatus,
   type RescueSession,
   type TemporarySSHAccess,
@@ -29,6 +30,7 @@ import {
   DEFAULT_RESCUE_MAX_OUTPUT_BYTES,
   DEFAULT_RESCUE_TIMEOUT_SECONDS,
   rescueCredentialTargets,
+  type RescueCredentialSpec,
 } from "@/utils/credentialAction";
 import { connectUnary } from "@/api/connect/client";
 import { DEFAULT_STREAM_DEADLINE_MS } from "@/api/connect/deadline";
@@ -82,11 +84,12 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   const [helperStatus, setHelperStatus] = React.useState<RescueHelperStatus>();
   const [action, setAction] = React.useState<RescueAction>(RescueAction.TEMPORARY_SSH_ACCESS);
   const [credentialAction, setCredentialAction] = React.useState<SensitiveAction | null>(null);
-  const [sshPort, setSshPort] = React.useState("22");
+  const [sourceIp, setSourceIp] = React.useState("");
   const [session, setSession] = React.useState<RescueSession>();
   const [sshAccess, setSSHAccess] = React.useState<TemporarySSHAccess>();
   const [output, setOutput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [expiredGrantId, setExpiredGrantId] = React.useState("");
   const statusController = React.useRef<AbortController | null>(null);
   const streamController = React.useRef<AbortController | null>(null);
   const statusTimer = React.useRef<number | undefined>(undefined);
@@ -96,6 +99,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     const response = await connectUnary({ signal }, (requestSignal, timeoutMs) =>
       deployment.getDeployment({ agentId }, { signal: requestSignal, timeoutMs }),
     );
+    if (signal.aborted) return;
     const helper = response.rescueHelper;
     setHelperStatus(helper);
     setAvailable(
@@ -118,6 +122,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     setHelperStatus(undefined);
     setSession(undefined);
     setSSHAccess(undefined);
+    setSourceIp("");
     setOutput("");
     if (!agentId) return;
 
@@ -140,6 +145,31 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     };
   }, [agentId, i18n, loadStatus]);
 
+  const latestWindow = helperStatus?.sshAccess;
+  const windowDeadline = latestWindow?.expiresAt ? timestampDate(latestWindow.expiresAt).getTime() : 0;
+  const windowExpired = !windowDeadline || windowDeadline <= Date.now() || expiredGrantId === latestWindow?.grantId;
+  const activeWindow = latestWindow?.granted && !windowExpired ? latestWindow : undefined;
+  const listener = sshAccess?.sshdState ?? latestWindow?.sshdState;
+  React.useEffect(() => {
+    if (!latestWindow?.grantId || windowExpired) return;
+    const grantId = latestWindow.grantId;
+    const timer = window.setTimeout(() => setExpiredGrantId(grantId), Math.max(0, windowDeadline - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [latestWindow?.grantId, windowDeadline, windowExpired]);
+
+  const activeGrantId = activeWindow?.grantId;
+  React.useEffect(() => {
+    if (!activeGrantId) return;
+    const controller = new AbortController();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void loadStatus(controller.signal).catch(() => undefined);
+    }, 20_000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [activeGrantId, loadStatus]);
+
   const watch = async (sessionId: string) => {
     streamController.current?.abort();
     const controller = new AbortController();
@@ -159,7 +189,17 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         if (message.session) setSession(message.session);
         const event = message.event;
         if (event) {
-          if (event.sshAccess) setSSHAccess(event.sshAccess);
+          const access = event.sshAccess;
+          if (access) {
+            setSSHAccess(access);
+            if (access.expiryMechanism === ExpiryMechanism.NFTABLES_TIMEOUT && access.expiresAt) {
+              setHelperStatus((current) =>
+                current && (access.granted || current.sshAccess?.grantId === access.grantId)
+                  ? { ...current, sshAccess: access, sshRevokePending: Boolean(access.granted && current.sshRevokePending) }
+                  : current,
+              );
+            }
+          }
           if (event.output.length > 0) {
             setOutput((current) => current + new TextDecoder().decode(event.output));
           }
@@ -186,8 +226,9 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   const start = async (
     authorizationToken: string,
     verificationSignal: AbortSignal,
-    boundAction: RescueAction = action,
-    boundSshPort: number = action === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0,
+    boundAction: RescueAction,
+    spec: RescueCredentialSpec,
+    idempotencyKey: string,
   ) => {
     if (!agentId) throw new Error(t("rescue.select_node"));
     const controller = new AbortController();
@@ -203,10 +244,11 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
             agentId,
             action: boundAction,
             arguments: [],
-            sshPort: boundSshPort,
+            sshPort: spec.sshPort || undefined,
+            sshWindow: spec.sshWindow,
             timeout: durationFromMs(DEFAULT_RESCUE_TIMEOUT_SECONDS * 1000),
             maxOutputBytes: BigInt(DEFAULT_RESCUE_MAX_OUTPUT_BYTES),
-            idempotencyKey: crypto.randomUUID(),
+            idempotencyKey,
             twoFactor: create(TwoFactorProofSchema, {
               authorizationToken,
             }),
@@ -214,6 +256,13 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
           { signal, timeoutMs },
         ),
       );
+      if (boundAction === RescueAction.REVOKE_TEMPORARY_SSH_ACCESS) {
+        setHelperStatus((current) =>
+          current && current.sshAccess?.grantId === spec.sshWindow?.previousGrantId
+            ? { ...current, sshRevokePending: true }
+            : current,
+        );
+      }
       setSession(response.session);
       if (response.session) void watch(response.session.sessionId);
     } catch (error) {
@@ -244,7 +293,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
 
   if (!agentId) return null;
 
-  if (!statusLoaded || !available) {
+  if (!statusLoaded || (!available && !activeWindow)) {
     return (
       <Card className="p-6">
         <Flex direction="column" gap="2">
@@ -276,7 +325,16 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
 
   const terminal = session ? terminalStates.has(session.state) : false;
   const selectedAction = actions.find((item) => item.value === action) ?? actions[0];
-  const runLabel = t("rescue.run_action", { action: t("rescue.action_" + selectedAction.key) });
+  const isGrant = action === RescueAction.TEMPORARY_SSH_ACCESS;
+  const isRevoke = action === RescueAction.REVOKE_TEMPORARY_SSH_ACCESS;
+  const fixedPort = helperStatus?.sshAccessPort ?? 0;
+  const enrollmentKeyId = helperStatus?.sshEnrollmentKeyId ?? "";
+  const runLabel = isGrant && activeWindow
+    ? t("rescue.ssh_replace")
+    : t("rescue.run_action", { action: t("rescue.action_" + selectedAction.key) });
+  const canRun = isRevoke
+    ? Boolean(activeWindow && enrollmentKeyId && !helperStatus?.sshRevokePending)
+    : available && (!isGrant || Boolean(fixedPort && enrollmentKeyId && sourceIp.trim() && !helperStatus?.sshRevokePending));
   return (
     <Card className="p-6">
       <Flex direction="column" gap="4">
@@ -303,42 +361,51 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
           </Select.Content>
         </Select.Root>
         <Text size="2" color={selectedAction.destructive ? "red" : "gray"}>{t("rescue.detail_" + selectedAction.key)}</Text>
-        {action === RescueAction.TEMPORARY_SSH_ACCESS && (
-          <Flex gap="2" align="center">
-            <Text size="2" color="gray" style={{ whiteSpace: "nowrap" }}>{t("rescue.ssh_port")}</Text>
-            <TextField.Root
-              type="number"
-              aria-label={t("rescue.ssh_port")}
-              placeholder="22"
-              value={sshPort}
-              onChange={(event) => setSshPort(event.target.value)}
-              style={{ width: "90px" }}
-            />
+        {isGrant && (fixedPort ? (
+          <Flex direction="column" gap="2">
+            <Text size="2">{t("rescue.ssh_fixed_port", { port: fixedPort })}</Text>
+            <label>
+              <Text size="2">{t("rescue.ssh_source")}</Text>
+              <TextField.Root value={sourceIp} maxLength={45} spellCheck={false} autoComplete="off"
+                onChange={(event) => setSourceIp(event.target.value)} />
+            </label>
           </Flex>
+        ) : (
+          <Text size="2" color="gray">{t(helperStatus?.sshWindowSupported ? "rescue.ssh_not_configured" : "rescue.ssh_upgrade")}</Text>
+        ))}
+        {isRevoke && !activeWindow && (
+          <Text size="2" color="gray">{t("rescue.ssh_no_window")}</Text>
         )}
         <Flex gap="2" justify="end" wrap="wrap">
           {session && !terminal ? (
-            <Button color="red" variant="soft" onClick={() => setCredentialAction({ action: "rescue:cancel", targets: [session.sessionId], title: t("rescue.cancel_task"), execute: cancel })}>
+            <Button color="red" variant="soft" disabled={session.action === RescueAction.REVOKE_TEMPORARY_SSH_ACCESS}
+              onClick={() => setCredentialAction({ action: "rescue:cancel", targets: [session.sessionId], title: t("rescue.cancel_task"), execute: cancel })}>
               <Square size="15" />{t("rescue.cancel_task")}
             </Button>
           ) : (
             <Button
               {...(selectedAction.destructive ? { color: "red" as const } : {})}
-              disabled={busy}
+              disabled={busy || !canRun}
               onClick={() => {
                 const capturedAction = action;
-                const resolvedPort = capturedAction === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0;
-                void rescueCredentialTargets(agentId, capturedAction, {
+                const spec: RescueCredentialSpec = {
                   arguments: [],
                   timeoutSeconds: DEFAULT_RESCUE_TIMEOUT_SECONDS,
                   maxOutputBytes: DEFAULT_RESCUE_MAX_OUTPUT_BYTES,
-                  sshPort: resolvedPort,
-                }).then((targets) => {
+                  sshPort: isGrant ? fixedPort : 0,
+                  sshWindow: isGrant || isRevoke ? {
+                    sourceIp: isGrant ? sourceIp.trim() : "",
+                    previousGrantId: activeWindow?.grantId ?? "",
+                    enrollmentKeyId,
+                  } : undefined,
+                };
+                const idempotencyKey = crypto.randomUUID();
+                void rescueCredentialTargets(agentId, capturedAction, spec).then((targets) => {
                   setCredentialAction({
                     action: "rescue:create",
                     targets,
                     title: runLabel,
-                    execute: (token, signal) => start(token, signal, capturedAction, resolvedPort),
+                    execute: (token, signal) => start(token, signal, capturedAction, spec, idempotencyKey),
                   });
                 });
               }}
@@ -354,29 +421,33 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
           </Text>
         )}
         {session?.error && <Text size="2" color="red">{session.error.message}</Text>}
-        {sshAccess && (
+        {(sshAccess || latestWindow) && (
           <Flex direction="column" gap="1" role="status">
-            <Text size="2">
-              {t("rescue.ssh_receipt", {
-                port: sshAccess.port,
-                status: t(sshAccess.granted ? "rescue.ssh_granted" : sshAccess.sshdState ? "rescue.ssh_failed" : "rescue.ssh_revoked"),
-              })}
-            </Text>
-            {sshAccess.granted && sshAccess.expiresAt && (
-              <Text size="2">{t("rescue.ssh_expires", { time: timestampDate(sshAccess.expiresAt).toLocaleString(i18n.resolvedLanguage) })}</Text>
-            )}
-            {sshAccess.sshdState && (
+            {listener && (
               <Flex direction="column" gap="1">
-                <Text size="2" color={sshAccess.sshdState.limitation ? "orange" : "gray"}>
-                  {t(sshAccess.sshdState.reachable ? "rescue.ssh_listening" : "rescue.ssh_not_confirmed")}
+                <Text size="2" color={listener.limitation ? "orange" : "gray"}>
+                  {t(listener.reachable ? "rescue.ssh_listening" : "rescue.ssh_not_confirmed")}
                 </Text>
-                {sshAccess.sshdState.listenAddresses.length > 0 && (
-                  <Text size="2" color="gray">{t("rescue.ssh_listen_addresses", { addresses: sshAccess.sshdState.listenAddresses.join(", ") })}</Text>
+                {listener.listenAddresses.length > 0 && (
+                  <Text size="2" color="gray">{t("rescue.ssh_listen_addresses", { addresses: listener.listenAddresses.join(", ") })}</Text>
                 )}
-                {sshAccess.sshdState.limitation && <Text size="2" color="orange">{sshAccess.sshdState.limitation}</Text>}
+                {listener.limitation && <Text size="2" color="orange">{listener.limitation}</Text>}
               </Flex>
             )}
-            {sshAccess.granted && <Text size="2" color="gray">{t("rescue.ssh_verify")}</Text>}
+            {latestWindow && (
+              <>
+                <Text size="2">{t("rescue.ssh_receipt", {
+                  port: latestWindow.port,
+                  status: t(windowExpired ? "rescue.ssh_expired" : helperStatus?.sshRevokePending
+                    ? "rescue.ssh_revoke_pending" : latestWindow.granted ? "rescue.ssh_kernel_written" : "rescue.ssh_window_closed"),
+                })}</Text>
+                {activeWindow?.expiresAt && (
+                  <Text size="2">{t("rescue.ssh_window_until", {
+                    source: activeWindow.sourceIp, time: timestampDate(activeWindow.expiresAt).toLocaleString(i18n.resolvedLanguage),
+                  })}</Text>
+                )}
+              </>
+            )}
           </Flex>
         )}
         <TextArea
