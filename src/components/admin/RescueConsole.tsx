@@ -23,6 +23,7 @@ import {
 } from "@radix-ui/themes";
 import { Power, RefreshCw, ShieldAlert, Square } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import {
   DEFAULT_RESCUE_MAX_OUTPUT_BYTES,
@@ -34,35 +35,35 @@ import { DEFAULT_STREAM_DEADLINE_MS } from "@/api/connect/deadline";
 import { useConnect } from "@/contexts/ConnectContext";
 
 const actions = [
-  { value: RescueAction.TEMPORARY_SSH_ACCESS, label: "临时开放 SSH", detail: "临时放行节点防火墙上的 TCP 端口（默认 22），最长 15 分钟。请使用节点的直连地址和已有的 SSH 服务。", destructive: false },
-  { value: RescueAction.REVOKE_TEMPORARY_SSH_ACCESS, label: "关闭临时 SSH", detail: "立即撤销临时 SSH 访问规则。", destructive: false },
-  { value: RescueAction.ROLLBACK_PRIVILEGED_CONFIG, label: "回滚特权配置", detail: "在机器上撤销最近一次特权配置变更，无需面板连接。", destructive: true },
-  { value: RescueAction.SHUTDOWN, label: "关闭 VPS", detail: "立即关闭操作系统。恢复需要云厂商控制台或物理电源。", destructive: true },
-  { value: RescueAction.REBOOT, label: "重启 VPS", detail: "立即重启整台机器，不只是重启 Agent。", destructive: true },
-  { value: RescueAction.BLOCK_PUBLIC_INTERFACES, label: "阻断公网网卡", detail: "阻断默认路由网卡全部入站和出站，可能立即失去远程连接。", destructive: true },
-  { value: RescueAction.BLOCK_TAILSCALE_INTERFACES, label: "阻断 Tailscale 网卡", detail: "阻断所有 tailscale* 网卡全部入站和出站。", destructive: true },
-  { value: RescueAction.ISOLATE_CONTROL_PLANE, label: "仅保留控制面板通信", detail: "阻断其他网络，只保留回环和安装时配置的 Komari 面板 IP/端口。可远程撤销。", destructive: true },
-  { value: RescueAction.RESTORE_NETWORK, label: "撤销网络隔离", detail: "仅删除 Komari 创建的隔离规则并恢复保存的默认策略，不修改其他防火墙规则。", destructive: false },
-  { value: RescueAction.ROLLBACK_ONLINE_CONFIG, label: "回滚在线配置", detail: "后端恢复上一份七项在线配置，生成新版本并重启普通 Agent 应用。", destructive: true },
+  { value: RescueAction.TEMPORARY_SSH_ACCESS, key: "grant_ssh", destructive: false },
+  { value: RescueAction.REVOKE_TEMPORARY_SSH_ACCESS, key: "revoke_ssh", destructive: false },
+  { value: RescueAction.ROLLBACK_PRIVILEGED_CONFIG, key: "rollback_privileged", destructive: true },
+  { value: RescueAction.SHUTDOWN, key: "shutdown", destructive: true },
+  { value: RescueAction.REBOOT, key: "reboot", destructive: true },
+  { value: RescueAction.BLOCK_PUBLIC_INTERFACES, key: "block_public", destructive: true },
+  { value: RescueAction.BLOCK_TAILSCALE_INTERFACES, key: "block_tailscale", destructive: true },
+  { value: RescueAction.ISOLATE_CONTROL_PLANE, key: "isolate", destructive: true },
+  { value: RescueAction.RESTORE_NETWORK, key: "restore_network", destructive: false },
+  { value: RescueAction.ROLLBACK_ONLINE_CONFIG, key: "rollback_online", destructive: true },
 ] as const;
 
 const isolationText: Record<NetworkIsolationMode, string> = {
-  [NetworkIsolationMode.UNSPECIFIED]: "未知",
-  [NetworkIsolationMode.NONE]: "未隔离",
-  [NetworkIsolationMode.PUBLIC_INTERFACES]: "公网网卡已阻断",
-  [NetworkIsolationMode.TAILSCALE_INTERFACES]: "Tailscale 网卡已阻断",
-  [NetworkIsolationMode.CONTROL_PLANE_ONLY]: "仅保留控制面板通信",
+  [NetworkIsolationMode.UNSPECIFIED]: "common.unknown",
+  [NetworkIsolationMode.NONE]: "rescue.isolation_none",
+  [NetworkIsolationMode.PUBLIC_INTERFACES]: "rescue.isolation_public",
+  [NetworkIsolationMode.TAILSCALE_INTERFACES]: "rescue.isolation_tailscale",
+  [NetworkIsolationMode.CONTROL_PLANE_ONLY]: "rescue.isolation_panel",
 };
 
 const stateText: Record<OperationState, string> = {
-  [OperationState.UNSPECIFIED]: "未知",
-  [OperationState.QUEUED]: "排队中",
-  [OperationState.RUNNING]: "运行中",
-  [OperationState.CANCEL_REQUESTED]: "正在取消",
-  [OperationState.CANCELLED]: "已取消",
-  [OperationState.DEADLINE_EXCEEDED]: "已超时",
-  [OperationState.FAILED]: "失败",
-  [OperationState.SUCCEEDED]: "成功",
+  [OperationState.UNSPECIFIED]: "common.unknown",
+  [OperationState.QUEUED]: "rescue.state_queued",
+  [OperationState.RUNNING]: "rescue.state_running",
+  [OperationState.CANCEL_REQUESTED]: "rescue.state_cancelling",
+  [OperationState.CANCELLED]: "rescue.state_cancelled",
+  [OperationState.DEADLINE_EXCEEDED]: "rescue.state_timeout",
+  [OperationState.FAILED]: "rescue.state_failed",
+  [OperationState.SUCCEEDED]: "rescue.state_succeeded",
 };
 
 const terminalStates = new Set([
@@ -74,9 +75,10 @@ const terminalStates = new Set([
 
 export function RescueConsole({ agentId }: { agentId?: string }) {
   const { deployment, rescue } = useConnect();
+  const { t, i18n } = useTranslation();
   const [available, setAvailable] = React.useState(false);
   const [statusLoaded, setStatusLoaded] = React.useState(false);
-  const [statusError, setStatusError] = React.useState("");
+  const [statusError, setStatusError] = React.useState<{ message?: string }>();
   const [helperStatus, setHelperStatus] = React.useState<RescueHelperStatus>();
   const [action, setAction] = React.useState<RescueAction>(RescueAction.TEMPORARY_SSH_ACCESS);
   const [credentialAction, setCredentialAction] = React.useState<SensitiveAction | null>(null);
@@ -103,7 +105,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         helper.helperRunning === true,
     );
     setStatusLoaded(true);
-    setStatusError("");
+    setStatusError(undefined);
   }, [agentId, deployment]);
 
   React.useEffect(() => {
@@ -112,7 +114,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     setCredentialAction(null);
     setAvailable(false);
     setStatusLoaded(false);
-    setStatusError("");
+    setStatusError(undefined);
     setHelperStatus(undefined);
     setSession(undefined);
     setSSHAccess(undefined);
@@ -125,8 +127,9 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
       .catch((error) => {
         if (!controller.signal.aborted) {
           setStatusLoaded(true);
-          setStatusError(error instanceof Error ? error.message : "读取救援状态失败");
-          toast.error(error instanceof Error ? error.message : "读取救援状态失败");
+          const message = error instanceof Error ? error.message : undefined;
+          setStatusError({ message });
+          toast.error(message || i18n.t("rescue.load_failed"));
         }
       });
 
@@ -135,7 +138,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
       streamController.current?.abort();
       if (statusTimer.current !== undefined) window.clearTimeout(statusTimer.current);
     };
-  }, [agentId, loadStatus]);
+  }, [agentId, i18n, loadStatus]);
 
   const watch = async (sessionId: string) => {
     streamController.current?.abort();
@@ -167,7 +170,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
       }
     } catch (error) {
       if (!signal.aborted) {
-        toast.error(error instanceof Error ? error.message : "救援输出流中断");
+        toast.error(error instanceof Error ? error.message : t("rescue.stream_interrupted"));
       }
     } finally {
       setBusy(false);
@@ -186,7 +189,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     boundAction: RescueAction = action,
     boundSshPort: number = action === RescueAction.TEMPORARY_SSH_ACCESS ? (Number(sshPort) || 22) : 0,
   ) => {
-    if (!agentId) throw new Error("请选择节点");
+    if (!agentId) throw new Error(t("rescue.select_node"));
     const controller = new AbortController();
     statusController.current?.abort();
     statusController.current = controller;
@@ -220,7 +223,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   };
 
   const cancel = async (authorizationToken: string, verificationSignal: AbortSignal) => {
-    if (!session) throw new Error("救援会话已变化");
+    if (!session) throw new Error(t("rescue.session_changed"));
     const controller = new AbortController();
     statusController.current?.abort();
     statusController.current = controller;
@@ -247,20 +250,23 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         <Flex direction="column" gap="2">
           <Flex align="center" gap="2">
             <ShieldAlert size="18" />
-            <Text size="4" weight="bold">救援模式控制台</Text>
+            <Text size="4" weight="bold">{t("rescue.console")}</Text>
           </Flex>
           {!statusLoaded ? (
-            <Text size="2" color="gray">正在读取救援辅助程序状态...</Text>
+            <Text size="2" color="gray">{t("rescue.loading")}</Text>
           ) : statusError ? (
-            <Text size="2" color="red">{statusError}</Text>
+            <Text size="2" color="red">{statusError.message || t("rescue.load_failed")}</Text>
           ) : (
             <Text size="2" color="orange">
-              此节点当前不可进入救援模式。请在特权配置中开启救援，完成面板 2FA 和本机授权后，Host 会自动安装独立的 root 救援服务；Agent 无需改为 root，可同时保留普通远程控制。
+              {t("rescue.unavailable")}
             </Text>
           )}
           {statusLoaded && !statusError && (
             <Text size="2" color="gray">
-              已安装：{helperStatus?.installed ? "是" : "否"}；辅助程序：{helperStatus?.helperRunning ? "运行中" : "未运行"}
+              {t("rescue.helper_status", {
+                installed: t(helperStatus?.installed ? "rescue.installed" : "rescue.not_installed"),
+                helper: t(helperStatus?.helperRunning ? "rescue.state_running" : "rescue.helper_stopped"),
+              })}
             </Text>
           )}
         </Flex>
@@ -270,37 +276,39 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
 
   const terminal = session ? terminalStates.has(session.state) : false;
   const selectedAction = actions.find((item) => item.value === action) ?? actions[0];
+  const runLabel = t("rescue.run_action", { action: t("rescue.action_" + selectedAction.key) });
   return (
     <Card className="p-6">
       <Flex direction="column" gap="4">
         <SensitiveActionDialog request={credentialAction} onClose={() => setCredentialAction(null)} />
         <Flex align="center" gap="2">
           <ShieldAlert size="18" />
-          <Text size="4" weight="bold">救援模式控制台</Text>
+          <Text size="4" weight="bold">{t("rescue.console")}</Text>
         </Flex>
         <Flex direction="column" gap="2">
-          <Text size="2">网络状态：{isolationText[helperStatus?.networkIsolation ?? NetworkIsolationMode.UNSPECIFIED]}</Text>
+          <Text size="2">{t("rescue.network_state", { state: t(isolationText[helperStatus?.networkIsolation ?? NetworkIsolationMode.UNSPECIFIED] || "common.unknown") })}</Text>
           {(helperStatus?.blockedInterfaces.length ?? 0) > 0 && (
-            <Text size="2" color="gray">已阻断网卡：{helperStatus?.blockedInterfaces.join(", ")}</Text>
+            <Text size="2" color="gray">{t("rescue.blocked_interfaces", { interfaces: helperStatus?.blockedInterfaces.join(", ") })}</Text>
           )}
         </Flex>
         <Select.Root
           value={String(action)}
           onValueChange={(value) => setAction(Number(value) as RescueAction)}
         >
-          <Select.Trigger aria-label="救援动作" />
+          <Select.Trigger aria-label={t("rescue.action")} />
           <Select.Content>
             {actions.map((item) => (
-              <Select.Item key={item.value} value={String(item.value)}>{item.label}</Select.Item>
+              <Select.Item key={item.value} value={String(item.value)}>{t("rescue.action_" + item.key)}</Select.Item>
             ))}
           </Select.Content>
         </Select.Root>
-        <Text size="2" color={selectedAction.destructive ? "red" : "gray"}>{selectedAction.detail}</Text>
+        <Text size="2" color={selectedAction.destructive ? "red" : "gray"}>{t("rescue.detail_" + selectedAction.key)}</Text>
         {action === RescueAction.TEMPORARY_SSH_ACCESS && (
           <Flex gap="2" align="center">
-            <Text size="2" color="gray" style={{ whiteSpace: "nowrap" }}>SSH 端口</Text>
+            <Text size="2" color="gray" style={{ whiteSpace: "nowrap" }}>{t("rescue.ssh_port")}</Text>
             <TextField.Root
               type="number"
+              aria-label={t("rescue.ssh_port")}
               placeholder="22"
               value={sshPort}
               onChange={(event) => setSshPort(event.target.value)}
@@ -310,8 +318,8 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         )}
         <Flex gap="2" justify="end" wrap="wrap">
           {session && !terminal ? (
-            <Button color="red" variant="soft" onClick={() => setCredentialAction({ action: "rescue:cancel", targets: [session.sessionId], title: "取消救援任务", execute: cancel })}>
-              <Square size="15" />取消任务
+            <Button color="red" variant="soft" onClick={() => setCredentialAction({ action: "rescue:cancel", targets: [session.sessionId], title: t("rescue.cancel_task"), execute: cancel })}>
+              <Square size="15" />{t("rescue.cancel_task")}
             </Button>
           ) : (
             <Button
@@ -329,43 +337,52 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
                   setCredentialAction({
                     action: "rescue:create",
                     targets,
-                    title: `执行${selectedAction.label}`,
+                    title: runLabel,
                     execute: (token, signal) => start(token, signal, capturedAction, resolvedPort),
                   });
                 });
               }}
             >
               {action === RescueAction.RESTORE_NETWORK ? <RefreshCw size="15" /> : <Power size="15" />}
-              执行{selectedAction.label}
+              {runLabel}
             </Button>
           )}
         </Flex>
         {session && (
           <Text size="2">
-            状态：{stateText[session.state]}；会话：{session.sessionId}
+            {t("rescue.session_state", { state: t(stateText[session.state] || "common.unknown"), session: session.sessionId })}
           </Text>
         )}
         {session?.error && <Text size="2" color="red">{session.error.message}</Text>}
         {sshAccess && (
           <Flex direction="column" gap="1" role="status">
             <Text size="2">
-              上次回执：TCP {sshAccess.port} {sshAccess.granted ? "节点防火墙已放行" : sshAccess.sshdState ? "临时放行失败" : "临时放行已撤销"}
-              {sshAccess.granted && sshAccess.expiresAt && `，最晚于 ${timestampDate(sshAccess.expiresAt).toLocaleString()} 到期`}
+              {t("rescue.ssh_receipt", {
+                port: sshAccess.port,
+                status: t(sshAccess.granted ? "rescue.ssh_granted" : sshAccess.sshdState ? "rescue.ssh_failed" : "rescue.ssh_revoked"),
+              })}
             </Text>
-            {sshAccess.sshdState && (
-              <Text size="2" color={sshAccess.sshdState.limitation ? "orange" : "gray"}>
-                {sshAccess.sshdState.reachable ? "节点报告目标端口已监听" : "节点本机未确认目标端口的 SSH 服务"}
-                {sshAccess.sshdState.listenAddresses.length > 0 && `，检测到的监听地址：${sshAccess.sshdState.listenAddresses.join(", ")}`}
-                {sshAccess.sshdState.limitation && `。${sshAccess.sshdState.limitation}`}
-              </Text>
+            {sshAccess.granted && sshAccess.expiresAt && (
+              <Text size="2">{t("rescue.ssh_expires", { time: timestampDate(sshAccess.expiresAt).toLocaleString(i18n.resolvedLanguage) })}</Text>
             )}
-            {sshAccess.granted && <Text size="2" color="gray">请从客户端使用节点直连地址验证连接。云安全组、NAT 和公网路由需单独核对。</Text>}
+            {sshAccess.sshdState && (
+              <Flex direction="column" gap="1">
+                <Text size="2" color={sshAccess.sshdState.limitation ? "orange" : "gray"}>
+                  {t(sshAccess.sshdState.reachable ? "rescue.ssh_listening" : "rescue.ssh_not_confirmed")}
+                </Text>
+                {sshAccess.sshdState.listenAddresses.length > 0 && (
+                  <Text size="2" color="gray">{t("rescue.ssh_listen_addresses", { addresses: sshAccess.sshdState.listenAddresses.join(", ") })}</Text>
+                )}
+                {sshAccess.sshdState.limitation && <Text size="2" color="orange">{sshAccess.sshdState.limitation}</Text>}
+              </Flex>
+            )}
+            {sshAccess.granted && <Text size="2" color="gray">{t("rescue.ssh_verify")}</Text>}
           </Flex>
         )}
         <TextArea
           readOnly
           value={output}
-          placeholder="救援辅助程序输出"
+          placeholder={t("rescue.output")}
           style={{ minHeight: "180px", fontFamily: "monospace" }}
         />
       </Flex>

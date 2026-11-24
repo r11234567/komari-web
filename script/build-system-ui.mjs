@@ -17,7 +17,7 @@ if (!index.includes('/system-assets/assets/entry-')) {
 const forbidden = [
   /(?:src|href)=["']\/assets\//i,
   /registerSW/i,
-  /manifest\.webmanifest/i,
+  /<link\b[^>]*\brel=["']manifest["']/i,
 ];
 
 for (const pattern of forbidden) {

@@ -128,7 +128,7 @@ const normalizeSiteRoot = (siteRoot: string) => {
 
 export const normalizeThemeRedirectTarget = (
   data: unknown,
-  siteRoot = import.meta.env.BASE_URL || "/",
+  siteRoot = import.meta.env?.BASE_URL || "/",
 ) => {
   if (typeof data !== "string") return null;
 

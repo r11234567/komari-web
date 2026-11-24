@@ -1,3 +1,11 @@
+import i18next from "i18next";
+import { agentCredentialFallback } from "@/i18n/agentCredentialFallback";
+
+function credentialMessage(key: string): string {
+  const translator = i18next.isInitialized ? i18next : agentCredentialFallback;
+  return translator.t(key);
+}
+
 export type CredentialPolicy = {
   revision: number;
   idle_days: number;
@@ -40,11 +48,11 @@ export function validCredentialPolicy(policy: CredentialPolicy): boolean {
 }
 async function responseData(response: Response) {
   const body = await response.json();
-  if (!response.ok || body.status !== "success") throw new Error(body.message || "凭据操作失败，请刷新后重试");
+  if (!response.ok || body.status !== "success") throw new Error(body.message || credentialMessage("agent_credentials.request_failed"));
   return body.data;
 }
 export async function loadCredentialLifecycle(page: number, signal: AbortSignal): Promise<CredentialLifecycle> {
-  if (!Number.isSafeInteger(page) || page < 1) throw new Error("无效页码");
+  if (!Number.isSafeInteger(page) || page < 1) throw new Error(credentialMessage("agent_credentials.invalid_page"));
   return responseData(await fetch(credentialLifecyclePath + "?page=" + page, { credentials: "same-origin", signal }));
 }
 export type CredentialLifecycleAction =
@@ -55,8 +63,8 @@ export function credentialActionPath(action: CredentialLifecycleAction): string 
     credentialLifecyclePath + "/" + encodeURIComponent(action.agent.agent_id) + "/reapprove";
 }
 export async function applyCredentialLifecycle(action: CredentialLifecycleAction, token: string, signal: AbortSignal): Promise<void> {
-  if (!token) throw new Error("需要新的可信凭据验证");
-  if (action.kind === "policy" && !validCredentialPolicy(action.policy)) throw new Error("凭据期限设置无效");
+  if (!token) throw new Error(credentialMessage("agent_credentials.proof_required"));
+  if (action.kind === "policy" && !validCredentialPolicy(action.policy)) throw new Error(credentialMessage("agent_credentials.invalid_policy"));
   const body = action.kind === "policy" ? action.policy :
     { generation: action.agent.generation, fingerprint: action.agent.fingerprint };
   await responseData(await fetch(credentialActionPath(action), {
