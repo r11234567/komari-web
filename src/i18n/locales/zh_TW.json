@@ -1566,7 +1566,15 @@
       "export_status_running": "產生中",
       "export_status_done": "可下載",
       "export_status_failed": "失败",
-      "export_status_cancelled": "已取消"
+      "export_status_cancelled": "已取消",
+      "background_exports": "CSV 歷史匯出",
+      "background_exports_description": "完成後可在工作清單下載，檔案保留 48 小時。",
+      "export_mode_raw": "原始觀測 CSV",
+      "export_mode_summary": "圖表彙總 CSV",
+      "export_mode_sample30s": "30 秒取樣 CSV（相容）",
+      "export_mode_raw_description": "逐筆匯出原始時間與數值。讀取冷封存可能需要較長時間。",
+      "export_mode_summary_description": "依圖表的時間區間匯出彙總值，附樣本數量、原始精度與缺漏。",
+      "export_mode_sample30s_description": "每個序列每 30 秒匯出第一筆觀測。"
     },
     "secret_copy_prevented": "敏感資訊禁止複製",
     "dashboard": {
@@ -1586,6 +1594,29 @@
       "precision": "保留精度：10 秒/1 小時、1 分鐘/1 天、5 分鐘/2 天、30 分鐘/7 天、1 小時/15 天、2 小時/60 天、6 小時/180 天、12 小時/365 天，之後按天；同時受指標保留期限制。圖表合併完整來源桶，歷史明細透過背景原始匯出讀取。",
       "retention_notice": "縮短歸檔保留期會永久刪除過期明細匯出資料。流量累計與校準獨立保留。歸檔失敗會保留已接收資料，並在達到預算時暫停接收。"
     }
+  },
+  "history_export": {
+    "node": "節點",
+    "select_node": "選擇節點",
+    "category": "資料類別",
+    "mode": "匯出模式",
+    "start": "開始",
+    "end": "結束",
+    "start_time": "匯出開始時間",
+    "end_time": "匯出結束時間",
+    "algorithm": "彙總方式",
+    "create": "建立匯出工作",
+    "refresh": "重新整理工作",
+    "list_unavailable": "暫時無法讀取工作清單，正在重試。",
+    "list_forbidden": "此帳戶無法存取這些匯出工作。",
+    "create_error": "無法建立匯出工作。",
+    "control_error": "無法更新匯出工作。",
+    "range": "時間範圍",
+    "interval": "間隔（秒，0 為自動）",
+    "worker_unavailable": "CSV 匯出 Worker 暫時無法使用",
+    "worker_not_detected": "CSV 匯出 Worker 尚未安裝或啟動",
+    "worker_install_docs": "安裝文件",
+    "capability_error": "暫時無法讀取匯出服務狀態，正在重試。"
   },
   "status_settings": "狀態顯示設定",
   "terminal": {

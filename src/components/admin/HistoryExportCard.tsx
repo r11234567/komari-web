@@ -1,20 +1,17 @@
 import { useAccount } from "@/contexts/AccountContext";
 import { useNodeList } from "@/contexts/NodeListContext";
-import { requestAdminData } from "@/lib/adminApi";
+import { AdminRequestError, requestAdminData } from "@/lib/adminApi";
 import { exportActions, exportPollDelay, phaseProgress, phaseETAMinutes, type ExportJob, type ExportMode } from "@/utils/historyExport";
-import { Button, Flex, Progress, Select, Text, TextField } from "@radix-ui/themes";
+import { Button, Flex, Link, Progress, Select, Text, TextField } from "@radix-ui/themes";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { SettingCard } from "./SettingCard";
 
-type Retention = { resource_hours: number; ping_hours: number; worker_available: boolean; worker_error?: string; cpu_core_limit: number };
+type Retention = { resource_hours: number; ping_hours: number; worker_available: boolean; worker_detected?: boolean };
 const modes: ExportMode[] = ["summary", "raw", "sample30s"];
-const modeNames = { summary: "图表汇总 CSV", raw: "原始观测 CSV", sample30s: "30 秒采样 CSV（兼容）" };
-const descriptions = {
-  summary: "按图表相同计划导出统计桶，标注聚合算法、样本数、真实来源精度和缺口；不是原始观测。",
-  raw: "逐条实际观测，保留原始时间、身份、标签、数值与单位。历史明细需要读取并解压冷归档，可能耗时 1–2 小时或更久。",
-  sample30s: "每条序列每个 30 秒槽只取时间最早的实际样本；同槽其他观测不输出，不计算平均值。仍可能需要完整解压历史归档。",
-};
+const categories = ["resource", "network", "latency", "all"];
+const algorithms = ["avg", "min", "max", "sum", "count", "p95", "stddev"];
+const workerInstallDocs = "https://github.com/r11234567/komari/blob/main/docs/background-csv-worker.md";
 
 function displayTime(value:string, fallback:string) { return value && !value.startsWith("0001-") ? value : fallback; }
 
@@ -25,21 +22,27 @@ export function HistoryExportCard() {
   const [hours, setHours] = React.useState(24); const [start, setStart] = React.useState(""); const [end, setEnd] = React.useState("");
   const [aggregation, setAggregation] = React.useState("avg"); const [interval, setInterval] = React.useState(0);
   const [retention, setRetention] = React.useState<Retention | null>(null);
-  const [jobs, setJobs] = React.useState<ExportJob[]>([]); const [error, setError] = React.useState(""); const [busy, setBusy] = React.useState(false);
+  const [jobs, setJobs] = React.useState<ExportJob[]>([]);
+  const [capabilityError, setCapabilityError] = React.useState(false);
+  const [listError, setListError] = React.useState("");
+  const [actionError, setActionError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
   const [revision, refresh] = React.useReducer((n: number) => n + 1, 0);
   const owner = account?.logged_in ? account.uuid : "";
+  const fieldId = React.useId();
 
   React.useEffect(() => { if (!uuid && nodeList?.length) setUUID(nodeList[0].uuid); }, [nodeList, uuid]);
   React.useEffect(() => {
-    let active = true; let failures = 0; let timer: ReturnType<typeof setTimeout>; setRetention(null);
+    let active = true; let failures = 0; let timer: ReturnType<typeof setTimeout>;
+    setRetention(null); setCapabilityError(false);
     const loadCapabilities = async () => {
       try {
         const info = await requestAdminData<Retention>("/api/admin/history/export/retention", t("history_export.capability_error"));
-        if (active) setRetention(info);
-      } catch (e) {
+        if (active) { setRetention(info); setCapabilityError(false); }
+      } catch {
         failures++;
         if (active) {
-          setError(`${t("history_export.list_unavailable")}: ${e instanceof Error ? e.message : String(e)}`);
+          setCapabilityError(true);
           timer = setTimeout(() => void loadCapabilities(), exportPollDelay(document.visibilityState === "visible", failures));
         }
       }
@@ -49,20 +52,24 @@ export function HistoryExportCard() {
   }, [owner, revision, t]);
   React.useEffect(() => {
     let active = true; let timer: ReturnType<typeof setTimeout>; let failures = 0; let etag = "";
-    setJobs([]); setError("");
+    setJobs([]); setListError("");
     if (!owner) return () => { active = false; };
     const poll = async () => {
+      let error = t("history_export.list_unavailable");
       try {
         const response = await fetch("/api/admin/history/export", { credentials: "same-origin", cache: "no-store", headers: etag ? { "If-None-Match": etag } : undefined });
-        if (response.status === 401 || response.status === 403) { if (active) setJobs([]); throw new Error(t("history_export.list_forbidden")); }
+        if (response.status === 401 || response.status === 403) {
+          if (active) setJobs([]);
+          error = t("history_export.list_forbidden");
+        }
         if (response.status !== 304) {
-          if (!response.ok) throw new Error(`${t("history_export.list_unavailable")} (${response.status})`);
+          if (!response.ok) throw new Error(error);
           const body = await response.json();
           etag = response.headers.get("ETag") ?? "";
           if (active) setJobs(body.data ?? []);
         }
-        if (active) setError(""); failures = 0;
-      } catch (e) { failures++; if (active) setError(`${t("history_export.list_unavailable")}: ${e instanceof Error ? e.message : String(e)}`); }
+        if (active) setListError(""); failures = 0;
+      } catch { failures++; if (active) setListError(error); }
       if (active) timer = setTimeout(() => void poll(), exportPollDelay(document.visibilityState === "visible", failures));
     };
     void poll(); return () => { active = false; clearTimeout(timer); };
@@ -72,39 +79,105 @@ export function HistoryExportCard() {
   const ranges = [1, 6, 12, 24, 168, 360]; for (let d = 30; d * 24 <= maxHours; d += 15) ranges.push(d * 24);
   if (!ranges.includes(maxHours)) ranges.push(maxHours);
   const create = async () => {
-    setBusy(true); setError("");
+    setBusy(true); setActionError("");
     try {
       const range = start ? { start: new Date(start).toISOString(), end: end ? new Date(end).toISOString() : new Date().toISOString() } : { hours: Math.min(hours, maxHours) };
       await requestAdminData<ExportJob>("/api/admin/history/export", t("history_export.create_error"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ uuid, category, mode, format_version: 2, aggregation, interval_seconds: interval, ...range }) });
+    } catch (error) {
+      setActionError(error instanceof AdminRequestError && error.status < 500 ? error.message : t("history_export.create_error"));
+    } finally {
       refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+      setBusy(false);
+    }
   };
   const control = async (id: string, action: string) => {
-    setBusy(true); try {
+    setBusy(true); setActionError("");
+    try {
       await requestAdminData(`/api/admin/history/export/${id}/${action}`, t("history_export.control_error"), { method: "POST" }); refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+    } catch (error) {
+      setActionError(error instanceof AdminRequestError && error.status < 500 ? error.message : t("history_export.control_error"));
+    } finally { setBusy(false); }
   };
+  const workerUnavailable = retention != null && !retention.worker_available;
+  const error = listError || (capabilityError ? t("history_export.capability_error") : actionError);
 
-  return <SettingCard title={t("settings.lts_database.background_exports", "后台导出任务")} description={t("settings.lts_database.background_exports_description", "关闭页面不影响任务；完成后返回任务列表下载。所有任务共享 CPU 硬上限，最多占实例有效算力的 10%。")}>
-    <Flex direction="column" gap="3" className="w-full min-w-0 [overflow-wrap:anywhere]" data-testid="history-export-card">
-      <Flex gap="3" wrap="wrap">
-        <Select.Root value={uuid || undefined} onValueChange={setUUID}><Select.Trigger aria-label={t("history_export.node")} placeholder={t("history_export.select_node")} /><Select.Content>{nodeList?.map(n => <Select.Item key={n.uuid} value={n.uuid}>{n.name || n.uuid}</Select.Item>)}</Select.Content></Select.Root>
-        <Select.Root value={category} onValueChange={setCategory}><Select.Trigger aria-label={t("history_export.category")} /><Select.Content>{["resource", "network", "latency", "all"].map(c => <Select.Item key={c} value={c}>{t(`settings.lts_database.export_${c}`, c)}</Select.Item>)}</Select.Content></Select.Root>
-        <Select.Root value={mode} onValueChange={v => setMode(v as ExportMode)}><Select.Trigger aria-label={t("history_export.mode")} /><Select.Content>{modes.map(m => <Select.Item key={m} value={m}>{t(`settings.lts_database.export_mode_${m}`, modeNames[m])}</Select.Item>)}</Select.Content></Select.Root>
+  return <SettingCard title={t("settings.lts_database.background_exports")} description={t("settings.lts_database.background_exports_description")}>
+    <Flex direction="column" gap="4" className="w-full min-w-0 max-w-4xl self-start py-3 [overflow-wrap:anywhere]" data-testid="history-export-card">
+      {workerUnavailable && (
+        <Flex align="center" justify="between" gap="2" wrap="wrap" className="rounded-md bg-[var(--gray-a2)] px-3 py-2">
+          <Text size="2" role="status">{t(retention.worker_detected === false ? "history_export.worker_not_detected" : "history_export.worker_unavailable")}</Text>
+          <Link size="2" href={workerInstallDocs} target="_blank" rel="noopener noreferrer">{t("history_export.worker_install_docs")}</Link>
+        </Flex>
+      )}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Flex direction="column" gap="1" className="min-w-0">
+          <Text as="label" size="2" htmlFor={`${fieldId}-node`}>{t("history_export.node")}</Text>
+          <Select.Root value={uuid} onValueChange={setUUID}>
+            <Select.Trigger id={`${fieldId}-node`} placeholder={t("history_export.select_node")} className="w-full min-w-0" />
+            <Select.Content>{nodeList?.map(n => <Select.Item key={n.uuid} value={n.uuid}>{n.name || n.uuid}</Select.Item>)}</Select.Content>
+          </Select.Root>
+        </Flex>
+        <Flex direction="column" gap="1" className="min-w-0">
+          <Text as="label" size="2" htmlFor={`${fieldId}-category`}>{t("history_export.category")}</Text>
+          <Select.Root value={category} onValueChange={setCategory}>
+            <Select.Trigger id={`${fieldId}-category`} className="w-full min-w-0" />
+            <Select.Content>{categories.map(c => <Select.Item key={c} value={c}>{t(`settings.lts_database.export_${c}`)}</Select.Item>)}</Select.Content>
+          </Select.Root>
+        </Flex>
+        <Flex direction="column" gap="1" className="min-w-0">
+          <Text as="label" size="2" htmlFor={`${fieldId}-mode`}>{t("history_export.mode")}</Text>
+          <Select.Root value={mode} onValueChange={v => setMode(v as ExportMode)}>
+            <Select.Trigger id={`${fieldId}-mode`} className="w-full min-w-0" aria-describedby={`${fieldId}-mode-description`} />
+            <Select.Content>{modes.map(m => <Select.Item key={m} value={m}>{t(`settings.lts_database.export_mode_${m}`)}</Select.Item>)}</Select.Content>
+          </Select.Root>
+        </Flex>
+        <Text id={`${fieldId}-mode-description`} size="2" color="gray" className="sm:col-span-3">{t(`settings.lts_database.export_mode_${mode}_description`)}</Text>
+      </div>
+      <Flex direction="column" gap="2">
+        <Text id={`${fieldId}-range`} size="2" weight="medium">{t("history_export.range")}</Text>
+        <Flex role="group" aria-labelledby={`${fieldId}-range`} gap="2" wrap="wrap">
+          {ranges.filter(h => h <= maxHours).map(h => (
+            <Button type="button" size="1" variant={!start && h === hours ? "solid" : "soft"} aria-pressed={!start && h === hours} key={h} onClick={() => { setHours(h); setStart(""); setEnd(""); }}>
+              {h < 24 ? `${h}h` : `${h / 24}d`}
+            </Button>
+          ))}
+        </Flex>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Flex asChild direction="column" gap="1" className="min-w-0">
+            <label><Text size="2">{t("history_export.start")}</Text><TextField.Root aria-label={t("history_export.start_time")} type="datetime-local" value={start} onChange={e => setStart(e.target.value)} /></label>
+          </Flex>
+          <Flex asChild direction="column" gap="1" className="min-w-0">
+            <label><Text size="2">{t("history_export.end")}</Text><TextField.Root aria-label={t("history_export.end_time")} type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} /></label>
+          </Flex>
+        </div>
       </Flex>
-      <Text size="2" color="gray">{t(`settings.lts_database.export_mode_${mode}_description`, descriptions[mode])}</Text>
-      <Flex gap="2" wrap="wrap">{ranges.filter(h => h <= maxHours).map(h => <Button type="button" size="1" variant={!start && h === hours ? "solid" : "soft"} key={h} onClick={() => { setHours(h); setStart(""); setEnd(""); }}>{h < 24 ? `${h}h` : `${h / 24}d`}</Button>)}</Flex>
-      <Flex gap="2" wrap="wrap"><Text as="label" size="2">{t("history_export.start")} <TextField.Root aria-label={t("history_export.start_time")} type="datetime-local" value={start} onChange={e => setStart(e.target.value)} /></Text><Text as="label" size="2">{t("history_export.end")} <TextField.Root aria-label={t("history_export.end_time")} type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} /></Text></Flex>
-      {mode === "summary" && <Flex gap="2" wrap="wrap"><Select.Root value={aggregation} onValueChange={setAggregation}><Select.Trigger aria-label={t("history_export.algorithm")} /><Select.Content>{["avg", "min", "max", "sum", "count", "p95", "stddev"].map(a => <Select.Item key={a} value={a}>{a}</Select.Item>)}</Select.Content></Select.Root><Text as="label" size="2">{t("history_export.interval")}<TextField.Root type="number" min={0} value={interval} onChange={e => setInterval(Number(e.target.value))} /></Text></Flex>}
-      {retention && !retention.worker_available && <Text role="status" color="amber" size="2">{t("history_export.worker_unavailable", {reason: retention.worker_error})}</Text>}
-      <Text size="2" color="gray">{t("history_export.snapshot_policy")}</Text>
-      <Flex gap="2" wrap="wrap"><Button onClick={() => void create()} disabled={busy || !uuid || !owner || !retention?.worker_available} data-testid="create-background-export">{t("history_export.create")}</Button><Button variant="soft" onClick={refresh}>{t("history_export.refresh")}</Button></Flex>
+      {mode === "summary" && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Flex direction="column" gap="1" className="min-w-0">
+            <Text as="label" size="2" htmlFor={`${fieldId}-algorithm`}>{t("history_export.algorithm")}</Text>
+            <Select.Root value={aggregation} onValueChange={setAggregation}>
+              <Select.Trigger id={`${fieldId}-algorithm`} className="w-full min-w-0" />
+              <Select.Content>{algorithms.map(a => <Select.Item key={a} value={a}>{a}</Select.Item>)}</Select.Content>
+            </Select.Root>
+          </Flex>
+          <Flex asChild direction="column" gap="1" className="min-w-0">
+            <label>
+              <Text size="2">{t("history_export.interval")}</Text>
+              <TextField.Root type="number" min={0} value={interval} onChange={e => setInterval(Number(e.target.value))} />
+            </label>
+          </Flex>
+        </div>
+      )}
+      <Flex gap="2" wrap="wrap">
+        <Button onClick={() => void create()} disabled={busy || !uuid || !owner || !retention?.worker_available} data-testid="create-background-export">{t("history_export.create")}</Button>
+        <Button variant="soft" onClick={() => { setActionError(""); refresh(); }}>{t("history_export.refresh")}</Button>
+      </Flex>
       {error && <Text role="alert" color="red" size="2">{error}</Text>}
       <div aria-live="polite" data-testid="export-task-list">{jobs.filter(job => job.owner === owner).map(job => {
         const percent = phaseProgress(job);
         const eta = phaseETAMinutes(job);
         return <Flex key={job.id} direction="column" gap="2" className="rounded-md border p-3 mb-3" data-testid={`export-job-${job.id}`}>
-          <Text weight="bold">{job.node_name} · {t(`settings.lts_database.export_mode_${job.mode}`,modeNames[job.mode])} · {t(`history_export.status.${job.status}`,job.status)} / {job.status === "recovering" ? t("history_export.validating_checkpoint") : t(`history_export.phase.${job.phase}`,job.phase)}</Text>
+          <Text weight="bold">{job.node_name} · {t(`settings.lts_database.export_mode_${job.mode}`)} · {t(`history_export.status.${job.status}`,job.status)} / {job.status === "recovering" ? t("history_export.validating_checkpoint") : t(`history_export.phase.${job.phase}`,job.phase)}</Text>
           <Text size="1" color="gray">{job.start} → {job.end} · {job.id} · v{job.format_version}</Text>
           {percent !== undefined && <><Progress value={percent} /><Text size="1">{job.status === "done" ? t("history_export.complete") : t("history_export.phase_progress", {done:job.phase_completed,total:job.phase_total,percent:percent.toFixed(1)})}</Text></>}
           {job.status === "recovering" && job.checkpoint_verification && <><Progress value={job.checkpoint_verification.total_bytes > 0 ? Math.min(100, job.checkpoint_verification.verified_bytes / job.checkpoint_verification.total_bytes * 100) : 0} /><Text size="2">{t("history_export.checkpoint_verification", {done:(job.checkpoint_verification.verified_bytes/1048576).toFixed(2),total:(job.checkpoint_verification.total_bytes/1048576).toFixed(2)})}</Text></>}
