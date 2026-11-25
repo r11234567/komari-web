@@ -18,6 +18,7 @@ import { SettingCardCollapse } from "@/components/admin/SettingCard";
 import { cancelRemoteExecution, createRemoteExecutions, listRemoteAgentCapabilities, watchRemoteExecution } from "@/api/connect/remote";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import { executionCredentialTargets, resolveExecutionDefaults } from "@/utils/credentialAction";
+import { createStreamOutputDecoder } from "@/utils/streamOutput";
 import { OperationState } from "@komari/proto/komari/common/v1/common_pb";
 
 interface TaskResult {
@@ -274,18 +275,21 @@ const ExecContent = () => {
                     const controller = new AbortController();
                     executionControllersRef.current.set(execution.executionId, controller);
                     void (async () => {
+                        const decoder = createStreamOutputDecoder();
                         let output = "";
                         try {
                             for await (const update of watchRemoteExecution({ executionId: execution.executionId, signal: controller.signal })) {
                                 const event = update.event;
                                 if (!event) continue;
-                                if (event.output.byteLength > 0) output += new TextDecoder().decode(event.output, { stream: true });
+                                output += decoder.decode(event.stream, event.output);
+                                const finished = [OperationState.CANCELLED, OperationState.DEADLINE_EXCEEDED, OperationState.FAILED, OperationState.SUCCEEDED].includes(event.state);
+                                if (finished) output += decoder.finish();
                                 setResults((current) => current.map((result) => result.task_id === execution.executionId ? {
                                     ...result,
                                     result: output,
                                     state: event.state,
                                     exit_code: event.exitCode ?? result.exit_code,
-                                    finished_at: [OperationState.CANCELLED, OperationState.DEADLINE_EXCEEDED, OperationState.FAILED, OperationState.SUCCEEDED].includes(event.state) ? new Date().toISOString() : result.finished_at,
+                                    finished_at: finished ? new Date().toISOString() : result.finished_at,
                                 } : result));
                             }
                         } catch (error) {
@@ -293,6 +297,11 @@ const ExecContent = () => {
                                 toast.error(error instanceof Error ? error.message : t("common.unknownError"));
                             }
                         } finally {
+                            const tail = decoder.finish();
+                            if (tail && !controller.signal.aborted) {
+                                setResults((current) => current.map((result) => result.task_id === execution.executionId
+                                    ? { ...result, result: result.result + tail } : result));
+                            }
                             executionControllersRef.current.delete(execution.executionId);
                         }
                     })();

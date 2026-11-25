@@ -22,7 +22,7 @@ import {
   setAdminPluginConfiguration,
 } from "@/api/connect/admin";
 import { resolveI18nText } from "@/utils/i18nText";
-import { iconMap, resolvePluginIcon } from "@/utils/iconHelper";
+import { getBuiltInIcon, resolvePluginIcon } from "@/utils/iconHelper";
 import type { I18nText } from "@/utils/i18nText";
 import type { PluginConfiguration, PluginInfo, PluginConfigItem } from "@/types/plugin";
 
@@ -37,7 +37,7 @@ const renderPluginIcon = (
   if (!icon) {
     return <Blocks size={size} className={className} style={{ opacity }} />;
   }
-  const Cmp = iconMap[icon];
+  const Cmp = getBuiltInIcon(icon);
   if (Cmp) {
     return <Cmp size={size} className={className} style={{ opacity }} />;
   }

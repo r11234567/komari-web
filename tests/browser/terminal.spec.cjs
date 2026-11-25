@@ -105,6 +105,22 @@ test('actual xterm selection copies into the browser system clipboard', async ({
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Clipboard sample');
 });
 
+test('changing language preserves the connected xterm and its input stream', async ({ page }) => {
+  await page.goto('/tests/browser/fixtures/terminal.html?twofa=0');
+  await expect.poll(() => page.evaluate(() => window.terminalAudit.ready)).toBe(true);
+  await page.evaluate(async () => {
+    window.originalTerminal = window.terminalAudit.api.terminal;
+    await window.changeTerminalFixtureLanguage();
+  });
+  await page.locator('.xterm-helper-textarea').press('a');
+  await expect.poll(() => page.evaluate(() => ({
+    sameTerminal: window.terminalAudit.api.terminal === window.originalTerminal,
+    created: window.terminalAudit.creates.length,
+    closed: window.terminalAudit.closes.length,
+    inputs: window.terminalAudit.inputs,
+  }))).toEqual({ sameTerminal: true, created: 1, closed: 0, inputs: [[97]] });
+});
+
 test('actual paste is sent once and Ctrl+C without selection remains an interrupt', async ({ page }) => {
   await page.goto('/tests/browser/fixtures/terminal.html?twofa=0');
   await expect.poll(() => page.evaluate(() => window.terminalAudit.creates.length)).toBe(1);

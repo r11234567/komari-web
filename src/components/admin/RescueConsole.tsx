@@ -1,3 +1,4 @@
+import { createStreamOutputDecoder } from "@/utils/streamOutput";
 import * as React from "react";
 import { create } from "@bufbuild/protobuf";
 import { durationFromMs, timestampDate } from "@bufbuild/protobuf/wkt";
@@ -181,6 +182,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
       controller.signal,
       AbortSignal.timeout(DEFAULT_STREAM_DEADLINE_MS),
     ]);
+    const decoder = createStreamOutputDecoder();
     try {
       const stream = rescue.watchRescueSession(
         { sessionId, afterSequence: 0n },
@@ -203,9 +205,9 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
               );
             }
           }
-          if (event.output.length > 0) {
-            setOutput((current) => current + new TextDecoder().decode(event.output));
-          }
+          let outputChunk = decoder.decode(event.stream, event.output);
+          if (terminalStates.has(event.state)) outputChunk += decoder.finish();
+          if (outputChunk) setOutput((current) => current + outputChunk);
           setSession((current) =>
             current ? { ...current, state: event.state, error: event.error ?? current.error } : current,
           );
@@ -216,13 +218,17 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
         toast.error(error instanceof Error ? error.message : t("rescue.stream_interrupted"));
       }
     } finally {
-      setBusy(false);
-      if (statusTimer.current !== undefined) window.clearTimeout(statusTimer.current);
-      statusTimer.current = window.setTimeout(() => {
-        const status = new AbortController();
-        statusController.current = status;
-        void loadStatus(status.signal).catch(() => undefined);
-      }, 3_000);
+      const tail = decoder.finish();
+      if (tail && !controller.signal.aborted) setOutput((current) => current + tail);
+      if (streamController.current === controller) {
+        setBusy(false);
+        if (statusTimer.current !== undefined) window.clearTimeout(statusTimer.current);
+        statusTimer.current = window.setTimeout(() => {
+          const status = new AbortController();
+          statusController.current = status;
+          void loadStatus(status.signal).catch(() => undefined);
+        }, 3_000);
+      }
     }
   };
 

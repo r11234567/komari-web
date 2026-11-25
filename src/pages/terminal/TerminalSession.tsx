@@ -72,6 +72,8 @@ export const TerminalSession = ({
   const optionsRef = useRef(options);
   optionsRef.current = options;
   const { t } = useTranslation();
+  const translateRef = useRef(t);
+  translateRef.current = t;
 
   const startRef = useRef<(() => void) | null>(null);
   const [manualPasteOpen, setManualPasteOpen] = useState(false);
@@ -301,21 +303,21 @@ export const TerminalSession = ({
     const copySelection = async () => {
       const selectedText = term.getSelection();
       if (!selectedText) {
-        toast.info(t("terminal.select_content_first", "请先选中要复制的内容"));
+        toast.info(translateRef.current("terminal.select_content_first", "请先选中要复制的内容"));
         term.focus();
         return;
       }
       try {
         const result = await writeClipboardText(selectedText);
         if (result.confirmed) {
-          toast.success(t("terminal.copied", "已复制到系统剪贴板"));
+          toast.success(translateRef.current("terminal.copied", "已复制到系统剪贴板"));
         } else {
-          toast.info(t("terminal.copy_unconfirmed", "已尝试复制，浏览器无法确认系统剪贴板内容，请粘贴检查"));
+          toast.info(translateRef.current("terminal.copy_unconfirmed", "已尝试复制，浏览器无法确认系统剪贴板内容，请粘贴检查"));
         }
         term.clearSelection();
       } catch {
         toast.error(
-          t(
+          translateRef.current(
             "terminal.copy_denied",
             "浏览器拒绝了剪贴板写入，请使用 HTTPS 访问",
           ),
@@ -423,7 +425,7 @@ export const TerminalSession = ({
       onApiChangeRef.current(null);
       term.dispose();
     };
-  }, [t, uuid]);
+  }, [uuid]);
 
   useEffect(() => {
     const api = apiRef.current;
