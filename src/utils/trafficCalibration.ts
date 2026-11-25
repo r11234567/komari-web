@@ -9,6 +9,11 @@ export type TrafficPolicy = {
   traffic_reset_time: string;
   traffic_reset_timezone: string;
   next_reset: string;
+  versioned_policy?: boolean;
+  pending?: { day: number; time: string; timezone: string; effective_at: string };
+  accounted_through?: string;
+  received_through?: string;
+  gaps?: Array<{ start: string; end: string; kind: string; up_bytes: number; down_bytes: number }>;
 };
 export type CalibrationSnapshot = {
   cycle: string;
@@ -28,14 +33,30 @@ export type CalibrationSnapshot = {
     adjustment: TrafficUsage;
     operator?: string;
     created_at: string;
+    cutoff?: string;
+    note?: string;
   }>;
 };
 export type CalibrationResponse = {
   available: boolean;
+  cutoff_enabled?: boolean;
   counting_type?: CountingType;
   reason?: string;
   snapshot?: CalibrationSnapshot;
 };
+
+export function localMinute(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+export function trafficCutoff(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime()) || localMinute(date) !== value) {
+    throw new Error("请输入有效的校准时间");
+  }
+  return date.toISOString();
+}
 
 export function gbToBytes(input: string): number {
   const value = input.trim();

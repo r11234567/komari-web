@@ -66,7 +66,7 @@ export function runtimeDraft(previous?: RuntimeConfig, changes: Partial<RuntimeC
     excludeNics: changes.excludeNics ?? previous?.excludeNics ?? [],
     includeMountpoints: changes.includeMountpoints ?? previous?.includeMountpoints ?? [],
     reportInterval: "reportInterval" in changes ? changes.reportInterval : previous?.reportInterval,
-    trafficResetDay: "trafficResetDay" in changes ? changes.trafficResetDay : previous?.trafficResetDay,
+    trafficResetDay: changes.trafficResetDay,
   };
 }
 

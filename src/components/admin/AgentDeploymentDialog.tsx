@@ -247,14 +247,6 @@ export function AgentDeploymentDialog({
                     updateRuntime({ reportInterval: milliseconds ? durationFromMs(milliseconds) : undefined });
                   }}
                 />
-                <TextField.Root
-                  defaultValue={runtime?.trafficResetDay !== undefined ? String(runtime.trafficResetDay) : ""}
-                  placeholder="流量重置日（1~31，0 为禁用）"
-                  onBlur={(event) => {
-                    const day = Number(event.target.value);
-                    updateRuntime({ trafficResetDay: event.target.value.trim() !== "" && Number.isInteger(day) && day >= 0 && day <= 31 ? day : undefined });
-                  }}
-                />
                 <TextField.Root defaultValue={listToText(runtime?.includeNics)} placeholder="监控网卡白名单（逗号分隔，留空监测所有网卡）" onBlur={(event) => updateRuntime({ includeNics: listFromText(event.target.value) })} />
                 <TextField.Root defaultValue={listToText(runtime?.excludeNics)} placeholder="排除网卡黑名单（逗号分隔，如 lo, docker0）" onBlur={(event) => updateRuntime({ excludeNics: listFromText(event.target.value) })} />
                 <TextField.Root defaultValue={listToText(runtime?.includeMountpoints)} placeholder="监控磁盘挂载点（逗号分隔，如 /, /data）" onBlur={(event) => updateRuntime({ includeMountpoints: listFromText(event.target.value) })} />
