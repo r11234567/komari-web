@@ -21,8 +21,23 @@ test("Agent installation commands require a clean HTTPS origin", () => {
 
 test("installation commands quote the validated origin for each shell", () => {
   const endpoint = "https://[2001:db8::1]:8443";
-  assert.ok(agentInstallCommand("linux", endpoint).endsWith(" -e '" + endpoint + "'"));
-  assert.ok(agentInstallCommand("windows", endpoint).endsWith(" -e '" + endpoint + "'"));
+  for (const platform of ["linux", "macos", "windows"] as const) {
+    assert.ok(agentInstallCommand(platform, endpoint).includes(" -e '" + endpoint + "'"));
+  }
   assert.equal(quoteShellArg("two words"), "'two words'");
   assert.equal(quotePowerShellArg("one’two'three"), "'one’’two''three'");
+});
+
+test("copyable commands pin the installer and verify it before execution", () => {
+  const endpoint = "https://panel.example";
+  const linux = agentInstallCommand("linux", endpoint);
+  const macos = agentInstallCommand("macos", endpoint);
+  const windows = agentInstallCommand("windows", endpoint);
+  for (const command of [linux, macos, windows]) {
+    assert.match(command, /komari-agent\/[a-f0-9]{40}\/install\.(?:sh|ps1)/);
+    assert.match(command, /--install-version '[A-Za-z0-9_.-]+'/);
+  }
+  assert.match(linux, /sha256sum -c - && sudo bash/);
+  assert.match(macos, /shasum -a 256 -c - && sudo bash/);
+  assert.match(windows, /Get-FileHash.*throw 'Installer SHA-256 mismatch'.*\[scriptblock\]::Create/);
 });
