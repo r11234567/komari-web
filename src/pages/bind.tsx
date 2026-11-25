@@ -36,9 +36,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { SignatureAlgorithm, type PublicKey } from "@komari/proto/komari/security/v1/security_pb";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import {
-  getStoredBindTicket,
-  clearStoredBindTicket,
-  getBindTicketRemainingSeconds,
+  getBindAuthorizationExpiry,
   formatTicketTime,
 } from "@/utils/bindTicket";
 import { bindLoginPath } from "@/utils/loginRedirect";
@@ -86,10 +84,10 @@ type SimpleNode = {
 };
 
 interface BindPageContentProps {
-  initialTicket: string;
+  expiresAt: number;
 }
 
-const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
+const BindPageContent = ({ expiresAt }: BindPageContentProps) => {
   const [params] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -107,8 +105,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
   const [panelKeys, setPanelKeys] = React.useState<PublicKey[]>();
 
   // Reusable two-minute authorization window created after a completed login.
-  const [bindTicket, setBindTicket] = React.useState<string | null>(initialTicket);
-  const [ticketTimeLeft, setTicketTimeLeft] = React.useState<number>(getBindTicketRemainingSeconds());
+  const [ticketTimeLeft, setTicketTimeLeft] = React.useState(() => Math.ceil((expiresAt - Date.now()) / 1000));
 
   // new-machine form
   const [newName, setNewName] = React.useState("");
@@ -127,11 +124,9 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
   React.useEffect(() => {
     if (approvedAgent) return;
     const updateCountdown = () => {
-      const remaining = getBindTicketRemainingSeconds();
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
       setTicketTimeLeft(remaining);
       if (remaining <= 0) {
-        clearStoredBindTicket();
-        setBindTicket(null);
         toast.warning("绑定小票已过期，请重新登录");
         navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
       }
@@ -139,7 +134,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [approvedAgent, location.hash, location.pathname, location.search, navigate]);
+  }, [approvedAgent, expiresAt, location.hash, location.pathname, location.search, navigate]);
 
   React.useEffect(() => {
     if (!approvedAgent) return;
@@ -161,15 +156,9 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
     return () => controller.abort();
   }, [approvedAgent]);
 
-  const lookup = React.useCallback(async (lookupCode: string, overrideTicket?: string) => {
+  const lookup = React.useCallback(async (lookupCode: string) => {
     const trimmed = lookupCode.trim().toUpperCase();
     if (!trimmed) return;
-    const ticketToUse = overrideTicket ?? bindTicket;
-    if (!ticketToUse) {
-      clearStoredBindTicket();
-      setBindTicket(null);
-      return;
-    }
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -181,7 +170,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
       const response = await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
         connectClients.enrollmentAdmin.getPendingEnrollment(
           { userCode: trimmed },
-          { signal, timeoutMs, headers: { "X-Bind-Ticket": ticketToUse } },
+          { signal, timeoutMs },
         ),
       );
       if (!controller.signal.aborted) {
@@ -197,8 +186,6 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
         setLookupError(failure.message);
         toast.error(failure.message);
         if (failure.invalidatesTicket) {
-          clearStoredBindTicket();
-          setBindTicket(null);
           navigate(bindLoginPath(location.pathname, location.search, location.hash), {
             replace: true,
           });
@@ -209,7 +196,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
         setLoading(false);
       }
     }
-  }, [bindTicket, location.hash, location.pathname, location.search, navigate]);
+  }, [location.hash, location.pathname, location.search, navigate]);
 
   // Load all server nodes for manual bind selection
   const loadServers = React.useCallback(async () => {
@@ -230,11 +217,11 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
   }, [account?.logged_in, loadServers]);
 
   React.useEffect(() => {
-    if (initialCode && !initialLookupDoneRef.current && initialTicket) {
+    if (initialCode && !initialLookupDoneRef.current) {
       initialLookupDoneRef.current = true;
-      void lookup(initialCode, initialTicket);
+      void lookup(initialCode);
     }
-  }, [initialCode, initialTicket, lookup]);
+  }, [initialCode, lookup]);
 
   React.useEffect(() => {
     return () => {
@@ -244,7 +231,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
 
   const approveNew = async () => {
     if (!enrollment) return;
-    if (!bindTicket) {
+    if (Date.now() >= expiresAt) {
       toast.error("绑定小票已过期，请重新登录");
       navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
       return;
@@ -269,7 +256,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
               },
             },
           },
-          { signal, timeoutMs, headers: { "X-Bind-Ticket": bindTicket } },
+          { signal, timeoutMs },
         ),
       );
       toast.success(`机器已成功注册：${response.agentId}`);
@@ -278,8 +265,6 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
       const failure = describeBindError(err, "注册失败");
       toast.error(failure.message);
       if (failure.invalidatesTicket) {
-        clearStoredBindTicket();
-        setBindTicket(null);
         navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
       }
     } finally {
@@ -289,7 +274,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
 
   const approveBind = async () => {
     if (!enrollment || !bindTarget) return;
-    if (!bindTicket) {
+    if (Date.now() >= expiresAt) {
       toast.error("绑定小票已过期，请重新登录");
       navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
       return;
@@ -304,7 +289,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
             userCode: code,
             target: { case: "existingAgentId", value: bindTarget },
           },
-          { signal, timeoutMs, headers: { "X-Bind-Ticket": bindTicket } },
+          { signal, timeoutMs },
         ),
       );
       toast.success("已成功绑定到已有机器");
@@ -313,8 +298,6 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
       const failure = describeBindError(err, "绑定失败");
       toast.error(failure.message);
       if (failure.invalidatesTicket) {
-        clearStoredBindTicket();
-        setBindTicket(null);
         navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
       }
     } finally {
@@ -324,7 +307,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
 
   const deny = async () => {
     if (!enrollment) return;
-    if (!bindTicket) {
+    if (Date.now() >= expiresAt) {
       toast.error("绑定小票已过期，请重新登录");
       navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
       return;
@@ -334,7 +317,7 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
       await connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
         connectClients.enrollmentAdmin.denyEnrollment(
           { userCode: code },
-          { signal, timeoutMs, headers: { "X-Bind-Ticket": bindTicket } },
+          { signal, timeoutMs },
         ),
       );
       toast.success("申请已拒绝");
@@ -343,8 +326,6 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
       const failure = describeBindError(err, "拒绝失败");
       toast.error(failure.message);
       if (failure.invalidatesTicket) {
-        clearStoredBindTicket();
-        setBindTicket(null);
         navigate(bindLoginPath(location.pathname, location.search, location.hash), { replace: true });
       }
     }
@@ -644,9 +625,24 @@ const BindPageContent = ({ initialTicket }: BindPageContentProps) => {
 const BindAuthGate = () => {
   const { account, loading: accountLoading } = useAccount();
   const location = useLocation();
-  const storedTicket = getStoredBindTicket();
+  const loggedIn = account?.logged_in === true;
+  const [expiresAt, setExpiresAt] = React.useState<number | null>();
+  const [statusError, setStatusError] = React.useState(false);
 
-  if (accountLoading) {
+  React.useEffect(() => {
+    if (!loggedIn) return;
+    const controller = new AbortController();
+    getBindAuthorizationExpiry(controller.signal).then(
+      (expiry) => { if (!controller.signal.aborted) setExpiresAt(expiry); },
+      () => { if (!controller.signal.aborted) setStatusError(true); },
+    );
+    return () => controller.abort();
+  }, [loggedIn]);
+
+  if (statusError) {
+    return <Text as="p" role="alert" className="p-6">暂时无法读取绑定授权，请刷新页面重试。</Text>;
+  }
+  if (accountLoading || (loggedIn && expiresAt === undefined)) {
     return (
       <Flex align="center" justify="center" p="6" style={{ minHeight: "50vh" }}>
         <RefreshCw size={24} className="animate-spin text-gray-400" />
@@ -654,7 +650,7 @@ const BindAuthGate = () => {
     );
   }
 
-  if (!account?.logged_in || !storedTicket) {
+  if (!loggedIn || !expiresAt) {
     return (
       <Navigate
         to={bindLoginPath(location.pathname, location.search, location.hash)}
@@ -663,7 +659,7 @@ const BindAuthGate = () => {
     );
   }
 
-  return <BindPageContent initialTicket={storedTicket.ticket} />;
+  return <BindPageContent expiresAt={expiresAt} />;
 };
 
 export default function BindPage() {

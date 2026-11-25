@@ -1,13 +1,12 @@
 import * as React from "react";
 import { Callout, Card, Flex, Heading, Text } from "@radix-ui/themes";
-import { Navigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Loading from "@/components/loading";
 import { LoginForm } from "@/components/Login";
 import { AccountProvider, useAccount } from "@/contexts/AccountContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { safeBindReturnTo } from "@/utils/loginRedirect";
-import { getStoredBindTicket, setStoredBindTicket } from "@/utils/bindTicket";
 
 const BIND_LOGIN_INTENT_KEY = "komari:bind-login-intent";
 const BIND_LOGIN_INTENT_MAX_AGE_MS = 120_000;
@@ -38,7 +37,6 @@ type TicketResponse = {
   status?: string;
   message?: string;
   data?: {
-    ticket?: string;
     expires_in?: number;
   };
 };
@@ -73,12 +71,9 @@ const BindLoginPageContent = () => {
       if (
         !response.ok ||
         payload.status !== "success" ||
-        !payload.data?.ticket
+        !(Number(payload.data?.expires_in) > 0)
       ) {
         throw new Error(payload.message || "Failed to create bind authorization");
-      }
-      if (!setStoredBindTicket(payload.data.ticket, payload.data.expires_in ?? 120)) {
-        throw new Error("Browser storage is unavailable; bind authorization was not saved");
       }
       const destination = new URL(returnTo, window.location.origin);
       window.location.replace(
@@ -98,7 +93,6 @@ const BindLoginPageContent = () => {
     if (
       !loading &&
       account?.logged_in === true &&
-      !getStoredBindTicket() &&
       consumeBindLoginIntent()
     ) {
       void issueTicket();
@@ -109,9 +103,6 @@ const BindLoginPageContent = () => {
     return <Loading />;
   }
 
-  if (getStoredBindTicket()) {
-    return <Navigate to={returnTo} replace />;
-  }
 
   return (
     <Flex
