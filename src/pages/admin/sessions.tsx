@@ -113,7 +113,7 @@ export default function Sessions() {
             {sessions.data.map((s) => {
               const isCurrent = s.session === sessions.current;
               return (
-                <TableRow key={s.uuid} className="km-session-item">
+                <TableRow key={s.session} className="km-session-item">
                   <TableCell>
                     <Dialog.Root>
                       <Dialog.Trigger>

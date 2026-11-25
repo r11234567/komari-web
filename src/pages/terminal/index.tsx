@@ -10,6 +10,7 @@ import { DEFAULT_TERMINAL_FONT_FAMILY } from "./terminalDefaults";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useXtermjsSettings } from "@/hooks/useXtermjsSettings";
 import TerminalPageBoundary from "./TerminalPageBoundary";
+import RequireAdminSession from "@/components/RequireAdminSession";
 
 const FileEditorDialog = lazy(() => import("./FileEditorDialog"));
 
@@ -195,7 +196,9 @@ const TerminalWorkbench = () => {
 };
 
 export const TerminalPage = () => (
-  <TerminalPageBoundary><TerminalWorkbench /></TerminalPageBoundary>
+  <RequireAdminSession>
+    <TerminalPageBoundary><TerminalWorkbench /></TerminalPageBoundary>
+  </RequireAdminSession>
 );
 
 export default TerminalPage;

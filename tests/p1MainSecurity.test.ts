@@ -1,3 +1,5 @@
+import { getBuiltInIcon, resolvePluginIcon } from "../src/utils/iconHelper.ts";
+import { createStreamOutputDecoder } from "../src/utils/streamOutput.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -59,4 +61,25 @@ test("enabling TOTP 2FA sends same-origin credentials and wires step-up token fo
   const accountSource = readFileSync(new URL("../src/pages/admin/account.tsx", import.meta.url), "utf8");
   assert.match(accountSource, /requiresStepUp=\{Boolean\(account\?\.trusted_2fa_enabled\)\}/);
   assert.match(accountSource, /restCredentialResource\("POST",\s*"\/api\/admin\/2fa\/enable"\)/);
+});
+
+test("plugin icon sources stay inside their package and names resolve only own icons", () => {
+  assert.ok(getBuiltInIcon("Home"));
+  assert.equal(getBuiltInIcon("__proto__"), undefined);
+  assert.equal(getBuiltInIcon("constructor"), undefined);
+  assert.equal(resolvePluginIcon("fixture", "./icons/service icon.svg"), "/api/admin/plugin/fixture/icons/service%20icon.svg");
+  for (const icon of ["//example.invalid/icon.svg", "/admin", "https://example.invalid/icon.svg", "../icon.svg", "icons/../x", "%2e%2e/x"]) {
+    assert.equal(resolvePluginIcon("fixture", icon), "");
+  }
+});
+
+test("execution output decodes multibyte characters across interleaved stdout and stderr frames", () => {
+  const stream = createStreamOutputDecoder();
+  const bytes = new TextEncoder().encode("\u4E2D\u6587");
+  assert.equal(stream.decode(1, bytes.subarray(0, 2)), "");
+  assert.equal(stream.decode(2, new TextEncoder().encode("stderr")), "stderr");
+  assert.equal(stream.decode(1, bytes.subarray(2)), "\u4E2D\u6587");
+  assert.equal(stream.decode(2, bytes.subarray(0, 1)), "");
+  assert.equal(stream.finish(), "\uFFFD");
+  assert.equal(stream.finish(), "");
 });

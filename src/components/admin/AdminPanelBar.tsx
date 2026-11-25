@@ -17,7 +17,7 @@ import ThemeSwitch from "../ThemeSwitch";
 import { useIsMobile } from "@/hooks/use-mobile";
 import menuConfig from "../../config/menuConfig.json";
 import type { MenuItem } from "../../types/menu";
-import { iconMap, resolvePluginIcon } from "../../utils/iconHelper";
+import { getBuiltInIcon, resolvePluginIcon } from "../../utils/iconHelper";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import { TablerMenu2 } from "../Icones/Tabler";
 import InlineSvgIcon from "../InlineSvgIcon";
@@ -157,7 +157,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
           });
         const icon: string =
           typeof cfg.icon === "string" &&
-          Object.prototype.hasOwnProperty.call(iconMap, cfg.icon)
+          getBuiltInIcon(cfg.icon)
             ? cfg.icon
             : "Palette"; // fallback icon
         const item: ExtendedMenuItem = {
@@ -682,7 +682,7 @@ const AdminPanelBar = ({ content }: AdminPanelBarProps) => {
                           />
                         );
                       }
-                      const Cmp = iconMap[icon];
+                      const Cmp = getBuiltInIcon(icon);
                       if (Cmp) {
                         return (
                           <Cmp

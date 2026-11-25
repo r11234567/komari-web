@@ -47,3 +47,9 @@ test("bind login path generates returnTo parameter", () => {
     "/bind-login?returnTo=%2Fbind%3Fcode%3DXYZ-123",
   );
 });
+
+test("terminal deep links return to the workbench after login", () => {
+  const query = new URLSearchParams(adminLoginPath("/terminal", "?node=demo", "#tab").split("?")[1]);
+  assert.equal(safeLoginReturnTo(query.get("returnTo")), "/terminal?node=demo#tab");
+  assert.equal(safeLoginReturnTo("/terminal//example.invalid"), "/admin/dashboard");
+});

@@ -1,16 +1,14 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 
 import AdminPanelBar from "../../components/admin/AdminPanelBar";
 import { AdminNavigationProvider } from "@/contexts/AdminNavigationContext";
-import { AccountProvider, useAccount } from "@/contexts/AccountContext";
+import RequireAdminSession from "@/components/RequireAdminSession";
 import { updateSettingsWithToast, useSettings } from "@/lib/api";
 import { Button, Dialog } from "@radix-ui/themes";
 import { useEffect, useState } from "react";
 import { getEula } from "@/utils/eula";
 import { normalizeLanguage, readStoredLanguage } from "@/utils/language";
 import { useTranslation } from "react-i18next";
-import Loading from "@/components/loading";
-import { adminLoginPath } from "@/utils/loginRedirect";
 
 const AdminContent = () => {
   const { t, i18n } = useTranslation();
@@ -71,29 +69,8 @@ const AdminContent = () => {
   );
 };
 
-const AdminAuthGate = () => {
-  const { account, loading } = useAccount();
-  const location = useLocation();
-
-  if (loading) {
-    return <Loading />;
-  }
-  if (!account?.logged_in) {
-    return (
-      <Navigate
-        to={adminLoginPath(location.pathname, location.search, location.hash)}
-        replace
-      />
-    );
-  }
-
-  return <AdminContent />;
-};
-
 const AdminLayout = () => (
-  <AccountProvider>
-    <AdminAuthGate />
-  </AccountProvider>
+  <RequireAdminSession><AdminContent /></RequireAdminSession>
 );
 
 export default AdminLayout;

@@ -34,7 +34,7 @@ import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
 import { deleteAdminPlugin, getAdminPluginLogs, listAdminPlugins, setAdminPluginEnabled } from "@/api/connect/admin";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
-import { iconMap, resolvePluginIcon } from "@/utils/iconHelper";
+import { getBuiltInIcon, resolvePluginIcon } from "@/utils/iconHelper";
 import type { PluginInfo } from "@/types/plugin";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 
@@ -51,7 +51,7 @@ const renderPluginIcon = (
 ) => {
   const icon = resolvePluginIcon(plugin.short, plugin.icon);
   if (!icon) return <Blocks size={size} className={className} />;
-  const Cmp = iconMap[icon];
+  const Cmp = getBuiltInIcon(icon);
   if (Cmp) {
     return <Cmp size={size} className={className} />;
   }

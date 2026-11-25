@@ -7,6 +7,9 @@ export function safeLoginReturnTo(value: string | null | undefined): string {
   }
 
   if (
+    value === "/terminal" ||
+    value.startsWith("/terminal?") ||
+    value.startsWith("/terminal#") ||
     value === "/bind" ||
     value.startsWith("/bind?") ||
     value.startsWith("/bind/") ||

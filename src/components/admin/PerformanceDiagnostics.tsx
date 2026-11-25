@@ -1,3 +1,4 @@
+import { createStreamOutputDecoder } from "@/utils/streamOutput";
 import * as React from "react";
 import { durationFromMs } from "@bufbuild/protobuf/wkt";
 import {
@@ -54,6 +55,7 @@ export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
     setOutput("");
     setReport(null);
     setState(OperationState.UNSPECIFIED);
+    const decoder = createStreamOutputDecoder();
 
     try {
       const response = await connectUnary(
@@ -85,14 +87,15 @@ export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
         for await (const msg of stream) {
           if (msg.heartbeat) continue;
           if (msg.event) {
-            if (msg.event.output && msg.event.output.length > 0) {
-              setOutput((prev) => prev + new TextDecoder().decode(msg.event!.output));
-            }
+            const finished = terminalStates.has(msg.event.state);
+            let outputChunk = decoder.decode(msg.event.stream, msg.event.output);
+            if (finished) outputChunk += decoder.finish();
+            if (outputChunk) setOutput((prev) => prev + outputChunk);
             if (msg.event.diagnostics) {
               setReport(msg.event.diagnostics);
             }
             setState(msg.event.state);
-            if (terminalStates.has(msg.event.state)) break;
+            if (finished) break;
           }
         }
       }
@@ -102,6 +105,8 @@ export function PerformanceDiagnostics({ agentId }: { agentId: string }) {
       }
     } finally {
       if (!controller.signal.aborted) {
+        const tail = decoder.finish();
+        if (tail) setOutput((prev) => prev + tail);
         setBusy(false);
       }
     }

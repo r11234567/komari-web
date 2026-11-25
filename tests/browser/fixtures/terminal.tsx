@@ -11,11 +11,13 @@ import { state } from "./state";
 import WorkspaceBoundary from "../../../src/pages/terminal/WorkspaceBoundary";
 import { installFixtureGrant } from "./workspace";
 import en from "../../../src/i18n/locales/en.json";
+import zh from "../../../src/i18n/locales/zh_CN.json";
 
 await i18next.use(initReactI18next).init({
   lng: "en", fallbackLng: "en", initImmediate: false,
-  resources: { en: { translation: en } },
+  resources: { en: { translation: en }, "zh-CN": { translation: zh } },
 });
+Object.assign(window, { changeTerminalFixtureLanguage: () => i18next.changeLanguage("zh-CN") });
 if (new URLSearchParams(location.search).get("twofa") !== "1") installFixtureGrant("synthetic-agent");
 createRoot(document.getElementById("root")!).render(
   <Theme>
