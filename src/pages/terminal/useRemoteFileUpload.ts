@@ -1,5 +1,5 @@
-import { ensureWorkspace } from "@/api/connect/workspace";
-import { useCallback, useRef, useState } from "react";
+import { workspaceAccess } from "@/api/connect/workspace";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -154,13 +154,18 @@ const createUploadTaskID = () => {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
 
-const sleep = (ms: number, signal?: AbortSignal) =>
+const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
+    signal.throwIfAborted();
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    function abort() {
       window.clearTimeout(timer);
       reject(new DOMException("Upload canceled", "AbortError"));
-    }, { once: true });
+    }
+    signal.addEventListener("abort", abort, { once: true });
   });
 
 const uploadEndpoint = (uuid: string, operation: string) =>
@@ -185,6 +190,12 @@ export const useRemoteFileUpload = (
   const activeUploadsRef = useRef(0);
   const completedFilesRef = useRef(0);
   const abortControllersRef = useRef(new Map<string, AbortController>());
+  useEffect(() => {
+    const controllers = abortControllersRef.current;
+    return () => {
+      for (const controller of controllers.values()) controller.abort();
+    };
+  }, [uuid]);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
@@ -210,6 +221,8 @@ export const useRemoteFileUpload = (
       const targetPath = joinRemotePath(targetDirectory, name);
       const taskID = createUploadTaskID();
       const controller = new AbortController();
+      let signal = controller.signal;
+      let workspaceHeaders: Record<string, string> = {};
       abortControllersRef.current.set(taskID, controller);
       activeUploadsRef.current += 1;
       const fileCount = activeUploadsRef.current;
@@ -305,13 +318,13 @@ export const useRemoteFileUpload = (
       };
 
       const send = async (operation: string, init?: RequestInit) => {
-        const headers = new Headers(init?.headers);
-        if (operation === "init") await ensureWorkspace(uuid!);
+        const headers = new Headers(workspaceHeaders);
+        new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
         const response = await fetch(uploadEndpoint(uuid!, operation), {
           ...init,
           headers,
           credentials: "include",
-          signal: controller.signal,
+          signal,
         });
         const payload = await response.json().catch(() => null) as
           | { message?: string; data?: Record<string, unknown> }
@@ -329,7 +342,7 @@ export const useRemoteFileUpload = (
           let settled = false;
           const cleanup = () => {
             activeRequests.delete(xhr);
-            controller.signal.removeEventListener("abort", handleAbort);
+            signal.removeEventListener("abort", handleAbort);
           };
           const finish = (callback: () => void) => {
             if (settled) return;
@@ -341,7 +354,7 @@ export const useRemoteFileUpload = (
             xhr.abort();
           };
 
-          if (controller.signal.aborted) {
+          if (signal.aborted) {
             finish(() => reject(new DOMException("Upload canceled", "AbortError")));
             return;
           }
@@ -350,6 +363,7 @@ export const useRemoteFileUpload = (
           // matching binary transfer stream instead of embedding it in RPC JSON.
           xhr.open("POST", uploadChunkEndpoint(uuid!, uploadID, index), true);
           xhr.setRequestHeader("Content-Type", "application/octet-stream");
+          for (const [name, value] of Object.entries(workspaceHeaders)) xhr.setRequestHeader(name, value);
           xhr.responseType = "json";
           xhr.upload.addEventListener("progress", (event) => {
             if (event.lengthComputable) {
@@ -376,7 +390,7 @@ export const useRemoteFileUpload = (
           xhr.onerror = () => finish(() => reject(new Error("Upload failed (network error)")));
           xhr.ontimeout = () => finish(() => reject(new Error("Upload timed out")));
           xhr.onabort = () => finish(() => reject(new DOMException("Upload canceled", "AbortError")));
-          controller.signal.addEventListener("abort", handleAbort, { once: true });
+          signal.addEventListener("abort", handleAbort, { once: true });
           xhr.send(chunk);
         });
 
@@ -414,7 +428,7 @@ export const useRemoteFileUpload = (
             report(true);
             return;
           } catch (error) {
-            if (controller.signal.aborted) throw error;
+            if (signal.aborted) throw error;
             if (resizeRequested) {
               throw resizeError ?? new ChunkTooLargeError(chunkItem.size, error);
             }
@@ -448,7 +462,7 @@ export const useRemoteFileUpload = (
               }
               throw error;
             }
-            await sleep(delay, controller.signal);
+            await sleep(delay, signal);
             if (resizeRequested) {
               throw resizeError ?? new ChunkTooLargeError(chunkItem.size, "upload session is being resized");
             }
@@ -460,12 +474,20 @@ export const useRemoteFileUpload = (
       const cancelSession = async (sessionID: string) => {
         if (!sessionID) return;
         const cancelURL = `${uploadEndpoint(uuid!, "cancel")}&upload_id=${encodeURIComponent(sessionID)}`;
-        await fetch(cancelURL, { method: "POST", credentials: "include" }).catch(() => undefined);
+        await fetch(cancelURL, {
+          method: "POST",
+          credentials: "include",
+          headers: workspaceHeaders,
+          signal: AbortSignal.timeout(5_000),
+        }).catch(() => undefined);
       };
 
       try {
         report(true);
         progressTimer = window.setInterval(() => report(), PROGRESS_INTERVAL_MS);
+        const access = await workspaceAccess(uuid!, signal);
+        workspaceHeaders = access.headers;
+        signal = access.signal;
         let sessionComplete = false;
         while (!sessionComplete) {
           resizeRequested = false;
@@ -509,7 +531,7 @@ export const useRemoteFileUpload = (
             const workers = Array.from(
               { length: Math.min(CONCURRENT_CHUNKS, Math.max(0, chunkCount - 1)) },
               async () => {
-                while (nextIndex < chunkCount && !controller.signal.aborted && !resizeRequested) {
+                while (nextIndex < chunkCount && !signal.aborted && !resizeRequested) {
                   const index = nextIndex;
                   nextIndex += 1;
                   await uploadChunkWithRetry(index);
@@ -580,12 +602,9 @@ export const useRemoteFileUpload = (
         onCompleteRef.current(targetDirectory);
         return true;
       } catch (error) {
-        const canceled = controller.signal.aborted ||
+        const canceled = signal.aborted ||
           (error instanceof DOMException && error.name === "AbortError");
-        if (uploadID) {
-          const cancelURL = `${uploadEndpoint(uuid!, "cancel")}&upload_id=${encodeURIComponent(uploadID)}`;
-          await fetch(cancelURL, { method: "POST" }).catch(() => undefined);
-        }
+        await cancelSession(uploadID);
         if (canceled) {
           toast.info(t("file_manager.upload_canceled", "Upload canceled"));
           onCompleteRef.current(targetDirectory);

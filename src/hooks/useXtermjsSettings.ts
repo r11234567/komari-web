@@ -8,6 +8,7 @@ import {
   type TerminalSettings,
 } from "@komari/proto/komari/admin/v1/terminal_pb";
 import { connectClients, connectUnary } from "@/api/connect/client";
+import { credentialHeader } from "@/utils/credentialHeader";
 
 const DEFAULT_FONT_FAMILY = "'Cascadia Mono', 'Noto Sans SC', monospace";
 const DEFAULT_FONT_SIZE = 16;
@@ -410,16 +411,18 @@ export async function fetchXtermjsSettings(options?: {
   );
 }
 
+type TerminalSaveOptions = { signal?: AbortSignal; authorization?: string };
+
 export async function saveXtermjsSettings(
   settings: XtermjsSettings,
-  options?: { signal?: AbortSignal }
+  options?: TerminalSaveOptions
 ): Promise<XtermjsSettings> {
   const response = await connectUnary(
     { signal: requestSignal(options?.signal) },
     (signal, timeoutMs) =>
       connectClients.terminalSettings.setTerminalSettings(
         { settings: terminalSettingsFromDto(serializeXtermjsSettings(settings)) },
-        { signal, timeoutMs },
+        { signal, timeoutMs, headers: options?.authorization ? { [credentialHeader]: options.authorization } : undefined },
       ),
   );
   return deserializeXtermjsSettings(
@@ -590,7 +593,7 @@ export function useXtermjsSettings() {
   );
 
   const saveSettings = useCallback(
-    async (valueOrUpdater: SetStateAction<XtermjsSettings>): Promise<XtermjsSettings> => {
+    async (valueOrUpdater: SetStateAction<XtermjsSettings>, options?: TerminalSaveOptions): Promise<XtermjsSettings> => {
       const baseSettings =
         pendingSettingsRef.current ?? confirmedSettingsRef.current;
       const nextSettings =
@@ -606,8 +609,8 @@ export function useXtermjsSettings() {
 
       return startQueuedTask(async () => {
         try {
-          await saveXtermjsSettings(sanitizedNext);
-          const confirmed = await fetchXtermjsSettings();
+          await saveXtermjsSettings(sanitizedNext, options);
+          const confirmed = await fetchXtermjsSettings(options);
 
           if (latestRevisionRef.current === revision) {
             confirmedSettingsRef.current = confirmed;
@@ -633,8 +636,8 @@ export function useXtermjsSettings() {
     [startQueuedTask]
   );
 
-  const resetSettings = useCallback(() => {
-    return saveSettings(createDefaultXtermjsSettings());
+  const resetSettings = useCallback((options?: TerminalSaveOptions) => {
+    return saveSettings(createDefaultXtermjsSettings(), options);
   }, [saveSettings]);
 
   useEffect(() => {

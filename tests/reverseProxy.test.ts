@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { startCloudflared, stopCloudflared, removeCloudflaredToken } from "../src/lib/cloudflared.ts";
 
 import {
   buildHTTPFallbackURL,
@@ -16,6 +17,23 @@ test("reverse proxy separates built-in HTTPS and Cloudflare Tunnel", () => {
   assert.match(page, /<Tabs\.Trigger value="cloudflare"/);
   assert.match(page, /<HTTPSPanel \/>/);
   assert.match(page, /<CloudflareTunnelPanel \/>/);
+});
+
+test("Cloudflare Tunnel mutations forward the proof and cancellation signal", async (t) => {
+  const signal = new AbortController().signal;
+  const options = { authorization: "scoped-fixture", signal };
+  const paths: string[] = [];
+  t.mock.method(globalThis, "fetch", async (input: string, init: RequestInit) => {
+    paths.push(input);
+    assert.equal(init.method, "POST");
+    assert.equal(init.signal, signal);
+    assert.equal(new Headers(init.headers).get("X-Komari-Credential-Authorization"), options.authorization);
+    return Response.json({ status: "success", data: { running: false } });
+  });
+  await startCloudflared("fixture-tunnel-token", options);
+  await stopCloudflared("fixture-password", "", options);
+  await removeCloudflaredToken(options);
+  assert.deepEqual(paths, ["start", "stop", "remove-token"].map(operation => `/api/admin/settings/cloudflared/${operation}`));
 });
 
 test("orange-cloud Agent setting has a deployment guide and every admin language", () => {

@@ -23,20 +23,23 @@ import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 import { useSensitiveSetting } from "@/hooks/useSensitiveSetting";
 
 type TemporaryShare = { token: string; expires_at: number };
+const temporarySharePath = "/api/admin/settings/temporary-share";
 
 async function requestTemporaryShare(
   method: "GET" | "POST" | "DELETE",
   hours?: number,
   signal?: AbortSignal,
+  token?: string,
 ): Promise<TemporaryShare> {
-  const response = await fetch("/api/admin/settings/temporary-share", {
+  const headers = new Headers();
+  if (token) headers.set(credentialHeader, token);
+  if (method === "POST") headers.set("Content-Type", "application/json");
+  const response = await fetch(method === "GET" && token ? temporarySharePath + "?reveal=true" : temporarySharePath, {
     method,
     credentials: "same-origin",
     signal,
-    ...(method === "POST" && {
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hours }),
-    }),
+    headers,
+    body: method === "POST" ? JSON.stringify({ hours }) : undefined,
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.message || `HTTP ${response.status}`);
@@ -50,6 +53,7 @@ export default function SiteSettings() {
   const [shareHours, setShareHours] = useState(1);
   const [share, setShare] = useState<TemporaryShare>();
   const [shareBusy, setShareBusy] = useState(true);
+  const [sensitiveAction, setSensitiveAction] = useState<SensitiveAction | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void requestTemporaryShare("GET", undefined, controller.signal)
@@ -65,23 +69,25 @@ export default function SiteSettings() {
   const shareLink = canShare && share?.token
     ? `${publicShareOrigin}/share?temp_key=${encodeURIComponent(share.token)}`
     : "";
-  const updateShare = async (method: "POST" | "DELETE") => {
-    setShareBusy(true);
-    try {
-      setShare(await requestTemporaryShare(method, shareHours));
-      toast.success(t("settings.settings_saved"));
-    } catch (error) {
-      toast.error(t("settings.settings_save_failed") + ": " + error);
-    } finally {
-      setShareBusy(false);
-    }
+  const updateShare = (method: "GET" | "POST" | "DELETE", title: string) => {
+    setSensitiveAction({
+      action: "temporary-share",
+      targets: [],
+      resource: restCredentialResource(method, temporarySharePath),
+      title,
+      execute: async (token, signal) => {
+        const result = await requestTemporaryShare(method, shareHours, signal, token);
+        if (signal.aborted) return;
+        setShare(result);
+        if (method !== "GET") toast.success(t("settings.settings_saved"));
+      },
+    });
   };
 
   // 恢复备份对话框与上传状态
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreProgress, setRestoreProgress] = useState(0);
-  const [sensitiveAction, setSensitiveAction] = useState<SensitiveAction | null>(null);
   const restoreTaskRef = useRef<ChunkUploadTask | null>(null);
   useEffect(() => () => restoreTaskRef.current?.cancel(), []);
   const startBackupDownload = () => {
@@ -222,10 +228,8 @@ export default function SiteSettings() {
       <SettingCardSwitch
         title={t("settings.site.private_site")}
         description={t("settings.site.private_site_description")}
-        defaultChecked={settings.private_site}
-        onChange={async (checked) => {
-          await updateSettingsWithToast({ private_site: checked }, t);
-        }}
+        checked={settings.private_site ?? false}
+        onChange={(checked) => sensitiveSetting.save("private_site", checked, t("settings.site.private_site"))}
         className="km-setting-card"
       />
       <SettingCardSwitch
@@ -262,6 +266,11 @@ export default function SiteSettings() {
             disabled
             bordless
           >
+            {canShare && Boolean(share?.expires_at) && !shareLink && (
+              <Button variant="soft" onClick={() => updateShare("GET", t("settings.site.temporary_share_current_link"))}>
+                {t("settings.site.temporary_share_current_link")}
+              </Button>
+            )}
             <Button
               disabled={!shareLink}
               onClick={async () => {
@@ -292,15 +301,15 @@ export default function SiteSettings() {
           <div className="flex flex-row w-full gap-2">
             <Button
               disabled={shareBusy || !canShare || shareHours < 1 || shareHours > 720}
-              onClick={() => void updateShare("POST")}
+              onClick={() => updateShare("POST", t("settings.site.temporary_share"))}
             >
               {t("common.generate")}
             </Button>
             <Button
               color="red"
               variant="soft"
-              disabled={shareBusy || !share?.token}
-              onClick={() => void updateShare("DELETE")}
+              disabled={shareBusy || !share?.expires_at}
+              onClick={() => updateShare("DELETE", t("settings.site.temporary_share_revoke"))}
             >
               {t("settings.site.temporary_share_revoke")}
             </Button>

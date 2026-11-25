@@ -46,11 +46,9 @@ const NavBar = () => {
         <ThemeSwitch />
         <ColorSwitch />
         <LanguageSwitch />
-        {publicInfo?.private_site && !document.cookie.includes("temp_key") ? (
+        {publicInfo?.private_site ? (
           <LoginDialog
-            autoOpen={
-              publicInfo?.private_site && !document.cookie.includes("temp_key")
-            }
+            autoOpen
             info={t("common.private_site")}
             onLoginSuccess={() => {
               window.location.assign("/admin/dashboard");

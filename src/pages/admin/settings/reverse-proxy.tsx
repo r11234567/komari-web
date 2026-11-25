@@ -588,6 +588,7 @@ function CloudflareTunnelPanel() {
   const [stopDialogOpen, setStopDialogOpen] = React.useState(false);
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [confirmText, setConfirmText] = React.useState("");
+  const [sensitiveAction, setSensitiveAction] = React.useState<SensitiveAction | null>(null);
 
   const refreshStatus = React.useCallback(async (silent = false) => {
     if (!silent) {
@@ -652,6 +653,20 @@ function CloudflareTunnelPanel() {
       setSubmitting(false);
     }
   };
+
+  const verifyTunnelChange = (
+    operation: "start" | "stop" | "remove-token",
+    title: string,
+    success: string,
+    task: (options: { authorization: string; signal: AbortSignal }) => Promise<CloudflaredStatus>,
+  ) => setSensitiveAction({
+    action: `cloudflared:${operation}`,
+    targets: [],
+    title,
+    execute: async (authorization, signal) => {
+      await withSubmit(() => task({ authorization, signal }), success);
+    },
+  });
 
   if (settingsLoading || loading) {
     return <SettingsPageSkeleton />;
@@ -804,12 +819,14 @@ function CloudflareTunnelPanel() {
                 disabled={submitting || !canStart}
                 className="w-full sm:w-auto"
                 onClick={() =>
-                  void withSubmit(
-                    () => startCloudflared(token.trim()),
+                  verifyTunnelChange(
+                    "start",
+                    t("settings.reverse_proxy.start_cloudflared", "Start cloudflared"),
                     t(
                       "settings.reverse_proxy.start_success",
                       "cloudflared started"
-                    )
+                    ),
+                    (options) => startCloudflared(token.trim(), options),
                   )
                 }
               >
@@ -851,12 +868,14 @@ function CloudflareTunnelPanel() {
                 disabled={submitting}
                 className="w-full sm:w-auto"
                 onClick={() =>
-                  void withSubmit(
-                    () => removeCloudflaredToken(),
+                  verifyTunnelChange(
+                    "remove-token",
+                    t("settings.reverse_proxy.remove_token", "Remove the stored token"),
                     t(
                       "settings.reverse_proxy.remove_token_success",
                       "Cloudflare Tunnel token removed"
-                    )
+                    ),
+                    removeCloudflaredToken,
                   )
                 }
               >
@@ -1001,13 +1020,15 @@ function CloudflareTunnelPanel() {
             <Button
               color="red"
               disabled={submitting || !stopConfirmSatisfied}
-              onClick={async () => {
-                await withSubmit(
-                  () => stopCloudflared(currentPassword, confirmText),
+              onClick={() => {
+                verifyTunnelChange(
+                  "stop",
+                  t("settings.reverse_proxy.stop_cloudflared", "Stop cloudflared"),
                   t(
                     "settings.reverse_proxy.stop_success",
                     "cloudflared stopped"
-                  )
+                  ),
+                  (options) => stopCloudflared(currentPassword, confirmText, options),
                 );
                 setCurrentPassword("");
                 setConfirmText("");
@@ -1022,6 +1043,7 @@ function CloudflareTunnelPanel() {
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
+      <SensitiveActionDialog request={sensitiveAction} onClose={() => setSensitiveAction(null)} />
     </Flex>
   );
 }

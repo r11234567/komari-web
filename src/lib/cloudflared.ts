@@ -1,3 +1,7 @@
+import { credentialHeader } from "../utils/credentialHeader.ts";
+
+type CloudflaredAuthorization = { authorization: string; signal: AbortSignal };
+
 export interface CloudflaredStatus {
   installed: boolean;
   running: boolean;
@@ -26,11 +30,14 @@ export async function getCloudflaredStatus(): Promise<CloudflaredStatus> {
 }
 
 export async function startCloudflared(
-  token: string
+  token: string,
+  { authorization, signal }: CloudflaredAuthorization,
 ): Promise<CloudflaredStatus> {
   const response = await fetch("/api/admin/settings/cloudflared/start", {
     method: "POST",
+    signal,
     headers: {
+      [credentialHeader]: authorization,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ token }),
@@ -40,11 +47,14 @@ export async function startCloudflared(
 
 export async function stopCloudflared(
   currentPassword: string,
-  confirmText: string
+  confirmText: string,
+  { authorization, signal }: CloudflaredAuthorization,
 ): Promise<CloudflaredStatus> {
   const response = await fetch("/api/admin/settings/cloudflared/stop", {
     method: "POST",
+    signal,
     headers: {
+      [credentialHeader]: authorization,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -55,12 +65,11 @@ export async function stopCloudflared(
   return parseResponse<CloudflaredStatus>(response);
 }
 
-export async function removeCloudflaredToken(): Promise<CloudflaredStatus> {
+export async function removeCloudflaredToken({ authorization, signal }: CloudflaredAuthorization): Promise<CloudflaredStatus> {
   const response = await fetch("/api/admin/settings/cloudflared/remove-token", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    signal,
+    headers: { [credentialHeader]: authorization },
   });
   return parseResponse<CloudflaredStatus>(response);
 }

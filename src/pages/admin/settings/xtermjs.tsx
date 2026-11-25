@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 import Loading from "@/components/loading";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import {
   SettingCardButton,
   SettingCardLabel,
@@ -23,6 +24,7 @@ export default function XtermjsSettingsPage() {
   const { t } = useTranslation();
   const { settings, loading, error, saving, setSettings, resetSettings, refetch } =
     useXtermjsSettings();
+  const [sensitiveAction, setSensitiveAction] = React.useState<SensitiveAction | null>(null);
 
   const showSaveError = React.useCallback(
     (error: unknown) => {
@@ -69,9 +71,21 @@ export default function XtermjsSettingsPage() {
   );
 
   const handleReset = React.useCallback(async () => {
+    if (settings.customCss) {
+      setSensitiveAction({
+        action: "terminal:custom-css",
+        targets: [""],
+        title: t("settings.xtermjs.reset_defaults"),
+        execute: async (authorization, signal) => {
+          await resetSettings({ authorization, signal });
+          toast.success(t("settings.settings_saved"));
+        },
+      });
+      return;
+    }
     await commitSettings(resetSettings());
     toast.success(t("settings.settings_saved"));
-  }, [commitSettings, resetSettings, t]);
+  }, [commitSettings, resetSettings, settings.customCss, t]);
 
   const handleThemeJsonSave = React.useCallback(
     async (value: string) => {
@@ -107,16 +121,19 @@ export default function XtermjsSettingsPage() {
   );
 
   const handleCustomCssSave = React.useCallback(
-    async (value: string) => {
-      await commitSettings(
-        setSettings((current) => ({
-          ...current,
-          customCss: value,
-        }))
-      );
-      toast.success(t("settings.settings_saved"));
+    (value: string) => {
+      if (settings.customCss === value) return;
+      setSensitiveAction({
+        action: "terminal:custom-css",
+        targets: [value],
+        title: t("settings.xtermjs.custom_css"),
+        execute: async (authorization, signal) => {
+          await setSettings((current) => ({ ...current, customCss: value }), { authorization, signal });
+          toast.success(t("settings.settings_saved"));
+        },
+      });
     },
-    [commitSettings, setSettings, t]
+    [settings.customCss, setSettings, t]
   );
 
   const handleRetry = React.useCallback(async () => {
@@ -152,6 +169,7 @@ export default function XtermjsSettingsPage() {
 
   return (
     <Flex direction="column" gap="3">
+      <SensitiveActionDialog request={sensitiveAction} onClose={() => setSensitiveAction(null)} />
       <SettingCardLabel>{t("settings.xtermjs.title")}</SettingCardLabel>
       <SettingCardButton
         title={t("settings.xtermjs.title")}
