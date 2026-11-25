@@ -35,7 +35,7 @@ test("copyable commands pin the installer and verify it before execution", () =>
   const windows = agentInstallCommand("windows", endpoint);
   for (const command of [linux, macos, windows]) {
     assert.match(command, /komari-agent\/[a-f0-9]{40}\/install\.(?:sh|ps1)/);
-    assert.match(command, /--install-version '[A-Za-z0-9_.-]+'/);
+    assert.doesNotMatch(command, /--install-version|Snapshot-/);
   }
   assert.match(linux, /sha256sum -c - && sudo bash/);
   assert.match(macos, /shasum -a 256 -c - && sudo bash/);

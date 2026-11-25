@@ -2,10 +2,9 @@ import { quotePowerShellArg, quoteShellArg } from "./shellQuote.ts";
 
 export type InstallPlatform = "linux" | "macos" | "windows";
 
-const installerRevision = "ee35277e63560af22e08a6b0b4254dc3e6c8302a";
-const unixInstallerSHA256 = "538e9caf04d7276666cc2811e82e670e04ffa7d70ca94f84fe67c55d982209f6";
-const windowsInstallerSHA256 = "9df1e67e5613064046d9fdbe898c74fa87b66aafdb238e9512b205d04fa7dcb4";
-const agentVersion = "Snapshot-2611250731";
+const installerRevision = "84604a6271d2f35620ebf542b5fa59ce9c1600b5";
+const unixInstallerSHA256 = "4378e1221200eddd6722775957e71a7eb4c34be9eaca8155f9802eb868d7e2a0";
+const windowsInstallerSHA256 = "e4e6426209d264929c36723adc12aeb5cfb57592e2392047ade1f93dcb5ec808";
 
 export function agentInstallEndpoint(configured: string, currentOrigin: string): string | null {
   const value = configured.trim() || currentOrigin;
@@ -26,7 +25,7 @@ export function agentInstallCommand(platform: InstallPlatform, endpoint: string)
     const install = [
       `Invoke-WebRequest -UseBasicParsing -ErrorAction Stop -Uri '${base}/install.ps1' -OutFile $installer.FullName`,
       `if ((Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash -ne '${windowsInstallerSHA256}') { throw 'Installer SHA-256 mismatch' }`,
-      `& ([scriptblock]::Create((Get-Content -LiteralPath $installer.FullName -Raw))) --install-version '${agentVersion}' -e ${quotePowerShellArg(endpoint)}`,
+      `& ([scriptblock]::Create((Get-Content -LiteralPath $installer.FullName -Raw))) -e ${quotePowerShellArg(endpoint)}`,
     ].join("; ");
     return `$installer = New-TemporaryFile; try { ${install} } finally { Remove-Item -LiteralPath $installer.FullName -Force }`;
   }
@@ -35,6 +34,6 @@ export function agentInstallCommand(platform: InstallPlatform, endpoint: string)
     "( installer=$(mktemp) && trap 'rm -f -- \"$installer\"' EXIT",
     `curl -fsSL '${base}/install.sh' -o "$installer"`,
     `printf '%s  %s\\n' '${unixInstallerSHA256}' "$installer" | ${checksumCommand} -c -`,
-    `sudo bash "$installer" --install-version '${agentVersion}' -e ${quoteShellArg(endpoint)} )`,
+    `sudo bash "$installer" -e ${quoteShellArg(endpoint)} )`,
   ].join(" && ");
 }
