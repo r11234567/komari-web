@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { agentInstallCommand, agentInstallEndpoint, type InstallPlatform } from "@/utils/agentInstallCommand";
 import { billingRequest, expiryEditPayload, resetBillingCache, type BillingPolicy } from "@/utils/billing";
 import { TrafficSettingsDialog } from "@/components/admin/TrafficSettingsDialog";
 import TrafficUsageSummary from "@/components/TrafficUsageSummary";
@@ -168,31 +169,13 @@ const EmptyNodesGuide = () => {
 
 const AgentInstallScripts = ({ settings }: { settings: any }) => {
   const { t } = useTranslation();
-  const [platform, setPlatform] = useState<"linux" | "macos" | "windows">("linux");
-
-  const endpoint = React.useMemo(() => {
-    if (!settings?.script_domain) {
-      return typeof window !== "undefined" ? window.location.origin : "https://panel.example.com";
-    }
-    const domain = String(settings.script_domain).trim();
-    if (domain.startsWith("http://") || domain.startsWith("https://")) {
-      return domain.replace(/\/+$/, "");
-    }
-    return `http://${domain.replace(/\/+$/, "")}`;
-  }, [settings?.script_domain]);
-
-  const command = React.useMemo(() => {
-    switch (platform) {
-      case "linux":
-        return `curl -fsSL 'https://raw.githubusercontent.com/r11234567/komari-agent/main/install.sh' | sudo bash -s -- -e "${endpoint}"`;
-      case "macos":
-        return `curl -fsSL 'https://raw.githubusercontent.com/r11234567/komari-agent/main/install.sh' | sudo bash -s -- -e "${endpoint}"`;
-      case "windows":
-        return `$script = irm 'https://raw.githubusercontent.com/r11234567/komari-agent/main/install.ps1'; & ([scriptblock]::Create($script)) -e "${endpoint}"`;
-    }
-  }, [platform, endpoint]);
+  const [platform, setPlatform] = useState<InstallPlatform>("linux");
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const endpoint = agentInstallEndpoint(String(settings?.script_domain || ""), origin);
+  const command = endpoint ? agentInstallCommand(platform, endpoint) : null;
 
   const copyToClipboard = async () => {
+    if (!command) return;
     try {
       await navigator.clipboard.writeText(command);
       toast.success(t("copy_success", "已复制到剪贴板"));
@@ -209,7 +192,7 @@ const AgentInstallScripts = ({ settings }: { settings: any }) => {
 
       <SegmentedControl.Root
         value={platform}
-        onValueChange={(val) => setPlatform(val as "linux" | "macos" | "windows")}
+        onValueChange={(val) => setPlatform(val as InstallPlatform)}
       >
         <SegmentedControl.Item value="linux">Linux</SegmentedControl.Item>
         <SegmentedControl.Item value="macos">macOS</SegmentedControl.Item>
@@ -232,11 +215,11 @@ const AgentInstallScripts = ({ settings }: { settings: any }) => {
             lineHeight: 1.5,
           }}
         >
-          {command}
+          {command ?? t("settings.site.install_address_invalid")}
         </div>
       </Flex>
 
-      <Button variant="solid" onClick={() => void copyToClipboard()}>
+      <Button variant="solid" disabled={!command} onClick={() => void copyToClipboard()}>
         <Copy size={16} />
         {t("common.copy", "复制安装命令")}
       </Button>

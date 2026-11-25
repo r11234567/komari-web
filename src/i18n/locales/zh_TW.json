@@ -1307,6 +1307,7 @@
       "origins_list_description": "每行或用逗號分隔一個 Origin，例如 https://example.com",
       "private_site": "私有站點",
       "private_site_description": "將站點設定為私有，開啟後資料都需要登陸後才能獲取。",
+      "install_address_invalid": "請在網站設定中填寫有效的 HTTPS Agent 連線位址。",
       "script_domain": "Agent 連線地址",
       "ssrf_protection_enabled": "啟用 SSRF 防護",
       "ssrf_protection_enabled_description": "開啟後，主題與外掛市集下載、主題遠端匯入及更新會封鎖內網、本機與其他非公網位址，包括重新導向目標。關閉後略過位址檢查。",
