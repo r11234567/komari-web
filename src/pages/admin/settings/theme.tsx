@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import ThemeOriginNotice from "@/components/admin/ThemeOriginNotice";
 import {
   Text,
   Card,
@@ -415,29 +416,7 @@ const ThemePage = () => {
         </Flex>
       </Flex>
 
-      <Callout.Root
-        color={isSplitPanelMode(settings) ? "green" : "amber"}
-        size="1"
-      >
-        <Callout.Text>
-          {isSplitPanelMode(settings)
-            ? t(
-                "theme.split_origin_notice",
-                "Split Panel listener (KOMARI_PANEL_LISTEN) is active: third-party themes run exclusively on the public status origin and cannot access management cookies, Passkeys, or control-plane endpoints.",
-              )
-            : <>
-                {t("theme.shared_origin_notice")}{" "}
-                <a
-                  href="https://github.com/r11234567/komari/blob/main/docs/security/public-theme-origin.md"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  {t("common.documentation")}
-                </a>
-              </>}
-        </Callout.Text>
-      </Callout.Root>
+      <ThemeOriginNotice split={isSplitPanelMode(settings)} />
 
       {/* 主题卡片网格 */}
       {themes.length === 0 ? (

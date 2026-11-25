@@ -223,6 +223,12 @@ test("P3A: Admin UI loads theme manifests and previews via /api/admin/theme, iso
   assert.doesNotMatch(rawSource, /allow-same-origin/);
 
   const themeSettingsSource = readFileSync(new URL("../src/pages/admin/settings/theme.tsx", import.meta.url), "utf8");
+  const themeMarketSource = readFileSync(new URL("../src/pages/admin/market/themes.tsx", import.meta.url), "utf8");
+  const originNotice = readFileSync(new URL("../src/components/admin/ThemeOriginNotice.tsx", import.meta.url), "utf8");
   assert.match(themeSettingsSource, /isSplitPanelMode/);
-  assert.match(themeSettingsSource, /KOMARI_PANEL_LISTEN/);
+  assert.match(themeSettingsSource, /<ThemeOriginNotice split=\{isSplitPanelMode/);
+  assert.match(themeMarketSource, /<ThemeOriginNotice split=\{split\}/);
+  assert.match(themeMarketSource, /disabled=\{!canActivate\(theme\)/);
+  assert.match(themeMarketSource, /disabled=\{!canActivate\(selectedTheme\)/);
+  assert.match(originNotice, /KOMARI_PANEL_LISTEN/);
 });

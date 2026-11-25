@@ -136,7 +136,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
         signal: access.signal,
         credentials: "include",
         cache: "no-store",
-        headers: { Accept: "application/octet-stream" },
+        headers: { ...access.headers, Accept: "application/octet-stream" },
       });
       if (!response.ok) {
         throw new Error(await readHTTPError(response));

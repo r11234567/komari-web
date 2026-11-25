@@ -1,8 +1,10 @@
 import Loading from "@/components/loading";
+import ThemeOriginNotice from "@/components/admin/ThemeOriginNotice";
 import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { useSettings } from "@/lib/api";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
+import { isSplitPanelMode } from "@/utils/themeConfiguration";
 import {
   Badge,
   Box,
@@ -127,6 +129,8 @@ export default function ThemeMarketPage() {
   const { refresh: refreshPublicInfo } = usePublicInfo();
   const { refreshNavigation } = useAdminNavigation();
   const currentTheme = settings?.theme;
+  const split = isSplitPanelMode(settings);
+  const canActivate = (theme: MarketTheme) => theme.short === "default" || split;
   const language = i18n.resolvedLanguage || i18n.language;
   const displayText = useCallback(
     (value: I18nText) => resolveI18nText(value, language) || "",
@@ -205,6 +209,7 @@ export default function ThemeMarketPage() {
   };
 
   const setActiveTheme = async (theme: MarketTheme) => {
+    if (!canActivate(theme)) return;
     setSettingTheme(theme.short);
     try {
       await request(`/api/admin/theme/set?theme=${encodeURIComponent(theme.short)}`, {
@@ -335,6 +340,8 @@ export default function ThemeMarketPage() {
         </Flex>
       </Flex>
 
+      <ThemeOriginNotice split={split} />
+
       {sourceStatuses.filter((source) => source.error).map((source) => (
         <Callout.Root key={source.id} color="red" size="1">
           <Callout.Icon><AlertTriangle size={16} /></Callout.Icon>
@@ -429,7 +436,7 @@ export default function ThemeMarketPage() {
                         </Button>
                       )}
                       {isInstalled && !isActive && (
-                        <Button size="1" variant="soft" onClick={() => setActiveTheme(theme)} disabled={settingTheme === theme.short}>
+                        <Button size="1" variant="soft" onClick={() => setActiveTheme(theme)} disabled={!canActivate(theme) || settingTheme === theme.short}>
                           <Settings2 size={14} />{t("theme.set_active", "Set theme")}
                         </Button>
                       )}
@@ -493,7 +500,7 @@ export default function ThemeMarketPage() {
                     </Button>
                   )}
                   {isInstalled && !isActive && (
-                    <Button variant="soft" onClick={() => setActiveTheme(selectedTheme)} disabled={settingTheme === selectedTheme.short}>
+                    <Button variant="soft" onClick={() => setActiveTheme(selectedTheme)} disabled={!canActivate(selectedTheme) || settingTheme === selectedTheme.short}>
                       <Settings2 size={15} />{t("theme.set_active", "Set theme")}
                     </Button>
                   )}
