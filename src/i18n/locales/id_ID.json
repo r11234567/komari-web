@@ -1307,6 +1307,7 @@
       "origins_list_description": "Satu origin per baris atau dipisahkan koma, misalnya https://example.com",
       "private_site": "Situs Privat",
       "private_site_description": "Jadikan situs privat. Setelah diaktifkan, data hanya dapat diakses setelah login.",
+      "install_address_invalid": "Atur alamat koneksi Agent HTTPS yang valid di Pengaturan Situs.",
       "script_domain": "Alamat koneksi Agen",
       "ssrf_protection_enabled": "Aktifkan perlindungan SSRF",
       "ssrf_protection_enabled_description": "Blokir alamat privat, lokal, dan nonpublik lainnya untuk unduhan pasar tema dan plugin, impor tema jarak jauh, serta pembaruan, termasuk tujuan pengalihan. Menonaktifkannya melewati pemeriksaan alamat.",

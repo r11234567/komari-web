@@ -1387,6 +1387,7 @@
       "ssrf_protection_enabled": "Enable SSRF protection",
       "ssrf_protection_enabled_description": "Block private, local and other non-public destinations for theme and plugin market downloads, remote theme imports and updates, including redirect targets. Turning this off skips address checks.",
       "rate_limit_enabled_description": "Limit request frequency per agent, account and visitor address, rejecting excess requests with HTTP 429. Coalescing of expensive historical reads is always active and is not affected by this switch.",
+      "install_address_invalid": "Set a valid HTTPS Agent connection address in Site Settings.",
       "script_domain": "Agent connection address",
       "script_domain_description": "Define the connection address for the installation script panel, convenient for users with multiple domains, and will not affect access to other domains. Leave empty to use the current domain.",
       "send_ip_addr_to_guest": "Show partial IP address to guests",

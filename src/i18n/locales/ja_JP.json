@@ -1307,6 +1307,7 @@
       "origins_list_description": "1 行に 1 つ、またはカンマ区切りで Origin を指定してください。例：https://example.com",
       "private_site": "プライベートサイト",
       "private_site_description": "サイトをプライベートに設定し、オンにするとデータはログイン後にのみ取得できます。",
+      "install_address_invalid": "サイト設定で有効な HTTPS の Agent 接続先を設定してください。",
       "script_domain": "エージェント接続アドレス",
       "ssrf_protection_enabled": "SSRF 保護を有効化",
       "ssrf_protection_enabled_description": "テーマとプラグインのマーケットからのダウンロード、テーマのリモートインポートと更新で、リダイレクト先を含む非公開アドレスやローカルアドレスへの接続を拒否します。無効にするとアドレス検証を省略します。",
