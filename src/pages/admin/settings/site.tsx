@@ -20,6 +20,7 @@ import { credentialHeader } from "@/api/connect/trustedCredential";
 import { restCredentialResource } from "@/utils/credentialAction";
 import { resolvePublicSiteOrigin } from "@/utils/themeConfiguration";
 import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
+import { useSensitiveSetting } from "@/hooks/useSensitiveSetting";
 
 type TemporaryShare = { token: string; expires_at: number };
 
@@ -45,6 +46,7 @@ async function requestTemporaryShare(
 export default function SiteSettings() {
   const { t } = useTranslation();
   const { settings, loading, error } = useSettings();
+  const sensitiveSetting = useSensitiveSetting();
   const [shareHours, setShareHours] = useState(1);
   const [share, setShare] = useState<TemporaryShare>();
   const [shareBusy, setShareBusy] = useState(true);
@@ -170,10 +172,8 @@ export default function SiteSettings() {
       <SettingCardSwitch
         title={t("settings.site.cors_origin_check_enabled")}
         description={t("settings.site.cors_origin_check_enabled_description")}
-        defaultChecked={settings.cors_origin_check_enabled ?? true}
-        onChange={async (checked) => {
-          await updateSettingsWithToast({ cors_origin_check_enabled: checked }, t);
-        }}
+        checked={settings.cors_origin_check_enabled ?? true}
+        onChange={(checked) => sensitiveSetting.save("cors_origin_check_enabled", checked, t("settings.site.cors_origin_check_enabled"))}
         className="km-page-admin-settings-site km-setting-card"
       />
       <SettingCardLongTextInput
@@ -182,9 +182,7 @@ export default function SiteSettings() {
           "每行或用逗号分隔一个 Origin，例如 https://example.com",
         )}
         defaultValue={settings.cors_allowed_origins || ""}
-        OnSave={async (data) => {
-          await updateSettingsWithToast({ cors_allowed_origins: data }, t);
-        }}
+        OnSave={(data) => sensitiveSetting.save("cors_allowed_origins", data, t("settings.site.cors_allowed_origins"))}
       />
       <SettingCardSwitch
         title={t("settings.site.ws_origin_check_enabled", "WebSocket Origin 校验")}
@@ -192,13 +190,8 @@ export default function SiteSettings() {
           "settings.site.ws_origin_check_enabled_description",
           "开启后 WebSocket 请求只允许同源或允许列表中的 Origin",
         )}
-        defaultChecked={settings.ws_origin_check_enabled ?? true}
-        onChange={async (checked) => {
-          await updateSettingsWithToast(
-            { ws_origin_check_enabled: checked },
-            t,
-          );
-        }}
+        checked={settings.ws_origin_check_enabled ?? true}
+        onChange={(checked) => sensitiveSetting.save("ws_origin_check_enabled", checked, t("settings.site.ws_origin_check_enabled"))}
         className="km-setting-card"
       />
       <SettingCardLongTextInput
@@ -207,9 +200,7 @@ export default function SiteSettings() {
           "每行或用逗号分隔一个 Origin，例如 https://example.com",
         )}
         defaultValue={settings.ws_allowed_origins || ""}
-        OnSave={async (data) => {
-          await updateSettingsWithToast({ ws_allowed_origins: data }, t);
-        }}
+        OnSave={(data) => sensitiveSetting.save("ws_allowed_origins", data, t("settings.site.ws_allowed_origins"))}
       />
       <SettingCardSwitch
         title={t("settings.site.send_ip_addr_to_guest")}
@@ -225,9 +216,7 @@ export default function SiteSettings() {
         description={t("settings.site.script_domain_description")}
         placeholder={`${window.location.origin}`}
         defaultValue={settings.script_domain || ""}
-        OnSave={async (data) => {
-          await updateSettingsWithToast({ script_domain: data }, t);
-        }}
+        OnSave={(data) => sensitiveSetting.save("script_domain", data, t("settings.site.script_domain"))}
       />
       <SettingCardLabel>{t("settings.site.private_site")}</SettingCardLabel>
       <SettingCardSwitch
@@ -254,10 +243,8 @@ export default function SiteSettings() {
       <SettingCardSwitch
         title={t("settings.site.ssrf_protection_enabled")}
         description={t("settings.site.ssrf_protection_enabled_description")}
-        defaultChecked={settings.ssrf_protection_enabled ?? true}
-        onChange={async (checked) => {
-          await updateSettingsWithToast({ ssrf_protection_enabled: checked }, t);
-        }}
+        checked={settings.ssrf_protection_enabled ?? true}
+        onChange={(checked) => sensitiveSetting.save("ssrf_protection_enabled", checked, t("settings.site.ssrf_protection_enabled"))}
         className="km-setting-card"
       />
       <SettingCardCollapse
@@ -328,9 +315,7 @@ export default function SiteSettings() {
         title={t("settings.custom.header")}
         description={t("settings.custom.header_description")}
         defaultValue={settings.custom_head || ""}
-        OnSave={async (data) => {
-          await updateSettingsWithToast({ custom_head: data }, t);
-        }}
+        OnSave={(data) => sensitiveSetting.save("custom_head", data, t("settings.custom.header"))}
       />
       <SettingCardLongTextInput
         title={t("settings.custom.body", "自定义 Body")}
@@ -339,9 +324,7 @@ export default function SiteSettings() {
           "在页面底部添加自定义内容",
         )}
         defaultValue={settings.custom_body || ""}
-        OnSave={async (data) => {
-          await updateSettingsWithToast({ custom_body: data }, t);
-        }}
+        OnSave={(data) => sensitiveSetting.save("custom_body", data, t("settings.custom.body"))}
       />
       <SettingCardCollapse
         title={t("settings.custom.favicon", "自定义 Favicon")}
@@ -507,6 +490,7 @@ export default function SiteSettings() {
         closeLabel={t("common.cancel")}
       />
       <SensitiveActionDialog request={sensitiveAction} onClose={() => setSensitiveAction(null)} />
+      <SensitiveActionDialog request={sensitiveSetting.request} onClose={sensitiveSetting.close} />
     </>
   );
 }

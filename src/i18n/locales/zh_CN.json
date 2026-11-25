@@ -1810,6 +1810,7 @@
     "copy_unconfirmed": "已尝试复制，但浏览器无法确认系统剪贴板内容，请粘贴检查。"
   },
   "theme": {
+    "shared_origin_notice": "当前监听器提供内置主题。要使用已安装的主题，请配置独立的公开域名。",
     "active": "当前使用",
     "author": "作者",
     "confirm_delete": "确认删除主题",

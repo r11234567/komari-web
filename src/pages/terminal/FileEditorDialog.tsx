@@ -42,6 +42,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -68,6 +70,7 @@ import RemoteFileTree from "./RemoteFileTree";
 import ConfirmDialog from "./ConfirmDialog";
 import { normalizeRemotePath } from "./fileManagerApi";
 import { useRemoteFileUpload } from "./useRemoteFileUpload";
+const PDFPreview = lazy(() => import("./PDFPreview"));
 import type { ContextMenuPosition } from "./terminalTypes";
 import {
   decodeRemoteTextBytes,
@@ -1795,7 +1798,9 @@ const FileEditorDialog = ({
                   </div>
                 )}
                 {activeDocument?.kind === "pdf" && (
-                  <iframe key={activeDocument.path} title={activeDocument.name} src={mediaUrl} className="h-full w-full border-0 bg-white" />
+                  <Suspense fallback={<div role="status" className="p-4">{t("loading")}</div>}>
+                    <PDFPreview key={mediaUrl} name={activeDocument.name} url={mediaUrl} />
+                  </Suspense>
                 )}
                 {activeDocument?.kind === "office" && (
                   officeConsent !== `${uuid}:${activeDocument.path}` ? (

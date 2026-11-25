@@ -1,3 +1,5 @@
+import { credentialHeader } from "../utils/credentialHeader.ts";
+
 export interface HTTPSSettings {
   https_enabled: boolean;
   https_listen: string;
@@ -133,18 +135,23 @@ export function buildHTTPSRedirectURL(
 
 export async function updateHTTPSSettings(
   settings: HTTPSSettings,
+  token: string,
+  signal: AbortSignal,
 ): Promise<HTTPSPayload> {
   const response = await fetch("/api/admin/settings/https", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", [credentialHeader]: token },
+    signal,
     body: JSON.stringify(settings),
   });
   return parseResponse<HTTPSPayload>(response);
 }
 
-export async function reloadHTTPSCertificate(): Promise<HTTPSStatus> {
+export async function reloadHTTPSCertificate(token: string, signal: AbortSignal): Promise<HTTPSStatus> {
   const response = await fetch("/api/admin/settings/https/reload", {
     method: "POST",
+    headers: { [credentialHeader]: token },
+    signal,
   });
   const payload = await parseResponse<{ status: HTTPSStatus }>(response);
   return payload.status;

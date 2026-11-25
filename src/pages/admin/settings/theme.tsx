@@ -425,10 +425,17 @@ const ThemePage = () => {
                 "theme.split_origin_notice",
                 "Split Panel listener (KOMARI_PANEL_LISTEN) is active: third-party themes run exclusively on the public status origin and cannot access management cookies, Passkeys, or control-plane endpoints.",
               )
-            : t(
-                "theme.shared_origin_notice",
-                "Single-port shared-origin mode: public themes and the management console share one browser Origin for out-of-the-box compatibility. Server-side authorization and step-up checks enforce privilege boundaries; set KOMARI_PANEL_LISTEN with a separate domain for browser-enforced Origin isolation.",
-              )}
+            : <>
+                {t("theme.shared_origin_notice")}{" "}
+                <a
+                  href="https://github.com/r11234567/komari/blob/main/docs/security/public-theme-origin.md"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  {t("common.documentation")}
+                </a>
+              </>}
         </Callout.Text>
       </Callout.Root>
 
@@ -519,7 +526,7 @@ const ThemePage = () => {
                     size="2"
                     variant="ghost"
                     onClick={() => setActiveTheme(theme.short)}
-                    disabled={settingTheme === theme.short}
+                    disabled={settingTheme === theme.short || (theme.short !== "default" && !isSplitPanelMode(settings))}
                     title={t("theme.set_active", "Set as Active Theme")}
                     aria-label={t("theme.set_active", "Set as Active Theme")}
                   >
@@ -626,6 +633,7 @@ const ThemePage = () => {
             </Dialog.Close>
             {selectedTheme && !selectedTheme.active && (
               <Button
+                disabled={selectedTheme.short !== "default" && !isSplitPanelMode(settings)}
                 onClick={() => {
                   setActiveTheme(selectedTheme.short);
                   setPreviewDialogOpen(false);
