@@ -34,9 +34,9 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
   function acceptCalibration(value: CalibrationResponse) {
     setCalibration(value);
     if (value.snapshot) {
-      setUp(bytesToGB(value.snapshot.effective.up));
-      setDown(bytesToGB(value.snapshot.effective.down));
-      setTotal(bytesToGB(billableUsage(value.snapshot.effective, value.counting_type || "max")));
+      setUp(value.cutoff_enabled ? "" : bytesToGB(value.snapshot.effective.up));
+      setDown(value.cutoff_enabled ? "" : bytesToGB(value.snapshot.effective.down));
+      setTotal(value.cutoff_enabled ? "" : bytesToGB(billableUsage(value.snapshot.effective, value.counting_type || "max")));
       setEntryMode(value.snapshot.history[0]?.mode?.startsWith("total:") || !value.snapshot.history.length ? "total" : "directions");
     }
   }
@@ -173,7 +173,8 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
           {snapshot.calibration_warning && <Text as="p" color="orange" size="2">{snapshot.calibration_warning}</Text>}
           <Text as="p" size="2">节点计费口径：{countingTypeLabels[countingType]}</Text>
           {calibration?.cutoff_enabled && <label className="block text-sm">供应商用量截至（本地时间）
-            <TextField.Root type="datetime-local" step={60} value={cutoff} onChange={(event) => setCutoff(event.target.value)} />
+            <TextField.Root type="datetime-local" step={60} value={cutoff} max={localMinute(new Date())} onChange={(event) => setCutoff(event.target.value)} />
+            <Text as="span" color="gray" size="2">可选本账期内最近 24 小时的时刻。</Text>
           </label>}
           <table className="w-full text-right text-sm"><thead><tr><th className="text-left">GB</th><th>上传</th><th>下载</th><th>计费用量</th></tr></thead><tbody>
             <UsageRow title="探针可用原始本期" value={snapshot.raw} billable={billableUsage(snapshot.raw, countingType)} />
