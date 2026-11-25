@@ -7,7 +7,7 @@ test("Audit P0 Bug 1: /bind page prevents input wipe, deadlock on abort, and wor
   // lookup must not depend on newName; route navigation dependencies are expected.
   assert.match(
     source,
-    /lookup\s*=\s*React\.useCallback\([\s\S]*?\},\s*\[bindTicket,\s*location\.hash,\s*location\.pathname,\s*location\.search,\s*navigate\]\)/,
+    /lookup\s*=\s*React\.useCallback\([\s\S]*?\},\s*\[location\.hash,\s*location\.pathname,\s*location\.search,\s*navigate\]\)/,
   );
   // setNewName should preserve user typed value if present
   assert.match(source, /setNewName\(\(prev\)\s*=>\s*prev\s*\|\|\s*response\.enrollment\?\.device\?\.hostname\s*\|\|\s*""\)/);
@@ -101,14 +101,15 @@ test("Audit Feature 1: /bind-login completes a full login then obtains a reusabl
   assert.doesNotMatch(loginSource, /\/api\/bind\/ticket/);
   // The session is exchanged for a ticket only after the login page observes a completed login.
   assert.match(bindLoginSource, /\/api\/public\/bind\/ticket/);
-  assert.match(bindLoginSource, /setStoredBindTicket/);
+  assert.doesNotMatch(bindLoginSource, /setStoredBindTicket|payload\.data\?\.ticket/);
   assert.match(bindLoginSource, /<LoginForm/);
   assert.match(bindLoginSource, /consumeBindLoginIntent/);
   assert.doesNotMatch(bindLoginSource, /requestedRef/);
   assert.match(navBarSource, /window\.location\.assign\("\/admin\/dashboard"\)/);
   assert.doesNotMatch(loginSource, /href="\/admin\/dashboard" target="_blank"/);
-  // Passes X-Bind-Ticket in headers
-  assert.match(bindSource, /"X-Bind-Ticket":\s*(?:ticketToUse|bindTicket)/);
+  // The browser sends the HttpOnly cookie, while React reads only expiry.
+  assert.match(bindSource, /getBindAuthorizationExpiry/);
+  assert.doesNotMatch(bindSource, /X-Bind-Ticket|sessionStorage/);
   // Has live countdown timer
   assert.match(bindSource, /formatTicketTime/);
   assert.match(bindSource, /ticketTimeLeft/);
