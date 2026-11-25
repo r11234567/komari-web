@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button, Dialog, Flex, IconButton, Select, Text, TextField } from "@radix-ui/themes";
 import { Gauge } from "lucide-react";
 import { toast } from "sonner";
-import { billableUsage, bytesToGB, calibrationTargets, calibrationTotalTarget, countingTypeLabels, trafficRequest, trafficResetPayload } from "@/utils/trafficCalibration";
+import { billableUsage, bytesToGB, calibrationTargets, calibrationTotalTarget, countingTypeLabels, localMinute, trafficCutoff, trafficRequest, trafficResetPayload } from "@/utils/trafficCalibration";
 import type { CalibrationResponse, CalibrationSnapshot, TrafficPolicy } from "@/utils/trafficCalibration";
 import { TRAFFIC_ACCOUNTING_CHANGED } from "@/utils/trafficDisplay";
 
@@ -16,16 +16,17 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [day, setDay] = useState("follow");
+  const [day, setDay] = useState("0");
   const [clock, setClock] = useState("00:00:00");
   const [timezone, setTimezone] = useState("Asia/Shanghai");
-  const [nextReset, setNextReset] = useState("");
+  const [policy, setPolicy] = useState<TrafficPolicy | null>(null);
   const [calibration, setCalibration] = useState<CalibrationResponse | null>(null);
   const [up, setUp] = useState("");
   const [down, setDown] = useState("");
   const [total, setTotal] = useState("");
   const [entryMode, setEntryMode] = useState("total");
   const [reason, setReason] = useState("");
+  const [cutoff, setCutoff] = useState("");
   const controller = useRef<AbortController | null>(null);
   const listId = useId();
   const path = `/api/admin/client/${encodeURIComponent(uuid)}`;
@@ -40,6 +41,13 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
     }
   }
 
+  function acceptPolicy(value: TrafficPolicy) {
+    setPolicy(value);
+    setDay(String(value.pending?.day ?? value.traffic_reset_day ?? 0));
+    setClock(value.pending?.time ?? value.traffic_reset_time);
+    setTimezone(value.pending?.timezone ?? value.traffic_reset_timezone);
+  }
+
   useEffect(() => {
     if (!open) return;
     const abort = new AbortController();
@@ -47,16 +55,15 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
     setLoading(true);
     setError("");
     setCalibration(null);
+    setPolicy(null);
     setReason("");
+    setCutoff(localMinute(new Date()));
     void Promise.all([
       trafficRequest<TrafficPolicy>(`${path}/traffic-policy`, abort.signal),
       trafficRequest<CalibrationResponse>(`${path}/traffic-calibration`, abort.signal),
     ]).then(([policy, snapshot]) => {
       if (abort.signal.aborted) return;
-      setDay(policy.traffic_reset_day == null ? "follow" : String(policy.traffic_reset_day));
-      setClock(policy.traffic_reset_time);
-      setTimezone(policy.traffic_reset_timezone);
-      setNextReset(policy.next_reset);
+      acceptPolicy(policy);
       acceptCalibration(snapshot);
     }).catch((err: unknown) => {
       if (!abort.signal.aborted) setError(err instanceof Error ? err.message : String(err));
@@ -70,13 +77,14 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
     setSaving(true);
     setError("");
     try {
-      await trafficRequest(`${path}/edit`, abort.signal, trafficResetPayload(day, clock, timezone));
-      const [policy, snapshot] = await Promise.all([
+      const policyPath = policy?.versioned_policy ? "traffic-policy" : "edit";
+      await trafficRequest(`${path}/${policyPath}`, abort.signal, trafficResetPayload(day, clock, timezone));
+      const [savedPolicy, snapshot] = await Promise.all([
         trafficRequest<TrafficPolicy>(`${path}/traffic-policy`, abort.signal),
         trafficRequest<CalibrationResponse>(`${path}/traffic-calibration`, abort.signal),
       ]);
       if (abort.signal.aborted) return;
-      setNextReset(policy.next_reset);
+      acceptPolicy(savedPolicy);
       acceptCalibration(snapshot);
       toast.success("流量重置设置已保存");
       window.dispatchEvent(new Event(TRAFFIC_ACCOUNTING_CHANGED));
@@ -95,7 +103,12 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
       const values = entryMode === "total"
         ? calibrationTotalTarget(snapshot, calibration?.counting_type || "max", total)
         : calibrationTargets(snapshot, up, down);
-      const result = await trafficRequest<CalibrationResponse>(`${path}/traffic-calibration`, abort.signal, { ...values, note: reason.trim(), cycle: snapshot.cycle });
+      const result = await trafficRequest<CalibrationResponse>(`${path}/traffic-calibration`, abort.signal, {
+        ...values,
+        note: reason.trim(),
+        cycle: snapshot.cycle,
+        ...(calibration?.cutoff_enabled && { cutoff: trafficCutoff(cutoff) }),
+      });
       if (abort.signal.aborted) return;
       acceptCalibration(result);
       toast.success("已按提供商本期已用流量校准");
@@ -122,7 +135,6 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
             <Select.Root value={day} disabled={loading || saving || !!error && !calibration} onValueChange={setDay}>
               <Select.Trigger aria-label="每月重置日" mt="1" style={{ width: "100%" }} />
               <Select.Content position="popper">
-                <Select.Item value="follow">跟随原有 Agent 设置</Select.Item>
                 <Select.Item value="0">不设置月度重置</Select.Item>
                 <Select.Separator />
                 {Array.from({ length: 31 }, (_, i) => <Select.Item key={i + 1} value={String(i + 1)}>{i + 1} 日</Select.Item>)}
@@ -133,9 +145,23 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
           <label className="text-sm">UTC 偏移 / 时区<TextField.Root aria-label="UTC 偏移或时区" className="mt-1" list={listId} value={timezone} onChange={(e) => setTimezone(e.target.value)} /><datalist id={listId}>{utcOffsets.map((zone) => <option key={zone} value={zone} />)}</datalist></label>
         </div>
         <Text as="p" size="2" color="gray">不足指定日期的月份按月末重置。UTC 偏移不随夏令时变化；原配置默认为 UTC+8 的 00:00。</Text>
-        {nextReset && <Text as="p" size="2">下次重置：{nextReset}</Text>}
+        {policy?.next_reset && <Text as="p" size="2">下次重置 {displayTime(policy.next_reset)}</Text>}
+        {policy?.pending && <Text as="p" size="2">新设置于 {displayTime(policy.pending.effective_at)} 生效</Text>}
         <Button onClick={() => void savePolicy()}>保存重置设置</Button>
       </fieldset>
+      {policy?.versioned_policy && <div className="mt-4 space-y-1">
+        <Text as="p" size="2">采样接收至 {displayTime(policy.received_through)} · 入账至 {displayTime(policy.accounted_through)}</Text>
+        {!!policy.gaps?.length && <details>
+          <summary className="cursor-pointer text-sm">最近估算与缺口</summary>
+          <ul className="space-y-1 pt-2 text-sm">
+            {policy.gaps.map((gap) => <li key={gap.end}>
+              {displayTime(gap.start)} 至 {displayTime(gap.end)} · {gap.kind === "unallocated"
+                ? `待归属，上传 ${bytesToGB(gap.up_bytes)} GB、下载 ${bytesToGB(gap.down_bytes)} GB`
+                : gap.kind === "estimated" ? "跨账期按时间估算" : gap.kind === "long_interval" ? "长采样间隔" : "采样缺口"}
+            </li>)}
+          </ul>
+        </details>}
+      </div>}
       <hr className="my-5" />
       <fieldset disabled={loading || saving || !snapshot} className="space-y-3">
         <legend className="font-semibold">本期流量校准（GB）</legend>
@@ -146,6 +172,9 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
           {snapshot.history_complete === false && <Text as="p" color="orange" size="2">本期部分历史已超过保留期，无法完整还原。请按提供商真实数值校准，建立本期基准。</Text>}
           {snapshot.calibration_warning && <Text as="p" color="orange" size="2">{snapshot.calibration_warning}</Text>}
           <Text as="p" size="2">节点计费口径：{countingTypeLabels[countingType]}</Text>
+          {calibration?.cutoff_enabled && <label className="block text-sm">供应商用量截至（本地时间）
+            <TextField.Root type="datetime-local" step={60} value={cutoff} onChange={(event) => setCutoff(event.target.value)} />
+          </label>}
           <table className="w-full text-right text-sm"><thead><tr><th className="text-left">GB</th><th>上传</th><th>下载</th><th>计费用量</th></tr></thead><tbody>
             <UsageRow title="探针可用原始本期" value={snapshot.raw} billable={billableUsage(snapshot.raw, countingType)} />
             <UsageRow title="补偿值" value={snapshot.adjustment} billable={billableUsage(snapshot.effective, countingType) - billableUsage(snapshot.raw, countingType)} />
@@ -163,19 +192,23 @@ export function TrafficSettingsDialog({ uuid, name }: { uuid: string; name: stri
           </label>
           {entryMode === "total" ? <>
             <label className="block text-sm">提供商本期计费已用总量（GB）<TextField.Root aria-label="提供商本期总量 GB" value={total} inputMode="decimal" onChange={(e) => setTotal(e.target.value)} /></label>
-            <Text as="p" size="2" color="gray">按“{countingTypeLabels[countingType]}”固定本期总量补偿，后续真实流量继续累计。合计按当前上下行比例分配；其他口径优先保留非计费方向，必要时调整以匹配总量。</Text>
+            <Text as="p" size="2" color="gray">按“{countingTypeLabels[countingType]}”计算截点后的净增长，加到供应商用量上。</Text>
           </> : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-sm">提供商本期上传（GB）<TextField.Root aria-label="提供商本期上传 GB" value={up} inputMode="decimal" onChange={(e) => setUp(e.target.value)} /></label>
             <label className="text-sm">提供商本期下载（GB）<TextField.Root aria-label="提供商本期下载 GB" value={down} inputMode="decimal" onChange={(e) => setDown(e.target.value)} /></label>
           </div>}
           <label className="block text-sm">校准说明（可选）<TextField.Root value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} /></label>
           <Button onClick={() => void saveCalibration()}>按提供商用量校准</Button>
-          {!!snapshot.history?.length && <details><summary className="cursor-pointer text-sm">最近校准记录</summary><ul className="space-y-2 pt-2 text-sm">{snapshot.history.map((item) => <li key={item.calibration_id}>{item.created_at} · {item.target_total != null ? `总量 ${bytesToGB(item.target_total)} GB（${item.mode?.slice(6)}），总量补偿 ${bytesToGB(item.billable_offset || 0)} GB` : `上传 ${bytesToGB(item.target.up)} GB / 下载 ${bytesToGB(item.target.down)} GB`} · 操作人 {item.operator || "管理员"}</li>)}</ul></details>}
+          {!!snapshot.history?.length && <details><summary className="cursor-pointer text-sm">最近校准记录</summary><ul className="space-y-2 pt-2 text-sm">{snapshot.history.map((item) => <li key={item.calibration_id}>{displayTime(item.created_at)}{item.cutoff && ` · 截至 ${displayTime(item.cutoff)}`} · {item.target_total != null ? `总量 ${bytesToGB(item.target_total)} GB（${item.mode?.slice(6)}）` : `上传 ${bytesToGB(item.target.up)} GB / 下载 ${bytesToGB(item.target.down)} GB`} · 操作人 {item.operator || "管理员"}{item.note && ` · ${item.note}`}</li>)}</ul></details>}
         </>}
       </fieldset>
       <Flex justify="end" mt="4"><Dialog.Close><Button variant="soft">关闭</Button></Dialog.Close></Flex>
     </Dialog.Content>
   </Dialog.Root>;
+}
+
+function displayTime(value?: string) {
+  return value ? new Date(value).toLocaleString() : "暂无";
 }
 
 function UsageRow({ title, value, billable }: { title: string; value: CalibrationSnapshot["raw"]; billable: number }) {
