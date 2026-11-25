@@ -21,10 +21,59 @@ import { restCredentialResource } from "@/utils/credentialAction";
 import { resolvePublicSiteOrigin } from "@/utils/themeConfiguration";
 import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 
+type TemporaryShare = { token: string; expires_at: number };
+
+async function requestTemporaryShare(
+  method: "GET" | "POST" | "DELETE",
+  hours?: number,
+  signal?: AbortSignal,
+): Promise<TemporaryShare> {
+  const response = await fetch("/api/admin/settings/temporary-share", {
+    method,
+    credentials: "same-origin",
+    signal,
+    ...(method === "POST" && {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hours }),
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.message || `HTTP ${response.status}`);
+  return result.data;
+}
+
 export default function SiteSettings() {
   const { t } = useTranslation();
-  const { settings, loading, error, refetch } = useSettings();
+  const { settings, loading, error } = useSettings();
   const [shareHours, setShareHours] = useState(1);
+  const [share, setShare] = useState<TemporaryShare>();
+  const [shareBusy, setShareBusy] = useState(true);
+  useEffect(() => {
+    const controller = new AbortController();
+    void requestTemporaryShare("GET", undefined, controller.signal)
+      .then(setShare)
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setShareBusy(false);
+      });
+    return () => controller.abort();
+  }, []);
+  const publicShareOrigin = resolvePublicSiteOrigin(settings, window.location.origin);
+  const canShare = publicShareOrigin.startsWith("https://");
+  const shareLink = canShare && share?.token
+    ? `${publicShareOrigin}/share?temp_key=${encodeURIComponent(share.token)}`
+    : "";
+  const updateShare = async (method: "POST" | "DELETE") => {
+    setShareBusy(true);
+    try {
+      setShare(await requestTemporaryShare(method, shareHours));
+      toast.success(t("settings.settings_saved"));
+    } catch (error) {
+      toast.error(t("settings.settings_save_failed") + ": " + error);
+    } finally {
+      setShareBusy(false);
+    }
+  };
 
   // 恢复备份对话框与上传状态
   const [restoreOpen, setRestoreOpen] = useState(false);
@@ -218,23 +267,23 @@ export default function SiteSettings() {
         <div className="flex w-full flex-col gap-4">
           <SettingCardShortTextInput
             title={t("settings.site.temporary_share_current_link")}
-            value={
-              settings.tempory_share_token
-                ? `${resolvePublicSiteOrigin(settings, window.location.origin)}/?temp_key=${settings.tempory_share_token}`
-                : ""
-            }
+            value={shareLink}
             showSaveButton={false}
-            description={`${t("admin.nodeTable.expiredAt")}: ${new Date((settings.tempory_share_token_expire_at || 0) * 1000).toLocaleString()}`}
+            description={share?.expires_at
+              ? `${t("admin.nodeTable.expiredAt")}: ${new Date(share.expires_at * 1000).toLocaleString()}`
+              : undefined}
             disabled
             bordless
           >
             <Button
-              onClick={() => {
-                if (!settings.tempory_share_token) return;
-                navigator.clipboard.writeText(
-                  `${resolvePublicSiteOrigin(settings, window.location.origin)}/?temp_key=${settings.tempory_share_token}`,
-                );
-                toast.success(t("common.copy"));
+              disabled={!shareLink}
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(shareLink);
+                  toast.success(t("common.copy"));
+                } catch (error) {
+                  toast.error(String(error));
+                }
               }}
             >
               {t("common.copy")}
@@ -255,36 +304,16 @@ export default function SiteSettings() {
           ></SettingCardShortTextInput>
           <div className="flex flex-row w-full gap-2">
             <Button
-              onClick={async () => {
-                const chars =
-                  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-                let key = "";
-                for (let i = 0; i < 8; i++) {
-                  key += chars.charAt(Math.floor(Math.random() * chars.length));
-                }
-                await updateSettingsWithToast(
-                  {
-                    tempory_share_token: key,
-                    tempory_share_token_expire_at:
-                      Math.floor(Date.now() / 1000) + shareHours * 3600,
-                  },
-                  t,
-                );
-                await refetch();
-              }}
+              disabled={shareBusy || !canShare || shareHours < 1 || shareHours > 720}
+              onClick={() => void updateShare("POST")}
             >
               {t("common.generate")}
             </Button>
             <Button
               color="red"
               variant="soft"
-              onClick={async () => {
-                await updateSettingsWithToast(
-                  { tempory_share_token: "", tempory_share_token_expire_at: 0 },
-                  t,
-                );
-                await refetch();
-              }}
+              disabled={shareBusy || !share?.token}
+              onClick={() => void updateShare("DELETE")}
             >
               {t("settings.site.temporary_share_revoke")}
             </Button>
