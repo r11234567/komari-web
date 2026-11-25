@@ -1,5 +1,6 @@
 import { Flex, Text } from "@radix-ui/themes";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
+import DOMPurify from "dompurify";
 
 const Footer = () => {
   //const currentYear = new Date().getFullYear();
@@ -23,7 +24,10 @@ const Footer = () => {
   const buildTime =
     typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : null;
   const { publicInfo } = usePublicInfo();
-  const customFooterHtml = publicInfo?.theme_settings?.customFooterHtml || "";
+  const customFooterHtml = DOMPurify.sanitize(
+    publicInfo?.theme_settings?.customFooterHtml || "",
+    { USE_PROFILES: { html: true }, FORBID_TAGS: ["style", "form", "input", "button"], FORBID_ATTR: ["style"] },
+  );
 
   return (
     <div className="km-footer footer p-2 border-t-1 border-t-[var(--gray-7)]">

@@ -10,12 +10,12 @@ export default defineConfig({
   optimizeDeps: {
     // Scan the harness, not the product's virtual @komari-entry. Late
     // optimization reloads the page and destroys in-flight test contexts.
-    entries: ["tests/browser/fixtures/terminal.html", "tests/browser/fixtures/account.html", "tests/browser/fixtures/management.html", "tests/browser/fixtures/workbench.html", "tests/browser/fixtures/transport.html", "tests/browser/fixtures/history.html"],
+    entries: ["tests/browser/fixtures/terminal.html", "tests/browser/fixtures/account.html", "tests/browser/fixtures/management.html", "tests/browser/fixtures/workbench.html", "tests/browser/fixtures/transport.html", "tests/browser/fixtures/history.html", "tests/browser/fixtures/footer.html"],
     noDiscovery: true,
     include: [
       "react", "react-dom", "react-dom/client", "@radix-ui/themes", "recharts",
       "@xterm/addon-fit", "@xterm/addon-search", "@xterm/addon-web-links",
-      "@xterm/xterm", "i18next", "react-i18next", "sonner", "lucide-react",
+      "@xterm/xterm", "i18next", "react-i18next", "sonner", "lucide-react", "dompurify",
     ],
     holdUntilCrawlEnd: true,
   },
