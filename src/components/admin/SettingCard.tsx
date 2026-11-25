@@ -92,12 +92,14 @@ export function SettingCardSwitch({
   label = "",
   autoDisabled = true,
   defaultChecked,
+  checked: controlledChecked,
   onChange,
   ...props
 }: SettingCardProps & {
   label?: string;
   autoDisabled?: boolean;
   defaultChecked?: boolean;
+  checked?: boolean;
   onChange?: (checked: boolean, switchElement: HTMLButtonElement) => void;
 }) {
   const switchRef = React.useRef<HTMLButtonElement>(null);
@@ -139,7 +141,7 @@ export function SettingCardSwitch({
           <label>{label}</label>
           <Switch
             ref={switchRef}
-            checked={checked}
+            checked={controlledChecked ?? checked}
             onCheckedChange={handleChange}
             disabled={disabled}
           />

@@ -17,6 +17,7 @@ import type {
   PluginInfo,
 } from "@/types/plugin";
 import { connectClients, connectUnary } from "./client";
+import { credentialHeader } from "@/utils/credentialHeader";
 
 const textValue = (value?: LocalizedText): I18nText | undefined => {
   if (!value) return undefined;
@@ -95,6 +96,7 @@ export const setAdminPluginEnabled = async (input: {
   short: string;
   enabled: boolean;
   signal: AbortSignal;
+  token: string;
 }) => connectUnary(
   { signal: input.signal },
   (signal, timeoutMs) => connectClients.plugin.setPluginEnabled({
@@ -102,7 +104,7 @@ export const setAdminPluginEnabled = async (input: {
     enabled: input.enabled,
     // Legacy flags cannot grant execution. Enabling opens package review/2FA.
     permissionsApproved: false,
-  }, { signal, timeoutMs }),
+  }, { signal, timeoutMs, headers: { [credentialHeader]: input.token } }),
 );
 
 export const getAdminPluginLogs = async (short: string, signal: AbortSignal) => {

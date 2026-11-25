@@ -40,6 +40,7 @@ import { deleteAdminPlugin, listAdminPlugins, setAdminPluginEnabled } from "@/ap
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import type { PluginInfo } from "@/types/plugin";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 
 interface MarketSource {
   id: string;
@@ -401,21 +402,28 @@ export default function PluginMarketPage() {
     }
   };
 
-  const togglePlugin = async (plugin: PluginInfo) => {
+  const [toggleAction, setToggleAction] = useState<SensitiveAction | null>(null);
+  const togglePlugin = (plugin: PluginInfo) => {
+    const enabled = !plugin.enabled;
+    setToggleAction({
+      action: "plugin:set-enabled",
+      targets: [plugin.short, String(enabled)],
+      title: resolveI18nText(plugin.name, language) || plugin.short,
+      execute: (token, signal) => applyToggle(plugin, enabled, token, signal),
+    });
+  };
+  const applyToggle = async (plugin: PluginInfo, enabled: boolean, token: string, signal: AbortSignal) => {
     if (togglingRef.current.has(plugin.short)) return;
     togglingRef.current.add(plugin.short);
     setToggling(new Set(togglingRef.current));
-    const enabled = !plugin.enabled;
     try {
-      const result = await setAdminPluginEnabled({ short: plugin.short, enabled, signal: AbortSignal.timeout(15_000) });
+      const result = await setAdminPluginEnabled({ short: plugin.short, enabled, token, signal });
       if (enabled && result?.requiresPermissionApproval) {
         setPendingApproval(plugin);
         return;
       }
       setPendingApproval((current) => current?.short === plugin.short ? null : current);
       toast.success(enabled ? t("plugin.enable_success", "Plugin enabled") : t("plugin.disable_success", "Plugin disabled"));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       refreshNavigation();
       try {
@@ -669,6 +677,7 @@ export default function PluginMarketPage() {
         />
       )}
       <PluginPackageApprovalDialog short={pendingApproval?.short ?? null} onClose={() => setPendingApproval(null)} onChanged={async () => { refreshNavigation(); await loadCatalog(); }} />
+      <SensitiveActionDialog request={toggleAction} onClose={() => setToggleAction(null)} />
 
 
       {/* 源管理弹窗：与主题市场一致 */}

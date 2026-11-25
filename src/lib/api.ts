@@ -1,5 +1,6 @@
 import React from "react";
 import { toast } from "sonner";
+import { credentialHeader } from "@/utils/credentialHeader";
 
 /**
  * API utility functions for settings management
@@ -135,13 +136,16 @@ export async function getSettings(): Promise<SettingsResponse> {
  * @returns Promise containing the response
  */
 export async function updateSettings(
-  settings: Partial<SettingsResponse>
+  settings: Partial<SettingsResponse>,
+  proof?: { token: string; signal: AbortSignal },
 ): Promise<SettingsRestart | undefined> {
   const response = await fetch("/api/admin/settings", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(proof && { [credentialHeader]: proof.token }),
     },
+    signal: proof?.signal,
     body: JSON.stringify(settings),
   });
 
@@ -179,10 +183,11 @@ export async function updateSettings(
 }
 export async function updateSettingsWithToast(
   settings: Partial<SettingsResponse>,
-  t: (key: string) => string
+  t: (key: string) => string,
+  proof?: { token: string; signal: AbortSignal },
 ): Promise<void> {
   try {
-    const restart = await updateSettings(settings);
+    const restart = await updateSettings(settings, proof);
     if (!restart) {
       toast.success(t("settings.settings_saved"));
     }

@@ -36,6 +36,7 @@ import { deleteAdminPlugin, getAdminPluginLogs, listAdminPlugins, setAdminPlugin
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import { iconMap, resolvePluginIcon } from "@/utils/iconHelper";
 import type { PluginInfo } from "@/types/plugin";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 
 // 插件是否声明了可编辑配置项（忽略 title 分组项）。
 const hasConfiguration = (plugin: PluginInfo) =>
@@ -166,13 +167,21 @@ export default function PluginsPage() {
     setUploadProgress(0);
   };
 
-  const toggle = async (plugin: PluginInfo, enabled: boolean) => {
+  const [toggleAction, setToggleAction] = useState<SensitiveAction | null>(null);
+  const toggle = (plugin: PluginInfo, enabled: boolean) => setToggleAction({
+    action: "plugin:set-enabled",
+    targets: [plugin.short, String(enabled)],
+    title: resolveI18nText(plugin.name, language) || plugin.short,
+    execute: (token, signal) => applyToggle(plugin, enabled, token, signal),
+  });
+  const applyToggle = async (plugin: PluginInfo, enabled: boolean, token: string, signal: AbortSignal) => {
     setToggling(plugin.short);
     try {
       const result = await setAdminPluginEnabled({
         short: plugin.short,
         enabled,
-        signal: AbortSignal.timeout(15_000),
+        signal,
+        token,
       });
       if (enabled && result.requiresPermissionApproval) {
         setPendingApproval(plugin);
@@ -186,8 +195,8 @@ export default function PluginsPage() {
       refreshNavigation();
       await loadList();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
       await loadList(); // 启动失败自动禁用，刷新后行内显示 last_error
+      throw error;
     } finally {
       setToggling(null);
     }
@@ -393,6 +402,7 @@ export default function PluginsPage() {
 
       {/* 权限确认弹窗 */}
       <PluginPackageApprovalDialog short={pendingApproval?.short ?? null} onClose={() => setPendingApproval(null)} onChanged={async () => { refreshNavigation(); await loadList(); }} />
+      <SensitiveActionDialog request={toggleAction} onClose={() => setToggleAction(null)} />
 
       {/* 运行日志弹窗 */}
       <Dialog.Root

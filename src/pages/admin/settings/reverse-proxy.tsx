@@ -1,4 +1,6 @@
 import SettingsPageSkeleton from "@/components/admin/SettingsPageSkeleton";
+import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
+import { restCredentialResource } from "@/utils/credentialAction";
 import {
   SettingCard,
   SettingCardLabel,
@@ -169,6 +171,7 @@ function extractListenPort(listen: string): string {
 }
 
 function HTTPSPanel() {
+  const [sensitiveAction, setSensitiveAction] = React.useState<SensitiveAction | null>(null);
   const { t, i18n } = useTranslation();
   const [settings, setSettings] = React.useState(emptyHTTPSSettings);
   const [status, setStatus] = React.useState(emptyHTTPSStatus);
@@ -227,7 +230,7 @@ function HTTPSPanel() {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  const save = async () => {
+  const save = () => {
     const numericPort = Number.parseInt(port, 10);
     if (!Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) {
       toast.error(
@@ -235,12 +238,19 @@ function HTTPSPanel() {
       );
       return;
     }
+    const draft = { ...settings, https_listen: `:${numericPort}` };
+    setSensitiveAction({
+      action: "https:edit",
+      targets: [String(draft.https_enabled), draft.https_listen, String(draft.https_redirect_http), draft.https_certificate_path, draft.https_private_key_path],
+      title: t("settings.reverse_proxy.https_status", "HTTPS status"),
+      execute: (token, signal) => applySettings(draft, token, signal),
+    });
+  };
+
+  const applySettings = async (draft: HTTPSSettings, token: string, signal: AbortSignal) => {
     setSaving(true);
     try {
-      const payload = await updateHTTPSSettings({
-        ...settings,
-        https_listen: `:${numericPort}`,
-      });
+      const payload = await updateHTTPSSettings(draft, token, signal);
       setSettings(payload.settings);
       setStatus(payload.status);
       setPort(extractListenPort(payload.settings.https_listen));
@@ -274,10 +284,18 @@ function HTTPSPanel() {
     }
   };
 
-  const reloadCertificate = async () => {
+  const reloadCertificate = () => setSensitiveAction({
+    action: "https:reload",
+    targets: [],
+    resource: restCredentialResource("POST", "/api/admin/settings/https/reload"),
+    title: t("settings.reverse_proxy.reload_certificate", "Reload certificate"),
+    execute: (token, signal) => applyReload(token, signal),
+  });
+
+  const applyReload = async (token: string, signal: AbortSignal) => {
     setReloading(true);
     try {
-      setStatus(await reloadHTTPSCertificate());
+      setStatus(await reloadHTTPSCertificate(token, signal));
       toast.success(
         t(
           "settings.reverse_proxy.certificate_reload_success",
@@ -503,6 +521,7 @@ function HTTPSPanel() {
           {t("common.save", "Save")}
         </Button>
       </Flex>
+      <SensitiveActionDialog request={sensitiveAction} onClose={() => setSensitiveAction(null)} />
     </Flex>
   );
 }
