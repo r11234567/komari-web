@@ -1695,6 +1695,7 @@
     "title_with_sessions": "終端 - {{name}}（{{count}} 個工作階段）"
   },
   "theme": {
+    "shared_origin_notice": "目前的接聽器提供內建主題。若要使用已安裝的主題，請設定獨立的公開網域。",
     "active": "當前使用",
     "author": "作者",
     "confirm_delete": "確認刪除主題",

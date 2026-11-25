@@ -1810,6 +1810,7 @@
     "copy_unconfirmed": "Copy attempted; the browser could not verify the system clipboard. Paste to check."
   },
   "theme": {
+    "shared_origin_notice": "The built-in theme is served on this listener. Configure a separate public hostname to serve an installed theme.",
     "active": "Active",
     "author": "Author",
     "confirm_delete": "Confirm Delete Theme",

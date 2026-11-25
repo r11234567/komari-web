@@ -1681,6 +1681,7 @@
     "title_with_sessions": "ターミナル - {{name}}（{{count}} セッション）"
   },
   "theme": {
+    "shared_origin_notice": "このリスナーは組み込みテーマを配信します。インストール済みのテーマを配信するには、公開用のホスト名を別途設定してください。",
     "active": "現在使用中",
     "author": "著者",
     "confirm_delete": "テーマを削除しますか？",

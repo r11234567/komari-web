@@ -1681,6 +1681,7 @@
     "title_with_sessions": "Terminal - {{name}} ({{count}} sesi)"
   },
   "theme": {
+    "shared_origin_notice": "Listener ini menyajikan tema bawaan. Konfigurasikan nama host publik terpisah untuk menyajikan tema yang telah diinstal.",
     "active": "Aktif",
     "author": "Penulis",
     "confirm_delete": "Konfirmasi Hapus Tema",
