@@ -22,6 +22,11 @@
       "icon": "CircleDollarSign"
     },
     {
+      "labelKey": "trafficEvidence.title",
+      "path": "/admin/traffic-evidence",
+      "icon": "Activity"
+    },
+    {
       "labelKey": "adminNavigation.operations",
       "path": "/admin/ping",
       "icon": "Bolt",
