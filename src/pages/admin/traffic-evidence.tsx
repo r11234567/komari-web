@@ -125,7 +125,9 @@ function NodeEvidence({ agentId }: { agentId: string }) {
                     <TableCell>{localTime(event.triggeredAt, language)}</TableCell>
                     <TableCell>{t(`trafficEvidence.reasons.${event.reason}`, { defaultValue: event.reason })}</TableCell>
                     <DirectionCells value={event.observed} />
-                    <TableCell><Badge color={event.partial ? "amber" : "green"}>{t(event.partial ? "trafficEvidence.partial" : "trafficEvidence.complete")}</Badge></TableCell>
+                    <TableCell><Badge color={!event.complete ? "blue" : event.partial ? "amber" : "green"}>
+                      {t(!event.complete ? "trafficEvidence.collecting" : event.partial ? "trafficEvidence.partial" : "trafficEvidence.complete")}
+                    </Badge></TableCell>
                     <TableCell><Button variant="ghost" onClick={() => setSelected(event)}>{t("trafficEvidence.view")}</Button></TableCell>
                   </TableRow>
                 ))}

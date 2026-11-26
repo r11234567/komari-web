@@ -1,5 +1,6 @@
 {
   "trafficEvidence": {
+    "collecting": "Sedang mengumpulkan",
     "setup": "Panduan penyiapan Agent",
     "title": "Bukti lalu lintas",
     "description": "Lihat atribusi lalu lintas per jam dan cuplikan anomali. Cuplikan disimpan selama 72 jam.",

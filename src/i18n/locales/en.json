@@ -1,5 +1,6 @@
 {
   "trafficEvidence": {
+    "collecting": "Collecting",
     "setup": "Agent setup",
     "title": "Traffic evidence",
     "description": "Hourly traffic attribution and anomaly snapshots. Snapshots are kept for 72 hours.",

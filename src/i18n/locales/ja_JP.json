@@ -1,5 +1,6 @@
 {
   "trafficEvidence": {
+    "collecting": "収集中",
     "setup": "Agent の設定手順",
     "title": "トラフィック調査",
     "description": "時間別の通信内訳と異常時のスナップショットを表示します。スナップショットは72時間保持されます。",

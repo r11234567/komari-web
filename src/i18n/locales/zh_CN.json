@@ -1,5 +1,6 @@
 {
   "trafficEvidence": {
+    "collecting": "采集中",
     "setup": "Agent 部署说明",
     "title": "流量取证",
     "description": "查看每小时流量归因和异常快照。异常快照保留 72 小时。",

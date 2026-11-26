@@ -1,5 +1,6 @@
 {
   "trafficEvidence": {
+    "collecting": "採集中",
     "setup": "Agent 部署說明",
     "title": "流量取證",
     "description": "查看每小時流量歸因及異常快照。異常快照保留 72 小時。",
