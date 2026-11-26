@@ -1681,7 +1681,8 @@
     "title_with_sessions": "ターミナル - {{name}}（{{count}} セッション）"
   },
   "theme": {
-    "shared_origin_notice": "このリスナーは組み込みテーマを配信します。インストール済みのテーマを配信するには、公開用のホスト名を別途設定してください。",
+    "shared_origin_notice": "現在は組み込みテーマを使用しています。このホスト名でテーマを切り替えるには、サーバーで KOMARI_ALLOW_SHARED_ORIGIN_THEMES を有効にしてください。",
+    "shared_origin_enabled": "このホスト名でインストール済みのテーマを有効にできます。テーマのスクリプトは管理画面と同一オリジンで動作するため、信頼できるテーマだけを有効にしてください。",
     "active": "現在使用中",
     "author": "著者",
     "confirm_delete": "テーマを削除しますか？",

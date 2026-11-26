@@ -9,7 +9,6 @@ import {
   Flex,
   Dialog,
   Badge,
-  IconButton,
   TextField,
   Callout,
   Separator,
@@ -37,6 +36,7 @@ import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 import {
   adminThemeManifestPath,
   adminThemePreviewPath,
+  canActivateTheme,
   getThemeConfigurationType,
   isSplitPanelMode,
   normalizeThemeManifest,
@@ -89,7 +89,8 @@ const ThemePage = () => {
     loading: settingsLoading,
     refetch: refetchSettings,
   } = useSettings();
-  const currentTheme = settings?.theme;
+  const configuredTheme = settings?.theme;
+  const currentTheme = configuredTheme && (canActivateTheme(configuredTheme, settings) ? configuredTheme : "default");
   const navigate = useNavigate();
   const { publicInfo, refresh: refreshPublicInfo } = usePublicInfo();
   const { refreshNavigation } = useAdminNavigation();
@@ -416,7 +417,7 @@ const ThemePage = () => {
         </Flex>
       </Flex>
 
-      <ThemeOriginNotice split={isSplitPanelMode(settings)} />
+      <ThemeOriginNotice split={isSplitPanelMode(settings)} shared={settings?.shared_origin_themes_enabled === true} />
 
       {/* 主题卡片网格 */}
       {themes.length === 0 ? (
@@ -501,22 +502,15 @@ const ThemePage = () => {
               </Flex>
               <Flex justify="end" align="center">
                 {!theme.active && (
-                  <IconButton
+                  <Button
                     size="2"
-                    variant="ghost"
+                    variant="soft"
                     onClick={() => setActiveTheme(theme.short)}
-                    disabled={settingTheme === theme.short || (theme.short !== "default" && !isSplitPanelMode(settings))}
-                    title={t("theme.set_active", "Set as Active Theme")}
-                    aria-label={t("theme.set_active", "Set as Active Theme")}
+                    disabled={settingTheme !== null || !canActivateTheme(theme.short, settings)}
                   >
-                    {settingTheme === theme.short ? (
-                      <Box className="animate-spin">
-                        <Settings size={16} />
-                      </Box>
-                    ) : (
-                      <Settings size={16} />
-                    )}
-                  </IconButton>
+                    {settingTheme === theme.short && <Loader2 size={16} className="animate-spin" />}
+                    {t("theme.set_active")}
+                  </Button>
                 )}
               </Flex>
             </Card>
@@ -612,7 +606,7 @@ const ThemePage = () => {
             </Dialog.Close>
             {selectedTheme && !selectedTheme.active && (
               <Button
-                disabled={selectedTheme.short !== "default" && !isSplitPanelMode(settings)}
+                disabled={settingTheme !== null || !canActivateTheme(selectedTheme.short, settings)}
                 onClick={() => {
                   setActiveTheme(selectedTheme.short);
                   setPreviewDialogOpen(false);
