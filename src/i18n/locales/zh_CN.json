@@ -1810,7 +1810,8 @@
     "copy_unconfirmed": "已尝试复制，但浏览器无法确认系统剪贴板内容，请粘贴检查。"
   },
   "theme": {
-    "shared_origin_notice": "当前监听器提供内置主题。要使用已安装的主题，请配置独立的公开域名。",
+    "shared_origin_notice": "当前使用内置主题。要在现有域名切换主题，可在服务器启用 KOMARI_ALLOW_SHARED_ORIGIN_THEMES。",
+    "shared_origin_enabled": "已允许在现有域名切换主题。主题脚本与管理后台同源，请只启用你信任的主题。",
     "active": "当前使用",
     "author": "作者",
     "confirm_delete": "确认删除主题",

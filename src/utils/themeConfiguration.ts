@@ -64,6 +64,14 @@ export const isSplitPanelMode = (
   settings?.panel_isolation_mode === "split" ||
   settings?.panel_listen_enabled === true;
 
+export const canActivateTheme = (
+  short: string,
+  settings?: Parameters<typeof isSplitPanelMode>[0],
+): boolean =>
+  short === "default" ||
+  isSplitPanelMode(settings) ||
+  settings?.shared_origin_themes_enabled === true;
+
 export const resolvePublicSiteOrigin = (
   settings?: {
     public_origin?: unknown;

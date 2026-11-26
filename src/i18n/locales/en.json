@@ -1810,7 +1810,8 @@
     "copy_unconfirmed": "Copy attempted; the browser could not verify the system clipboard. Paste to check."
   },
   "theme": {
-    "shared_origin_notice": "The built-in theme is served on this listener. Configure a separate public hostname to serve an installed theme.",
+    "shared_origin_notice": "The built-in theme is active. To switch themes on this hostname, enable KOMARI_ALLOW_SHARED_ORIGIN_THEMES on the server.",
+    "shared_origin_enabled": "Installed themes can be activated on this hostname. Only activate themes you trust with access to the management origin.",
     "active": "Active",
     "author": "Author",
     "confirm_delete": "Confirm Delete Theme",

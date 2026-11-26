@@ -191,6 +191,7 @@ test("P3A: Admin UI loads theme manifests and previews via /api/admin/theme, iso
   const {
     adminThemeManifestPath,
     adminThemePreviewPath,
+    canActivateTheme,
     isSplitPanelMode,
     normalizeThemeManifest,
     resolvePublicSiteHref,
@@ -201,6 +202,11 @@ test("P3A: Admin UI loads theme manifests and previews via /api/admin/theme, iso
   assert.equal(adminThemePreviewPath("adhesive-note"), "/api/admin/theme/adhesive-note/preview");
   assert.equal(isSplitPanelMode({ panel_isolation_mode: "split" }), true);
   assert.equal(isSplitPanelMode({ panel_isolation_mode: "single_origin" }), false);
+  assert.equal(canActivateTheme("default"), true);
+  assert.equal(canActivateTheme("adhesive-note", { panel_isolation_mode: "single_origin" }), false);
+  assert.equal(canActivateTheme("adhesive-note", { shared_origin_themes_enabled: "true" }), false);
+  assert.equal(canActivateTheme("adhesive-note", { shared_origin_themes_enabled: true }), true);
+  assert.equal(canActivateTheme("adhesive-note", { panel_isolation_mode: "split" }), true);
   assert.equal(resolvePublicSiteOrigin({ public_origin: "https://status.example.com/" }), "https://status.example.com");
   assert.equal(resolvePublicSiteHref({ public_origin: "https://status.example.com" }, "/"), "https://status.example.com/");
   assert.equal(resolvePublicSiteHref({}, "/"), "/");
@@ -228,6 +234,8 @@ test("P3A: Admin UI loads theme manifests and previews via /api/admin/theme, iso
   assert.match(themeSettingsSource, /isSplitPanelMode/);
   assert.match(themeSettingsSource, /<ThemeOriginNotice split=\{isSplitPanelMode/);
   assert.match(themeMarketSource, /<ThemeOriginNotice split=\{split\}/);
+  assert.match(themeSettingsSource, /shared=\{settings\?\.shared_origin_themes_enabled === true\}/);
+  assert.match(themeMarketSource, /shared=\{settings\?\.shared_origin_themes_enabled === true\}/);
   assert.match(themeMarketSource, /disabled=\{!canActivate\(theme\)/);
   assert.match(themeMarketSource, /disabled=\{!canActivate\(selectedTheme\)/);
   assert.match(originNotice, /KOMARI_PANEL_LISTEN/);

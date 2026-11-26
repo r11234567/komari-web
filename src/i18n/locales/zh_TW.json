@@ -1695,7 +1695,8 @@
     "title_with_sessions": "終端 - {{name}}（{{count}} 個工作階段）"
   },
   "theme": {
-    "shared_origin_notice": "目前的接聽器提供內建主題。若要使用已安裝的主題，請設定獨立的公開網域。",
+    "shared_origin_notice": "目前使用內建主題。若要在現有網域切換主題，可在伺服器啟用 KOMARI_ALLOW_SHARED_ORIGIN_THEMES。",
+    "shared_origin_enabled": "已允許在現有網域切換主題。主題指令碼與管理介面同源，請只啟用您信任的主題。",
     "active": "當前使用",
     "author": "作者",
     "confirm_delete": "確認刪除主題",

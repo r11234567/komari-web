@@ -22,6 +22,7 @@ export interface SettingsResponse {
   metric_rollup_hour_retention_hours?: number;
   panel_isolation_mode?: "split" | "single_origin" | string;
   panel_listen_enabled?: boolean;
+  shared_origin_themes_enabled?: boolean;
   public_origin?: string;
   panel_origin?: string;
   agent_cloudflare_proxy?: boolean;
