@@ -883,7 +883,13 @@
       "utility": "System and utilities",
       "uncategorized": "Uncategorized"
     },
-    "market_update_required": "Komari update required",
+    "failed": "Failed",
+    "market_availability": "Package availability",
+    "market_all_availability": "All packages",
+    "market_available": "Installable",
+    "market_unavailable": "Unavailable",
+    "market_incompatible": "Incompatible with this Komari version",
+    "market_retired": "Plugin retired",
     "saving_and_reloading": "Saving and reloading...",
     "save_and_reload": "Save and reload",
     "package_review": {

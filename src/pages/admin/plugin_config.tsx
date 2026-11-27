@@ -14,7 +14,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import Loading from "@/components/loading";
-import InlineSvgIcon from "@/components/InlineSvgIcon";
+import PluginIcon from "@/components/admin/PluginIcon";
 import ConfigFormTabs from "@/components/admin/ConfigFormTabs";
 import {
   getAdminPluginConfiguration,
@@ -22,34 +22,8 @@ import {
   setAdminPluginConfiguration,
 } from "@/api/connect/admin";
 import { resolveI18nText } from "@/utils/i18nText";
-import { getBuiltInIcon, resolvePluginIcon } from "@/utils/iconHelper";
 import type { I18nText } from "@/utils/i18nText";
 import type { PluginConfiguration, PluginInfo, PluginConfigItem } from "@/types/plugin";
-
-// 渲染插件 icon：lucide 名用组件，URL/相对路径用图片或内联 SVG，否则默认 Blocks。
-const renderPluginIcon = (
-  plugin: PluginInfo,
-  size: number,
-  className: string,
-  opacity: number,
-) => {
-  const icon = resolvePluginIcon(plugin.short, plugin.icon);
-  if (!icon) {
-    return <Blocks size={size} className={className} style={{ opacity }} />;
-  }
-  const Cmp = getBuiltInIcon(icon);
-  if (Cmp) {
-    return <Cmp size={size} className={className} style={{ opacity }} />;
-  }
-  return (
-    <InlineSvgIcon
-      src={icon}
-      alt=""
-      className={`${className} object-contain`}
-      style={{ opacity }}
-    />
-  );
-};
 
 // 插件配置：左侧插件列表，右侧具体插件的配置项（与主题配置一致）。
 export default function PluginConfigPage() {
@@ -246,7 +220,7 @@ export default function PluginConfigPage() {
                       color: isActive ? "var(--accent-10)" : "inherit",
                     }}
                   >
-                    {renderPluginIcon(plugin, 16, "h-5 w-5 shrink-0", isActive ? 1 : 0.7)}
+                    <PluginIcon plugin={plugin} size={16} className="h-5 w-5 shrink-0" style={{ opacity: isActive ? 1 : 0.7 }} />
                     <Text
                       size="2"
                       weight={isActive ? "bold" : "medium"}
