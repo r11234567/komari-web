@@ -25,3 +25,11 @@ export function boundedRemoteSettings<T extends { remoteControlEnabled?: boolean
 export function needsRescueInstall(state: GetNodeConfigStateResponse) {
   return !!state.desired?.privileged?.rescueHelperEnabled && state.observation?.helperInstalled !== true;
 }
+
+export function needsRootExecutionApproval(state: GetNodeConfigStateResponse) {
+  const target = state.desired?.privileged;
+  const applied = appliedSnapshot(state)?.privileged;
+  return !!target?.rootExecutionAllowed && (!applied?.rootExecutionAllowed ||
+    !!target.websshEnabled && !applied.websshEnabled ||
+    !!target.executionEnabled && !applied.executionEnabled);
+}

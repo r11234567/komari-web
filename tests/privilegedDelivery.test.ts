@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings, needsRescueInstall } from "../src/utils/privilegedDelivery.ts";
+import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings, needsRescueInstall, needsRootExecutionApproval } from "../src/utils/privilegedDelivery.ts";
 
 test("pending desired never becomes the applied snapshot, even when history is truncated", () => {
   const desired = { revision: 22n } as any;
@@ -36,4 +36,21 @@ test("rescue installation is pending until independently observed, without chang
   assert.equal(needsRescueInstall({ ...state, observation: undefined }), true);
   assert.equal(needsRescueInstall({ ...state, observation: { helperInstalled: true } } as any), false);
   assert.equal(needsRescueInstall({ desired: { privileged: { rescueHelperEnabled: false } } } as any), false);
+});
+
+test("an existing root Agent with rescue and WebSSH still needs local approval for remote root", () => {
+  const privileged = { requiredPrivilegeMode: 1, websshEnabled: true, rescueHelperEnabled: true, rootExecutionAllowed: false };
+  const state = {
+    appliedRevision: 1n,
+    applied: { revision: 1n, privileged },
+    desired: { revision: 2n, privileged: { ...privileged, rootExecutionAllowed: true } },
+    observation: { helperInstalled: true },
+  } as any;
+  assert.equal(needsRescueInstall(state), false);
+  assert.equal(needsRootExecutionApproval(state), true);
+  assert.equal(needsRootExecutionApproval({ ...state, desired: { revision: 2n, privileged } }), false);
+  state.applied.privileged = { ...privileged, rootExecutionAllowed: true };
+  assert.equal(needsRootExecutionApproval(state), false);
+  state.desired.privileged.executionEnabled = true;
+  assert.equal(needsRootExecutionApproval(state), true);
 });
