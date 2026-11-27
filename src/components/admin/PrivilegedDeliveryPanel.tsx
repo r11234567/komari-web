@@ -209,9 +209,14 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
             {ready && hostSupported && hostCommand && !expired ? <>
               <Text>在机主直连目标节点的 SSH 终端运行以下命令。Komari WebSSH 不支持此授权。</Text>
               <code className="break-all select-all">{hostCommand}</code>
-              <Button variant="soft" onClick={() => void navigator.clipboard.writeText(hostCommand).then(
-                () => toast.success("已复制本机授权命令"), () => toast.error("无法访问剪贴板，请选中命令复制"),
-              )}>复制本机授权命令</Button>
+              <Button variant="soft" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(hostCommand);
+                  toast.success("已复制本机授权命令");
+                } catch {
+                  toast.error("无法访问剪贴板，请选中命令复制");
+                }
+              }}>复制本机授权命令</Button>
               {actions.includes(HostAction.INSTALL_RESCUE_HELPER) && <Text>此命令包含救援安装：本机认证后自动下载并验签，再安装独立的 root 救援服务。下载或验签失败不会停止原 Agent。</Text>}
             </> : !expired && <Text>此节点尚未准备好所需主机操作。Linux systemd 需安装新版 host 工具、固定主机信任密钥和 PAM 依赖后重启 agent；Windows/macOS 暂不支持身份转换与救援安装。</Text>}
           </Flex>
@@ -223,7 +228,7 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
       {editing && <Flex direction="column" gap="2">
         <Text size="2" color="gray">救援组件以独立 root 服务运行。开启救援不会修改下方的 Agent 目标身份，可与普通远程控制同时启用。</Text>
         {settingLabels.map(([key, label]) => <Flex key={key} gap="2">
-          <Checkbox disabled={((key === "websshEnabled" || key === "executionEnabled" || key === "rootExecutionAllowed") && !draft.remoteControlEnabled) ||
+          <Checkbox aria-label={label} disabled={((key === "websshEnabled" || key === "executionEnabled" || key === "rootExecutionAllowed") && !draft.remoteControlEnabled) ||
             (key === "rootExecutionAllowed" && draft.requiredPrivilegeMode !== PrivilegeMode.LINUX_ROOT)}
             checked={draft[key] ?? false} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
           <Text>{label}</Text>
