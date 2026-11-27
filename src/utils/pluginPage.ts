@@ -15,7 +15,7 @@ function hasUnsafePathChars(value: string): boolean {
 }
 
 export function buildPluginPageSrc(
-  prefix: "/api/admin/plugin" | "/api/plugin",
+  prefix: "/api/admin/plugin" | "/api/admin/plugin-icon" | "/api/plugin",
   short: string | null | undefined,
   file: string | null | undefined,
 ): string | null {

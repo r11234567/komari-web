@@ -67,7 +67,7 @@ test("plugin icon sources stay inside their package and names resolve only own i
   assert.ok(getBuiltInIcon("Home"));
   assert.equal(getBuiltInIcon("__proto__"), undefined);
   assert.equal(getBuiltInIcon("constructor"), undefined);
-  assert.equal(resolvePluginIcon("fixture", "./icons/service icon.svg"), "/api/admin/plugin/fixture/icons/service%20icon.svg");
+  assert.equal(resolvePluginIcon("fixture", "./icons/service icon.svg"), "/api/admin/plugin-icon/fixture/icons/service%20icon.svg");
   for (const icon of ["//example.invalid/icon.svg", "/admin", "https://example.invalid/icon.svg", "../icon.svg", "icons/../x", "%2e%2e/x"]) {
     assert.equal(resolvePluginIcon("fixture", icon), "");
   }

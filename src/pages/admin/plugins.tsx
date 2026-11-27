@@ -28,13 +28,12 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Loading from "@/components/loading";
 import PluginConfigDialog from "@/components/admin/PluginConfigDialog";
 import PluginPackageManager, { PluginPackageApprovalDialog } from "@/components/admin/PluginPackageManager";
-import InlineSvgIcon from "@/components/InlineSvgIcon";
+import PluginIcon from "@/components/admin/PluginIcon";
 import UploadDialog from "@/components/UploadDialog";
 import { createChunkUploadTask, type ChunkUploadTask } from "@/lib/chunkUpload";
 import { useAdminNavigation } from "@/contexts/AdminNavigationContext";
 import { deleteAdminPlugin, getAdminPluginLogs, listAdminPlugins, setAdminPluginEnabled } from "@/api/connect/admin";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
-import { getBuiltInIcon, resolvePluginIcon } from "@/utils/iconHelper";
 import type { PluginInfo } from "@/types/plugin";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 
@@ -43,26 +42,8 @@ const hasConfiguration = (plugin: PluginInfo) =>
   Array.isArray(plugin.configuration?.data) &&
   plugin.configuration!.data!.some((item) => item.type !== "title");
 
-// 渲染插件 icon：lucide 名用组件，URL/相对路径用图片或内联 SVG，否则默认 Blocks。
-const renderPluginIcon = (
-  plugin: PluginInfo,
-  size: number,
-  className: string,
-) => {
-  const icon = resolvePluginIcon(plugin.short, plugin.icon);
-  if (!icon) return <Blocks size={size} className={className} />;
-  const Cmp = getBuiltInIcon(icon);
-  if (Cmp) {
-    return <Cmp size={size} className={className} />;
-  }
-  return (
-    <InlineSvgIcon
-      src={icon}
-      alt=""
-      className={`${className} object-contain`}
-    />
-  );
-};
+const pluginStatus = (plugin: PluginInfo) =>
+  plugin.running ? "running" : plugin.last_error ? "failed" : "stopped";
 
 // 插件管理：上传 zip、switch 启停、权限确认弹窗、运行日志、行内错误文本。
 export default function PluginsPage() {
@@ -82,11 +63,11 @@ export default function PluginsPage() {
   const [slideDirection, setSlideDirection] = useState(1);
   const reduceMotion = useReducedMotion();
   const filteredPlugins = plugins.filter((plugin) =>
-    (statusFilter === "all" || (statusFilter === "running" ? plugin.running : !plugin.running)) &&
+    (statusFilter === "all" || statusFilter === pluginStatus(plugin)) &&
     [plugin.short, displayText(plugin.name), displayText(plugin.author), displayText(plugin.description)].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
   );
   const changeStatusFilter = (value: string) => {
-    const order = ["all", "running", "stopped"];
+    const order = ["all", "running", "stopped", "failed"];
     setSlideDirection(order.indexOf(value) > order.indexOf(statusFilter) ? 1 : -1);
     setStatusFilter(value);
   };
@@ -266,6 +247,7 @@ export default function PluginsPage() {
           <Tabs.Trigger value="all">{t("common.all", "All")}</Tabs.Trigger>
           <Tabs.Trigger value="running">{t("exec.status.running", "Running")}</Tabs.Trigger>
           <Tabs.Trigger value="stopped">{t("plugin.stopped", "Stopped")}</Tabs.Trigger>
+          <Tabs.Trigger value="failed">{t("plugin.failed", "Failed")}</Tabs.Trigger>
         </Tabs.List>
       </Tabs.Root>
 
@@ -299,16 +281,14 @@ export default function PluginsPage() {
                     <Flex direction="column" gap="2">
                       <Flex align="center" justify="between" gap="4">
                         <Flex align="center" gap="3" className="min-w-0">
-                          {renderPluginIcon(plugin, 20, "h-5 w-5 shrink-0")}
+                          <PluginIcon plugin={plugin} size={20} className="h-5 w-5 shrink-0" />
                           <Flex direction="column" gap="1" className="min-w-0">
                             <Flex align="center" gap="2" wrap="wrap">
                               <Text weight="bold">
                                 {displayText(plugin.name) || plugin.short}
                               </Text>
-                              <Badge color={plugin.running ? "green" : "gray"}>
-                                {plugin.running
-                                  ? t("plugin.running", "Running")
-                                  : t("plugin.stopped", "Stopped")}
+                              <Badge color={plugin.running ? "green" : plugin.last_error ? "red" : "gray"}>
+                                {t(`plugin.${pluginStatus(plugin)}`)}
                               </Badge>
                               <Text size="2" color="gray">
                                 v{plugin.version}

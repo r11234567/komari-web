@@ -10,6 +10,7 @@ import {
   Grid,
   Heading,
   IconButton,
+  Select,
   Separator,
   Switch,
   Tabs,
@@ -37,7 +38,6 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { normalizePluginCategory, pluginCategories } from "@/utils/pluginCategory";
 import Loading from "@/components/loading";
 import { deleteAdminPlugin, listAdminPlugins, setAdminPluginEnabled } from "@/api/connect/admin";
-import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { resolveI18nText, type I18nText } from "@/utils/i18nText";
 import type { PluginInfo } from "@/types/plugin";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
@@ -68,6 +68,7 @@ interface MarketPlugin {
   download: string;
   sha256: string;
   komari?: string;
+  compatible?: boolean;
   installable: boolean;
   source_id: string;
   source_name: string;
@@ -104,57 +105,6 @@ function isVersionNewer(candidate: string, installed: string) {
   return false;
 }
 
-function isKomariCompatible(constraint: string | undefined, current: string) {
-  const parse = (value: string): [number, number, number] | null => {
-    const parts = value.trim().replace(/^v/, "").split(".");
-    if (
-      parts.length > 3 ||
-      parts.some((part) => part === "" || !/^\d+$/.test(part))
-    ) {
-      return null;
-    }
-    return [0, 1, 2].map((index) => Number(parts[index] || 0)) as [
-      number,
-      number,
-      number,
-    ];
-  };
-  const currentVersion = parse(current);
-  const requirement = (constraint || "").trim();
-  if (!requirement || !currentVersion) return true;
-
-  let operator = "";
-  let version = requirement;
-  for (const candidate of [">=", "<=", ">", "<", "="]) {
-    if (version.startsWith(candidate)) {
-      operator = candidate;
-      version = version.slice(candidate.length).trim();
-      break;
-    }
-  }
-  const requiredVersion = parse(version);
-  if (!requiredVersion) return false;
-
-  let comparison = 0;
-  for (let index = 0; index < 3; index += 1) {
-    if (currentVersion[index] !== requiredVersion[index]) {
-      comparison = currentVersion[index] > requiredVersion[index] ? 1 : -1;
-      break;
-    }
-  }
-  switch (operator) {
-    case ">=":
-      return comparison >= 0;
-    case ">":
-      return comparison > 0;
-    case "<=":
-      return comparison <= 0;
-    case "<":
-      return comparison < 0;
-    default:
-      return comparison === 0;
-  }
-}
 
 // 插件是否声明了可编辑配置项（忽略 title 分组项）。
 const hasConfiguration = (plugin: PluginInfo | undefined) =>
@@ -174,8 +124,6 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit) {
 
 // 插件市场：源管理与主题市场一致（增/改/删/启停 + 目录刷新）。
 export default function PluginMarketPage() {
-  const { publicInfo } = usePublicInfo();
-  const currentVersion = String(publicInfo?.version || "");
   const { t, i18n } = useTranslation();
   const { refreshNavigation } = useAdminNavigation();
   const [configPlugin, setConfigPlugin] = useState<PluginInfo | null>(null);
@@ -197,6 +145,7 @@ export default function PluginMarketPage() {
   );
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [availabilityFilter, setAvailabilityFilter] = useState("all");
   const [slideDirection, setSlideDirection] = useState(1);
   const reduceMotion = useReducedMotion();
   const changeCategoryFilter = (value: string) => {
@@ -260,6 +209,7 @@ export default function PluginMarketPage() {
     const term = search.trim().toLocaleLowerCase();
     return plugins.filter((plugin) =>
       (categoryFilter === "all" || normalizePluginCategory(plugin.category) === categoryFilter) &&
+      (availabilityFilter === "all" || plugin.installable === (availabilityFilter === "available")) &&
       (!term || [
         displayText(plugin.name),
         plugin.short,
@@ -271,7 +221,7 @@ export default function PluginMarketPage() {
         .toLocaleLowerCase()
         .includes(term)),
     );
-  }, [categoryFilter, displayText, search, plugins]);
+  }, [availabilityFilter, categoryFilter, displayText, search, plugins]);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -481,16 +431,24 @@ export default function PluginMarketPage() {
           </Callout.Root>
         ))}
 
-      <TextField.Root
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder={t("plugin.market_search", "Search plugins...")}
-        className="km-market-plugins-toolbar"
-      >
-        <TextField.Slot>
-          <Search size={14} />
-        </TextField.Slot>
-      </TextField.Root>
+      <Flex gap="2" align="center" wrap="wrap" className="km-market-plugins-toolbar">
+        <TextField.Root
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={t("plugin.market_search", "Search plugins...")}
+          className="flex-1"
+        >
+          <TextField.Slot><Search size={14} /></TextField.Slot>
+        </TextField.Root>
+        <Select.Root value={availabilityFilter} onValueChange={setAvailabilityFilter}>
+          <Select.Trigger aria-label={t("plugin.market_availability")} />
+          <Select.Content>
+            <Select.Item value="all">{t("plugin.market_all_availability")}</Select.Item>
+            <Select.Item value="available">{t("plugin.market_available")}</Select.Item>
+            <Select.Item value="unavailable">{t("plugin.market_unavailable")}</Select.Item>
+          </Select.Content>
+        </Select.Root>
+      </Flex>
 
       <Tabs.Root value={categoryFilter} onValueChange={changeCategoryFilter}>
         <Tabs.List aria-label={t("plugin.market_category")} className="overflow-x-auto">
@@ -539,10 +497,6 @@ export default function PluginMarketPage() {
                     installedVersion &&
                     isVersionNewer(plugin.version, installedVersion),
                   );
-                  const komariCompatible = isKomariCompatible(
-                    plugin.komari,
-                    currentVersion,
-                  );
                   const canConfigure =
                     isInstalled && hasConfiguration(installedInfo.get(plugin.short));
                   const key = `${plugin.source_id}:${plugin.short}`;
@@ -567,17 +521,11 @@ export default function PluginMarketPage() {
                                   : t("market.installed", "Installed")} v{installedVersion?.replace(/^v/i, "")}
                               </Badge>
                             )}
-                            {!isInstalled && (!plugin.installable || !komariCompatible) && (
+                            {(!isInstalled || hasUpdate) && !plugin.installable && (
                               <Badge color="gray" variant="soft">
-                                {komariCompatible
-                                  ? t(
-                                      "market.install_unavailable",
-                                      "Package unavailable",
-                                    )
-                                  : t(
-                                      "plugin.market_update_required",
-                                      "Komari update required",
-                                    )}
+                                {plugin.compatible === false
+                                  ? t("plugin.market_incompatible")
+                                  : t("market.install_unavailable", "Package unavailable")}
                               </Badge>
                             )}
                           </Flex>
@@ -605,7 +553,7 @@ export default function PluginMarketPage() {
                                   : t("plugin.enable", "Enable plugin")}`}
                               />
                             )}
-                            {!isInstalled && plugin.installable && komariCompatible && (
+                            {!isInstalled && plugin.installable && (
                               <Button
                                 size="1"
                                 disabled={busy}
@@ -617,7 +565,7 @@ export default function PluginMarketPage() {
                                   : t("plugin.market_install", "Install")}
                               </Button>
                             )}
-                            {isInstalled && hasUpdate && plugin.installable && komariCompatible && (
+                            {isInstalled && hasUpdate && plugin.installable && (
                               <Button
                                 size="1"
                                 color="yellow"

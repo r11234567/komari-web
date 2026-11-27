@@ -83,5 +83,5 @@ export function resolvePluginIcon(short: string, icon?: string): string {
   if (!icon) return "";
   if (getBuiltInIcon(icon)) return icon;
   if (icon.startsWith("/") || /[:%]/.test(icon)) return "";
-  return buildPluginPageSrc("/api/admin/plugin", short, icon.replace(/^\.\//, "")) ?? "";
+  return buildPluginPageSrc("/api/admin/plugin-icon", short, icon.replace(/^\.\//, "")) ?? "";
 }

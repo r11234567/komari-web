@@ -860,7 +860,12 @@
       "utility": "系統與工具",
       "uncategorized": "未分類"
     },
-    "market_update_required": "需要更新 Komari",
+    "failed": "異常",
+    "market_availability": "安裝套件可用性",
+    "market_all_availability": "全部安裝套件",
+    "market_available": "可安裝",
+    "market_unavailable": "無法安裝",
+    "market_incompatible": "與目前的 Komari 版本不相容",
     "save_and_reload": "儲存並重新載入",
     "saving_and_reloading": "儲存並重新載入中..."
   },

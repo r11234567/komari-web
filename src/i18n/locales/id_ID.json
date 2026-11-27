@@ -860,7 +860,12 @@
       "utility": "Sistem dan utilitas",
       "uncategorized": "Tanpa kategori"
     },
-    "market_update_required": "Komari perlu diperbarui",
+    "failed": "Gagal",
+    "market_availability": "Ketersediaan paket",
+    "market_all_availability": "Semua paket",
+    "market_available": "Dapat dipasang",
+    "market_unavailable": "Tidak tersedia",
+    "market_incompatible": "Tidak kompatibel dengan versi Komari ini",
     "save_and_reload": "Simpan dan muat ulang",
     "saving_and_reloading": "Menyimpan dan memuat ulang..."
   },
