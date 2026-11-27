@@ -889,6 +889,7 @@
     "market_available": "可安装",
     "market_unavailable": "不可安装",
     "market_incompatible": "与当前 Komari 版本不兼容",
+    "market_retired": "插件已退役",
     "save_and_reload": "保存并重载",
     "saving_and_reloading": "保存并重载中...",
     "package_review": {

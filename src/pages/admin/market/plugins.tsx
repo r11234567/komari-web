@@ -69,6 +69,7 @@ interface MarketPlugin {
   sha256: string;
   komari?: string;
   compatible?: boolean;
+  retired?: boolean;
   installable: boolean;
   source_id: string;
   source_name: string;
@@ -523,8 +524,8 @@ export default function PluginMarketPage() {
                             )}
                             {(!isInstalled || hasUpdate) && !plugin.installable && (
                               <Badge color="gray" variant="soft">
-                                {plugin.compatible === false
-                                  ? t("plugin.market_incompatible")
+                                {plugin.retired ? t("plugin.market_retired")
+                                  : plugin.compatible === false ? t("plugin.market_incompatible")
                                   : t("market.install_unavailable", "Package unavailable")}
                               </Badge>
                             )}

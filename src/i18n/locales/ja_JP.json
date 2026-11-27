@@ -866,6 +866,7 @@
     "market_available": "インストール可能",
     "market_unavailable": "インストール不可",
     "market_incompatible": "現在の Komari バージョンと非互換",
+    "market_retired": "提供終了のプラグイン",
     "save_and_reload": "保存して再読み込み",
     "saving_and_reloading": "保存して再読み込み中..."
   },

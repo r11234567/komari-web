@@ -866,6 +866,7 @@
     "market_available": "Dapat dipasang",
     "market_unavailable": "Tidak tersedia",
     "market_incompatible": "Tidak kompatibel dengan versi Komari ini",
+    "market_retired": "Plugin telah dihentikan",
     "save_and_reload": "Simpan dan muat ulang",
     "saving_and_reloading": "Menyimpan dan memuat ulang..."
   },

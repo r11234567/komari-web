@@ -889,6 +889,7 @@
     "market_available": "Installable",
     "market_unavailable": "Unavailable",
     "market_incompatible": "Incompatible with this Komari version",
+    "market_retired": "Plugin retired",
     "saving_and_reloading": "Saving and reloading...",
     "save_and_reload": "Save and reload",
     "package_review": {

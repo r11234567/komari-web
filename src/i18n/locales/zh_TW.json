@@ -866,6 +866,7 @@
     "market_available": "可安裝",
     "market_unavailable": "無法安裝",
     "market_incompatible": "與目前的 Komari 版本不相容",
+    "market_retired": "外掛已退役",
     "save_and_reload": "儲存並重新載入",
     "saving_and_reloading": "儲存並重新載入中..."
   },
