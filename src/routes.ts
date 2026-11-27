@@ -101,6 +101,10 @@ export const routes: RouteObject[] = [
         ),
       },
       {
+        path: "traffic-evidence",
+        element: React.createElement(lazy(() => import("./pages/admin/traffic-evidence"))),
+      },
+      {
         path: "theme_managed",
         element: React.createElement(
           lazy(() => import("./pages/admin/theme_managed.tsx"))
