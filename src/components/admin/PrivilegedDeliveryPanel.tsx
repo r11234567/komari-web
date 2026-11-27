@@ -12,7 +12,7 @@ import { TwoFactorProofSchema } from "@komari/proto/komari/common/v1/common_pb";
 import { PrivilegeMode } from "@komari/proto/komari/report/v1/report_pb";
 import { HostAction, HostOperationPhase } from "@komari/proto/komari/host/v1/host_pb";
 import { connectClients, connectUnary } from "@/api/connect/client";
-import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings, needsRescueInstall } from "@/utils/privilegedDelivery";
+import { acceptState, appliedSnapshot, confirmationStillCurrent, boundedRemoteSettings, needsRescueInstall, needsRootExecutionApproval } from "@/utils/privilegedDelivery";
 import { unsupportedHostPlatform } from "@/utils/deploymentObservation";
 
 const labels: Record<State, string> = {
@@ -25,7 +25,7 @@ const labels: Record<State, string> = {
   [State.AWAITING_AGENT]: "已批准，等待 Agent",
   [State.APPLYING]: "正在应用，等待运行中的 Agent 确认",
   [State.SUPERSEDED]: "已被新版本取代",
-  [State.EXPIRED]: "授权已过期，需保存新版本并重新确认",
+  [State.EXPIRED]: "授权已过期，等待重新确认",
 };
 const settingLabels = [
   ["remoteControlEnabled", "远程控制"], ["websshEnabled", "WebSSH"],
@@ -112,6 +112,8 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
   const ready = state?.protocolVersion === 2 && !unsupportedPlatform;
   const rescueInstallNeeded = state && needsRescueInstall(state);
   const rescueInstallSupported = state?.supportedHostActions.includes(HostAction.INSTALL_RESCUE_HELPER);
+  const rootExecutionNeeded = state && needsRootExecutionApproval(state);
+  const rootExecutionSupported = state?.supportedHostActions.includes(HostAction.ENABLE_ROOT_EXECUTION);
   const serviceId = desired?.authorization?.serviceId ?? state?.observation?.serviceId;
   const trustedServiceId = serviceId && /^[A-Za-z0-9_.-]{1,128}$/.test(serviceId) && !serviceId.startsWith("-");
   const actions = desired?.authorization?.actions ?? [];
@@ -130,15 +132,20 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
     try {
       const fresh = await read(AbortSignal.any([controller.signal, signal]));
       if (currentAgent.current !== agentId) return;
-      if (!confirmationStillCurrent(desired, fresh.desired, State.NEEDS_CONFIRMATION)) {
+      if (!confirmationStillCurrent(desired, fresh.desired, desired.state) ||
+          (desired.state !== State.NEEDS_CONFIRMATION && desired.state !== State.EXPIRED)) {
         setState(fresh); setCredentialAction(null);
         toast.error("配置状态已变化，已刷新，请核对当前版本");
         throw new Error("配置状态已变化，已刷新，请核对当前版本");
       }
-      await connectUnary({ signal: AbortSignal.any([controller.signal, signal]) }, (signal, timeoutMs) =>
+      const confirmation = await connectUnary({ signal: AbortSignal.any([controller.signal, signal]) }, (signal, timeoutMs) =>
         connectClients.privilegedDelivery.confirmPrivilegedDelivery({ agentId, revision: desired.revision,
           twoFactor: create(TwoFactorProofSchema, { authorizationToken }) }, { signal, timeoutMs }));
-      toast.success("已批准，等待机器应用");
+      if (confirmation.revision?.state === State.NEEDS_MANUAL_AUTHORIZATION) {
+        toast.info("面板已确认。请复制本机授权命令，在目标节点完成 SSH 和 PAM 确认。");
+      } else {
+        toast.success("已批准，等待 Agent 应用");
+      }
     } finally { setBusy(false); await load(controller.signal); }
   };
   const save = async () => {
@@ -184,17 +191,34 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
           </Flex>
         </Callout.Text></Callout.Root>}
         {desired.errors.map((e, i) => <Text key={i} color="red">{e.message}</Text>)}
-        {desired.state === State.NEEDS_CONFIRMATION && ready && <Flex gap="2" wrap="wrap">
-          <Button disabled={busy || !!rescueInstallNeeded && !rescueInstallSupported} onClick={() => setCredentialAction({ action: "privileged:confirm", targets: [agentId, desired.revision.toString()], title: `确认特权配置版本 ${desired.revision}`, execute: confirm })}>确认此版本</Button>
+        {rootExecutionNeeded && <Callout.Root color="orange"><Callout.Text>
+          {rootExecutionSupported
+            ? "此版本会增加远程 root 权限。面板确认后，请从机主直连到节点的 SSH 终端执行本机授权命令。"
+            : "此节点尚未支持远程 root 的本机授权。请更新 Agent 和 komari-host，完成主机信任和 PAM 配置后重启 Agent。"}
+        </Callout.Text></Callout.Root>}
+        {(desired.state === State.NEEDS_CONFIRMATION || desired.state === State.EXPIRED) && ready && <Flex gap="2" wrap="wrap">
+          <Button disabled={busy || !!rescueInstallNeeded && !rescueInstallSupported || !!rootExecutionNeeded && !rootExecutionSupported}
+            onClick={() => setCredentialAction({ action: "privileged:confirm", targets: [agentId, desired.revision.toString()], title: `确认特权配置版本 ${desired.revision}`, execute: confirm })}>
+            {desired.state === State.EXPIRED ? "重新授权此版本" : "确认此版本"}
+          </Button>
         </Flex>}
         {desired.state === State.NEEDS_MANUAL_AUTHORIZATION && <Callout.Root color="orange"><Callout.Text>
           <Flex direction="column" gap="2">
             <Text>需要本机管理员操作。密码仅在本机系统认证中输入。</Text>
-            {countdown !== undefined && <Text>{expired ? "授权已过期，请保存新版本后重新确认" : `${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, "0")} 后过期`}</Text>}
-            {ready && hostSupported && hostCommand ? <>
-              <Text>在目标节点的本机管理员终端执行：</Text><code className="break-all select-all">{hostCommand}</code>
+            {countdown !== undefined && <Text>{expired ? "授权已过期，刷新后可重新授权此版本" : `${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, "0")} 后过期`}</Text>}
+            {ready && hostSupported && hostCommand && !expired ? <>
+              <Text>在机主直连目标节点的 SSH 终端运行以下命令。Komari WebSSH 不支持此授权。</Text>
+              <code className="break-all select-all">{hostCommand}</code>
+              <Button variant="soft" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(hostCommand);
+                  toast.success("已复制本机授权命令");
+                } catch {
+                  toast.error("无法访问剪贴板，请选中命令复制");
+                }
+              }}>复制本机授权命令</Button>
               {actions.includes(HostAction.INSTALL_RESCUE_HELPER) && <Text>此命令包含救援安装：本机认证后自动下载并验签，再安装独立的 root 救援服务。下载或验签失败不会停止原 Agent。</Text>}
-            </> : <Text>此节点尚未准备好所需主机操作。Linux systemd 需安装新版 host 工具、固定主机信任密钥和 PAM 依赖后重启 agent；Windows/macOS 暂不支持身份转换与救援安装。</Text>}
+            </> : !expired && <Text>此节点尚未准备好所需主机操作。Linux systemd 需安装新版 host 工具、固定主机信任密钥和 PAM 依赖后重启 agent；Windows/macOS 暂不支持身份转换与救援安装。</Text>}
           </Flex>
         </Callout.Text></Callout.Root>}
       </>}
@@ -204,11 +228,14 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
       {editing && <Flex direction="column" gap="2">
         <Text size="2" color="gray">救援组件以独立 root 服务运行。开启救援不会修改下方的 Agent 目标身份，可与普通远程控制同时启用。</Text>
         {settingLabels.map(([key, label]) => <Flex key={key} gap="2">
-          <Checkbox disabled={(key === "websshEnabled" || key === "executionEnabled" || key === "rootExecutionAllowed") && !draft.remoteControlEnabled} checked={draft[key] ?? false} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
+          <Checkbox aria-label={label} disabled={((key === "websshEnabled" || key === "executionEnabled" || key === "rootExecutionAllowed") && !draft.remoteControlEnabled) ||
+            (key === "rootExecutionAllowed" && draft.requiredPrivilegeMode !== PrivilegeMode.LINUX_ROOT)}
+            checked={draft[key] ?? false} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
           <Text>{label}</Text>
         </Flex>)}
         <Text size="1" color="gray">root 会话权限与 Agent 服务身份分别设置。远程执行默认使用 komari，每次使用 root 需单独选择，且 Agent 须具备切换用户的系统权限。</Text>
-        <Select.Root value={String(draft.requiredPrivilegeMode)} onValueChange={(value) => setDraft((s) => ({ ...s, requiredPrivilegeMode: Number(value) }))}>
+        <Select.Root value={String(draft.requiredPrivilegeMode)} onValueChange={(value) => setDraft((s) => ({ ...s, requiredPrivilegeMode: Number(value),
+          rootExecutionAllowed: Number(value) === PrivilegeMode.LINUX_ROOT && s.rootExecutionAllowed }))}>
           <Select.Trigger aria-label="目标服务身份" /><Select.Content>
             {Object.entries(modeLabels).map(([value, label]) => <Select.Item key={value} value={value}>{label}</Select.Item>)}
           </Select.Content>
