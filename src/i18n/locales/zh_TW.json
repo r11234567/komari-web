@@ -1,4 +1,17 @@
 {
+  "forensicArchives": {
+    "title": "取證封存",
+    "description": "加密的證據封裝，附有簽署回執。",
+    "refresh": "重新整理",
+    "loading": "正在載入封存…",
+    "empty": "尚未收到取證封存。",
+    "loadError": "無法載入取證封存。",
+    "downloadError": "無法下載已驗證的封存。",
+    "file": "封存檔",
+    "saved": "封存時間",
+    "size": "大小",
+    "download": "下載 .tar.gz"
+  },
   "trafficEvidence": {
     "collecting": "採集中",
     "setup": "Agent 部署說明",

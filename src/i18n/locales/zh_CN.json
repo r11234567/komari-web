@@ -1,4 +1,17 @@
 {
+  "forensicArchives": {
+    "title": "取证归档",
+    "description": "已加密的证据包，附签名回执。",
+    "refresh": "刷新",
+    "loading": "正在加载归档…",
+    "empty": "尚未收到取证归档。",
+    "loadError": "无法加载取证归档。",
+    "downloadError": "无法下载已校验的归档。",
+    "file": "归档",
+    "saved": "存档时间",
+    "size": "大小",
+    "download": "下载 .tar.gz"
+  },
   "trafficEvidence": {
     "collecting": "采集中",
     "setup": "Agent 部署说明",

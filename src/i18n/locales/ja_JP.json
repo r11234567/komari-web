@@ -1,4 +1,17 @@
 {
+  "forensicArchives": {
+    "title": "フォレンジックアーカイブ",
+    "description": "署名付き受領証を含む暗号化された証拠です。",
+    "refresh": "更新",
+    "loading": "アーカイブを読み込み中…",
+    "empty": "証拠アーカイブはまだ受信されていません。",
+    "loadError": "フォレンジックアーカイブを読み込めませんでした。",
+    "downloadError": "検証済みアーカイブをダウンロードできませんでした。",
+    "file": "アーカイブ",
+    "saved": "保存日時",
+    "size": "サイズ",
+    "download": ".tar.gz をダウンロード"
+  },
   "trafficEvidence": {
     "collecting": "収集中",
     "setup": "Agent の設定手順",

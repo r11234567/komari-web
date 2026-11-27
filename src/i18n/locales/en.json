@@ -1,4 +1,17 @@
 {
+  "forensicArchives": {
+    "title": "Forensic archives",
+    "description": "Encrypted evidence bundles with signed receipts.",
+    "refresh": "Refresh",
+    "loading": "Loading archives…",
+    "empty": "No evidence archives have been received.",
+    "loadError": "Could not load forensic archives.",
+    "downloadError": "Could not download the verified archive.",
+    "file": "Archive",
+    "saved": "Stored at",
+    "size": "Size",
+    "download": "Download .tar.gz"
+  },
   "trafficEvidence": {
     "collecting": "Collecting",
     "setup": "Agent setup",
