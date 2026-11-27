@@ -27,6 +27,11 @@
       "icon": "Activity"
     },
     {
+      "labelKey": "forensicArchives.title",
+      "path": "/admin/forensic-archives",
+      "icon": "FileText"
+    },
+    {
       "labelKey": "adminNavigation.operations",
       "path": "/admin/ping",
       "icon": "Bolt",

@@ -1,4 +1,17 @@
 {
+  "forensicArchives": {
+    "title": "Arsip forensik",
+    "description": "Paket bukti terenkripsi dengan tanda terima bertanda tangan.",
+    "refresh": "Muat ulang",
+    "loading": "Memuat arsip…",
+    "empty": "Belum ada arsip bukti yang diterima.",
+    "loadError": "Gagal memuat arsip forensik.",
+    "downloadError": "Gagal mengunduh arsip yang terverifikasi.",
+    "file": "Arsip",
+    "saved": "Waktu penyimpanan",
+    "size": "Ukuran",
+    "download": "Unduh .tar.gz"
+  },
   "trafficEvidence": {
     "collecting": "Sedang mengumpulkan",
     "setup": "Panduan penyiapan Agent",
