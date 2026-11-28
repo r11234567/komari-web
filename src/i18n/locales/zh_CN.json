@@ -40,6 +40,7 @@
     "incidentBadgeLimited": "{{unread}} 未读 / 共 {{total}} 条（保留 {{hours}} 小时）",
     "incidentBadge": "{{unread}} 未读 / {{total}} 条（72 小时）",
     "unread": "未读",
+    "unreadNodes": "{{n}} 台有未读异常",
     "nodeUnread": "{{n}} 条未读",
     "readError": "详情已打开，未能保存已读状态。",
     "searchNodes": "搜索节点",

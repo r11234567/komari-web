@@ -40,6 +40,7 @@
     "incidentBadgeLimited": "{{unread}} unread / {{total}} retained ({{hours}} h)",
     "incidentBadge": "{{unread}} unread / {{total}} (72 h)",
     "unread": "Unread",
+    "unreadNodes": "{{n}} nodes with unread incidents",
     "nodeUnread": "{{n}} unread",
     "readError": "The incident opened, but its read status could not be saved.",
     "searchNodes": "Search nodes",

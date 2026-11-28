@@ -121,7 +121,7 @@ function NodeEvidence({ node, selector, onRead }: { node: NodeBasicInfo; selecto
   const language = i18n.resolvedLanguage ?? "en";
   const agentId = node.uuid;
   const load = useCallback((signal: AbortSignal) => connectUnary({ signal }, (signal, timeoutMs) =>
-    metrics.listTrafficEvidence({ agentId, hourLimit: range }, { signal, timeoutMs }),
+    metrics.listTrafficEvidence({ agentId, hourLimit: Math.max(range, 26) }, { signal, timeoutMs }),
   ), [agentId, metrics, range]);
   const state = useEvidencePoll(load);
   const refresh = state.refresh;
@@ -221,6 +221,8 @@ export default function TrafficEvidencePage() {
   const enabled = (row: TrafficEvidenceNode) => row.monitoringEnabled || row.monitoring?.state === TrafficMonitoringState.MANUAL ||
     row.monitoring?.state === TrafficMonitoringState.RUNNING;
   const health = (row: TrafficEvidenceNode) => row.agentOnline && !!row.coverage &&
+    (row.monitoring?.state === TrafficMonitoringState.RUNNING || row.monitoring?.state === TrafficMonitoringState.MANUAL) &&
+    (!row.monitoring?.interfaceName || row.monitoring.interfaceName === row.coverage.interfaceName) &&
     evidenceFresh(Number(row.dataThrough?.seconds ?? 0n), Number(row.lastReportedAt?.seconds ?? 0n), now) &&
     !coverageNeedsAttention(row.coverage);
   const alerts = nodeList?.filter((item) => (byId.get(item.uuid)?.unreadIncidentsIn72Hours ?? 0) > 0) ?? [];
@@ -243,6 +245,7 @@ export default function TrafficEvidencePage() {
         ].map(([key, count]) => <div key={key} className="rounded-lg border p-3">
           <div className="text-sm text-muted-foreground">{t(`trafficEvidence.${key}`)}</div>
           <div className="text-xl font-semibold">{count}</div>
+          {key === "alertNodes" && <div className="text-xs text-muted-foreground">{t("trafficEvidence.unreadNodes", { n: nodes.filter((row) => row.unreadIncidentsIn72Hours > 0).length })}</div>}
         </div>)}
       </div>}
       {node ? (

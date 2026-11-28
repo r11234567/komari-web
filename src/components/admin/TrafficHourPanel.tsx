@@ -37,7 +37,10 @@ export function TrafficHourPanel({ rows, now, count, node }: { rows: TrafficEvid
   const available = range.flatMap(({ row }) => row ? [row] : []);
   const chartRows = chart.flatMap(({ row }) => row ? [row] : []);
   const { firstFull, omittedEdge } = todayBucketStart(now);
-  const today = available.filter((row) => Number(row.hourUtc?.seconds) >= firstFull);
+  const today = rows.filter((row) => {
+    const start = Number(row.hourUtc?.seconds);
+    return start >= firstFull && start <= current;
+  });
   const currentRow = chart[chart.length - 1].row;
   const maxBytes = chartRows.reduce((max, row) => evidenceBytes(row)[view] > max ? evidenceBytes(row)[view] : max, 1n);
   const account = node.trafficAccounting;
