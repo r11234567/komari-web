@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Badge, Button, Callout, Dialog, Select, Tabs } from "@radix-ui/themes";
 import { timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import type {
@@ -7,6 +7,8 @@ import type {
   TrafficEvidenceIncident,
   TrafficEvidencePeer,
 } from "@komari/proto/komari/metrics/v1/metrics_pb";
+import { TrafficMonitoringState } from "@komari/proto/komari/report/v1/report_pb";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { connectUnary } from "@/api/connect/client";
 import AdminPageTitle, { AdminSectionTitle } from "@/components/admin/AdminPageTitle";
@@ -88,7 +90,17 @@ function IncidentDetail({ agentId, selected, close }: { agentId: string; selecte
   );
 }
 
-function NodeEvidence({ agentId }: { agentId: string }) {
+const monitorStates: Partial<Record<TrafficMonitoringState, string>> = {
+  [TrafficMonitoringState.DISABLED]: "disabled",
+  [TrafficMonitoringState.REQUIRES_ROOT]: "requiresRoot",
+  [TrafficMonitoringState.STARTING]: "starting",
+  [TrafficMonitoringState.RUNNING]: "running",
+  [TrafficMonitoringState.NO_DEFAULT_INTERFACE]: "noInterface",
+  [TrafficMonitoringState.CAPTURE_UNAVAILABLE]: "captureUnavailable",
+  [TrafficMonitoringState.MANUAL]: "manual",
+};
+
+function NodeEvidence({ agentId, selector }: { agentId: string; selector: ReactNode }) {
   const { metrics } = useConnect();
   const { t, i18n } = useTranslation();
   const [state, setState] = useState<{ data?: ListTrafficEvidenceResponse; error?: boolean }>({});
@@ -100,22 +112,37 @@ function NodeEvidence({ agentId }: { agentId: string }) {
     void connectUnary({ signal: controller.signal }, (signal, timeoutMs) =>
       metrics.listTrafficEvidence({ agentId }, { signal, timeoutMs }),
     ).then(
-      (data) => setState({ data }),
+      (data) => { if (!controller.signal.aborted) setState({ data }); },
       () => { if (!controller.signal.aborted) setState({ error: true }); },
     );
     return () => controller.abort();
   }, [agentId, metrics, revision]);
+  const data = state.data;
+  const monitorState = data?.monitoring?.state ?? TrafficMonitoringState.UNSPECIFIED;
+  const status = !data?.agentOnline ? "offline"
+    : data.monitoringEnabled && monitorState === TrafficMonitoringState.DISABLED ? "starting"
+      : monitorStates[monitorState] ?? "upgrade";
 
   return (
     <>
-      <Button variant="soft" onClick={() => { setState({}); setRevision((value) => value + 1); }}>{t("trafficEvidence.refresh")}</Button>
+      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
+        {selector}
+        <Button variant="soft" onClick={() => { setState({}); setRevision((value) => value + 1); }}>{t("trafficEvidence.refresh")}</Button>
+      </div>
+      {data && <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm" role="status">
+        <Badge color={status === "running" ? "green" : status === "captureUnavailable" || status === "noInterface" ? "amber" : "gray"}>
+          {t(`trafficEvidence.monitor.${status}`)}
+        </Badge>
+        {data.agentOnline && data.monitoring?.interfaceName && <span className="font-mono">{data.monitoring.interfaceName}</span>}
+        {status === "disabled" && <Link to="/admin/servers" className="underline">{t("trafficEvidence.monitor.configure")}</Link>}
+      </div>}
       {state.error && <Callout.Root color="red"><Callout.Text>{t("trafficEvidence.loadError")}</Callout.Text></Callout.Root>}
       {!state.error && !state.data && <p role="status">{t("trafficEvidence.loading")}</p>}
       {state.data && (
-        <Tabs.Root defaultValue="incidents" className="space-y-4">
-          <Tabs.List><Tabs.Trigger value="incidents">{t("trafficEvidence.incidents")}</Tabs.Trigger><Tabs.Trigger value="hours">{t("trafficEvidence.hours")}</Tabs.Trigger></Tabs.List>
+        <Tabs.Root defaultValue="hours" className="min-w-0 space-y-4">
+          <Tabs.List><Tabs.Trigger value="hours">{t("trafficEvidence.hours")}</Tabs.Trigger><Tabs.Trigger value="incidents">{t("trafficEvidence.incidents")}</Tabs.Trigger></Tabs.List>
           <Tabs.Content value="incidents">
-            <Table>
+            {state.data.incidents.length === 0 ? <p className="rounded-lg border p-4 text-sm">{t("trafficEvidence.noIncidents")}</p> : <Table>
               <TableHeader>
                 <TableRow><TableHead>{t("trafficEvidence.triggerTime")}</TableHead><TableHead>{t("trafficEvidence.reason")}</TableHead><TableHead>{t("trafficEvidence.rx")}</TableHead><TableHead>{t("trafficEvidence.tx")}</TableHead><TableHead>{t("trafficEvidence.status")}</TableHead><TableHead>{t("trafficEvidence.detail")}</TableHead></TableRow>
               </TableHeader>
@@ -131,12 +158,11 @@ function NodeEvidence({ agentId }: { agentId: string }) {
                     <TableCell><Button variant="ghost" onClick={() => setSelected(event)}>{t("trafficEvidence.view")}</Button></TableCell>
                   </TableRow>
                 ))}
-                {!state.data.incidents.length && <TableRow><TableCell colSpan={6}>{t("trafficEvidence.noIncidents")}</TableCell></TableRow>}
               </TableBody>
-            </Table>
+            </Table>}
           </Tabs.Content>
           <Tabs.Content value="hours">
-            <Table>
+            {state.data.hours.length === 0 ? <p className="rounded-lg border p-4 text-sm">{t("trafficEvidence.noHours")}</p> : <Table>
               <TableHeader>
                 <TableRow><TableHead>{t("trafficEvidence.period")}</TableHead><TableHead>{t("trafficEvidence.service")}</TableHead><TableHead>{t("trafficEvidence.rx")}</TableHead><TableHead>{t("trafficEvidence.tx")}</TableHead></TableRow>
               </TableHeader>
@@ -155,9 +181,8 @@ function NodeEvidence({ agentId }: { agentId: string }) {
                     <DirectionCells value={hour.observed} />
                   </TableRow>
                 ))}
-                {!state.data.hours.length && <TableRow><TableCell colSpan={4}>{t("trafficEvidence.noHours")}</TableCell></TableRow>}
               </TableBody>
-            </Table>
+            </Table>}
           </Tabs.Content>
         </Tabs.Root>
       )}
@@ -172,19 +197,16 @@ export default function TrafficEvidencePage() {
   const [selection, setSelection] = useState("");
   const agentId = nodeList?.some((node) => node.uuid === selection) ? selection : nodeList?.[0]?.uuid;
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-4">
       <AdminPageTitle description={t("trafficEvidence.description")}>{t("trafficEvidence.title")}</AdminPageTitle>
-      <a className="inline-block text-sm underline" href="https://github.com/r11234567/komari-agent/blob/main/docs/traffic-anomaly-pilot.md#在面板查看" target="_blank" rel="noreferrer">
-        {t("trafficEvidence.setup")}
-      </a>
       {agentId ? (
-        <>
+        <NodeEvidence key={agentId} agentId={agentId} selector={<div className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-xs">
+          <span className="text-sm font-medium">{t("trafficEvidence.node")}</span>
           <Select.Root value={agentId} onValueChange={setSelection}>
-            <Select.Trigger aria-label={t("trafficEvidence.node")} />
+            <Select.Trigger className="w-full min-w-0" aria-label={t("trafficEvidence.node")} />
             <Select.Content>{nodeList?.map((node) => <Select.Item key={node.uuid} value={node.uuid}>{node.name}</Select.Item>)}</Select.Content>
           </Select.Root>
-          <div className="space-y-4"><NodeEvidence key={agentId} agentId={agentId} /></div>
-        </>
+        </div>} />
       ) : <p role="status">{t(nodeList === null ? "trafficEvidence.loading" : "trafficEvidence.noNodes")}</p>}
     </div>
   );
