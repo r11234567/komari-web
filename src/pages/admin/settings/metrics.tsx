@@ -6,6 +6,7 @@ import {
   SettingCardShortTextInput,
 } from "@/components/admin/SettingCard";
 import { DatabaseMaintenanceCard } from "@/components/admin/DatabaseMaintenanceCard";
+import { TrafficRetentionCard } from "@/components/admin/TrafficRetentionCard";
 import { DownsamplingCard } from "@/components/admin/DownsamplingCard";
 import {
   Table,
@@ -182,6 +183,7 @@ export default function MetricsSettings() {
     <Flex direction="column" gap="3" className="km-page-admin-settings-metrics">
       <SettingCardLabel>{t("settings.metrics.title")}</SettingCardLabel>
       <DatabaseMaintenanceCard />
+      <TrafficRetentionCard />
 
       {/*<Callout.Root color="blue" variant="surface">
         <Callout.Icon>
