@@ -3,6 +3,7 @@ import { create } from "@bufbuild/protobuf";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Badge, Button, Callout, Checkbox, Flex, Select, Text, TextField } from "@radix-ui/themes";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import SensitiveActionDialog, { type SensitiveAction } from "@/components/SensitiveActionDialog";
 import {
   PrivilegedConfigSchema, PrivilegedDeliveryState as State,
@@ -43,15 +44,18 @@ const modeLabels: Record<PrivilegeMode, string> = {
 };
 
 function Snapshot({ revision }: { revision: PrivilegedRevision }) {
+  const { t } = useTranslation();
   const settings = revision.privileged;
   if (!settings) return null;
   return <Flex direction="column" gap="1">
     {settingLabels.map(([key, label]) => <Text size="2" key={key}>{label}：{settings[key] ? "开启" : "关闭"}</Text>)}
+    <Text size="2">{t("trafficEvidence.toggle")} · {t(settings.trafficMonitoringEnabled ? "trafficEvidence.monitor.enabled" : "trafficEvidence.monitor.disabled")}</Text>
     <Text size="2">Agent 目标身份：{modeLabels[settings.requiredPrivilegeMode]}</Text>
   </Flex>;
 }
 
 export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSystem }: { agentId: string; history?: boolean; operatingSystem?: string }) {
+  const { t } = useTranslation();
   const [state, setState] = React.useState<GetNodeConfigStateResponse>();
   const [revisions, setRevisions] = React.useState<PrivilegedRevision[]>([]);
   const [error, setError] = React.useState("");
@@ -233,9 +237,23 @@ export function PrivilegedDeliveryPanel({ agentId, history = false, operatingSys
             checked={draft[key] ?? false} onCheckedChange={(value) => setDraft((s) => ({ ...s, [key]: value === true }))} />
           <Text>{label}</Text>
         </Flex>)}
+        <Flex direction="column" gap="1">
+          <Flex gap="2">
+            <Checkbox aria-label={t("trafficEvidence.toggle")}
+              disabled={!draft.trafficMonitoringEnabled && (!state.trafficMonitoringSupported || draft.requiredPrivilegeMode !== PrivilegeMode.LINUX_ROOT)}
+              checked={draft.trafficMonitoringEnabled ?? false}
+              onCheckedChange={(value) => setDraft((s) => ({ ...s, trafficMonitoringEnabled: value === true }))} />
+            <Text>{t("trafficEvidence.toggle")}</Text>
+          </Flex>
+          <Text size="1" color="gray">{t(!state.trafficMonitoringSupported
+            ? "trafficEvidence.monitor.upgrade"
+            : draft.requiredPrivilegeMode !== PrivilegeMode.LINUX_ROOT
+              ? "trafficEvidence.monitor.requiresRoot" : "trafficEvidence.monitor.automatic")}</Text>
+        </Flex>
         <Text size="1" color="gray">root 会话权限与 Agent 服务身份分别设置。远程执行默认使用 komari，每次使用 root 需单独选择，且 Agent 须具备切换用户的系统权限。</Text>
         <Select.Root value={String(draft.requiredPrivilegeMode)} onValueChange={(value) => setDraft((s) => ({ ...s, requiredPrivilegeMode: Number(value),
-          rootExecutionAllowed: Number(value) === PrivilegeMode.LINUX_ROOT && s.rootExecutionAllowed }))}>
+          rootExecutionAllowed: Number(value) === PrivilegeMode.LINUX_ROOT && s.rootExecutionAllowed,
+          trafficMonitoringEnabled: Number(value) === PrivilegeMode.LINUX_ROOT && s.trafficMonitoringEnabled }))}>
           <Select.Trigger aria-label="目标服务身份" /><Select.Content>
             {Object.entries(modeLabels).map(([value, label]) => <Select.Item key={value} value={value}>{label}</Select.Item>)}
           </Select.Content>
