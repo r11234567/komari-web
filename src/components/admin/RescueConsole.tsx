@@ -89,6 +89,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   const [action, setAction] = React.useState<RescueAction>(RescueAction.TEMPORARY_SSH_ACCESS);
   const [credentialAction, setCredentialAction] = React.useState<SensitiveAction | null>(null);
   const [sourceIp, setSourceIp] = React.useState("");
+  const sourceIpEdited = React.useRef(false);
   const [session, setSession] = React.useState<RescueSession>();
   const [sshAccess, setSSHAccess] = React.useState<TemporarySSHAccess>();
   const [output, setOutput] = React.useState("");
@@ -101,7 +102,13 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
   const loadStatus = React.useCallback(async (signal: AbortSignal) => {
     if (!agentId) return;
     const response = await connectUnary({ signal }, (requestSignal, timeoutMs) =>
-      deployment.getDeployment({ agentId }, { signal: requestSignal, timeoutMs }),
+      deployment.getDeployment({ agentId }, {
+        signal: requestSignal, timeoutMs,
+        onHeader: (headers) => {
+          const ip = headers.get("X-Komari-SSH-Source-IP");
+          if (ip && !signal.aborted && !sourceIpEdited.current) setSourceIp(ip);
+        },
+      }),
     );
     if (signal.aborted) return;
     const helper = response.rescueHelper;
@@ -126,6 +133,7 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
     setHelperStatus(undefined);
     setSession(undefined);
     setSSHAccess(undefined);
+    sourceIpEdited.current = false;
     setSourceIp("");
     setOutput("");
     if (!agentId) return;
@@ -408,7 +416,10 @@ export function RescueConsole({ agentId }: { agentId?: string }) {
             <label>
               <Text size="2">{t("rescue.ssh_source")}</Text>
               <TextField.Root value={sourceIp} maxLength={45} spellCheck={false} autoComplete="off"
-                onChange={(event) => setSourceIp(event.target.value)} />
+                onChange={(event) => {
+                  sourceIpEdited.current = true;
+                  setSourceIp(event.target.value);
+                }} />
             </label>
             <Text size="2" color="gray">
               {t("rescue.ssh_nat_hint")} <code>curl -4 -fsS https://api.ipify.org</code>

@@ -17,6 +17,7 @@ export interface RemoteFileService {
   roots: () => Promise<RemoteFileInfo[]>;
   stat: (path: string) => Promise<RemoteFileInfo>;
   read: (path: string) => Promise<RemoteFileReadResult>;
+  saveEdit: (path: string, original: Uint8Array, replacement: Uint8Array) => Promise<void>;
   mkdir: (path: string, mode?: string) => Promise<void>;
   search: (path: string, query: string, content: boolean) => Promise<RemoteSearchResult>;
   remove: (path: string) => Promise<void>;
@@ -24,6 +25,65 @@ export interface RemoteFileService {
   copy: (source: string, destination: string) => Promise<void>;
   chmod: (path: string, mode: string) => Promise<void>;
   chown: (path: string, owner: string, group: string) => Promise<void>;
+}
+
+export const FILE_PAGE_BYTES = 128 * 1024;
+const UTF8_LOOKAHEAD = 3;
+
+export class FileEditConflict extends Error {}
+
+export interface FileRangePage {
+  bytes: Uint8Array;
+  start: number;
+  size: number;
+  etag: string;
+}
+
+export async function readFileRange(
+  uuid: string, path: string, start: number | "tail", etag: string, signal: AbortSignal,
+): Promise<FileRangePage | null> {
+  const access = await workspaceAccess(uuid, signal);
+  const tail = start === "tail";
+  const limit = FILE_PAGE_BYTES + (tail ? 0 : UTF8_LOOKAHEAD);
+  const url = fileDownloadUrl(uuid, path, true);
+  const response = await fetch(tail ? `${url}&follow=1` : url, {
+    signal: access.signal,
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      ...access.headers,
+      Range: tail ? `bytes=-${FILE_PAGE_BYTES}` : `bytes=${start}-${start + limit - 1}`,
+      ...(etag ? { [tail ? "If-None-Match" : "If-Match"]: etag } : {}),
+    },
+  });
+  if (response.status === 304 && tail) return null;
+  if (response.status === 412 || response.status === 409) {
+    await response.body?.cancel();
+    throw new FileEditConflict();
+  }
+  const tag = response.headers.get("ETag") || "";
+  const range = response.headers.get("Content-Range");
+  if (response.status === 416 && range === "bytes */0") {
+    await response.body?.cancel();
+    if (tail && tag && tag === etag) return null;
+    return { bytes: new Uint8Array(), start: 0, size: 0, etag: tag };
+  }
+  const match = range?.match(/^bytes (\d+)-(\d+)\/(\d+)$/);
+  if (response.status !== 206 || !match || !tag) {
+    await response.body?.cancel();
+    throw new Error(`Range request failed (${response.status})`);
+  }
+  const offset = Number(match[1]);
+  const end = Number(match[2]);
+  const size = Number(match[3]);
+  if (!Number.isSafeInteger(size) || end >= size || offset > end || end - offset >= limit ||
+      (tail ? end !== size - 1 : start !== offset)) {
+    await response.body?.cancel();
+    throw new Error("Invalid remote byte range");
+  }
+  const bytes = await readResponseBytes(response, limit);
+  if (bytes.length !== end - offset + 1) throw new Error("Incomplete remote byte range");
+  return { bytes, start: offset, size, etag: tag };
 }
 
 const mapFileEntryToInfo = (entry: FileEntry): RemoteFileInfo => ({
@@ -174,6 +234,25 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
     [uuid, lifetime],
   );
 
+  const saveEdit = useCallback(async (path: string, original: Uint8Array, replacement: Uint8Array) => {
+    if (replacement.length > MAX_EDITABLE_FILE_SIZE) throw editableFileLimitError();
+    const signal = lifetime.controller.signal;
+    const access = await workspaceAccess(uuid, signal);
+    signal.throwIfAborted();
+    const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(original));
+    const version = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const query = new URLSearchParams({ path });
+    const response = await fetch(`/api/admin/client/${encodeURIComponent(uuid)}/file/edit?${query}`, {
+      method: "PUT",
+      credentials: "include",
+      signal: access.signal,
+      headers: { ...access.headers, "Content-Type": "application/octet-stream", "If-Match": `"${version}"` },
+      body: new Uint8Array(replacement),
+    });
+    if (response.status === 412) throw new FileEditConflict();
+    if (!response.ok) throw new Error(await readHTTPError(response));
+  }, [uuid, lifetime]);
+
   const mkdir = useCallback(
     async (path: string, mode = "0755") => {
       await connectClients.file.createEntry({
@@ -274,6 +353,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
       roots,
       stat,
       read,
+      saveEdit,
       mkdir,
       remove,
       move,
@@ -281,7 +361,7 @@ export const useRemoteFileService = (uuid: string): RemoteFileService => {
       chmod,
       chown,
     }),
-    [search, list, roots, stat, read, mkdir, remove, move, copy, chmod, chown],
+    [search, list, roots, stat, read, saveEdit, mkdir, remove, move, copy, chmod, chown],
   );
 };
 
