@@ -56,7 +56,8 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { useRemoteFileService } from "./useRemoteFileService";
+import { FileEditConflict, useRemoteFileService } from "./useRemoteFileService";
+import FileRangeViewer from "./FileRangeViewer";
 import { DEFAULT_TERMINAL_FONT_FAMILY } from "./terminalDefaults";
 import EditorResourceMonitor from "./EditorResourceMonitor";
 import EditorTerminalPanel from "./EditorTerminalPanel";
@@ -69,7 +70,6 @@ import {
 import RemoteFileTree from "./RemoteFileTree";
 import ConfirmDialog from "./ConfirmDialog";
 import { normalizeRemotePath } from "./fileManagerApi";
-import { useRemoteFileUpload } from "./useRemoteFileUpload";
 const PDFPreview = lazy(() => import("./PDFPreview"));
 import type { ContextMenuPosition } from "./terminalTypes";
 import {
@@ -108,6 +108,7 @@ interface EditorDocument {
   kind: DocumentKind;
   size: number;
   loading?: boolean;
+  conflict?: boolean;
   errorMessage?: string;
 }
 
@@ -343,8 +344,9 @@ const FileEditorDialog = ({
 }: FileEditorDialogProps) => {
   const { t } = useTranslation();
   const fileService = useRemoteFileService(uuid);
-  const { uploadBlob: uploadEditorBlob } = useRemoteFileUpload(uuid, () => undefined, { silent: true });
   const [documents, setDocuments] = useState<EditorDocument[]>([]);
+  const [rangePath, setRangePath] = useState<string>();
+  const [reloadEditPath, setReloadEditPath] = useState<string>();
   const [activePath, setActivePath] = useState<string | null>(null);
   const [pendingClose, setPendingClose] = useState<PendingClose>(null);
   const [pendingEncodingReopen, setPendingEncodingReopen] = useState<PendingEncodingReopen | null>(null);
@@ -619,16 +621,12 @@ const FileEditorDialog = ({
         return false;
       }
       const contentToSave = document.content;
+      if (!document.sourceBytes || document.conflict) return false;
       savingPathsRef.current.add(path);
       setSavingPaths((current) => new Set(current).add(path));
       try {
         const encodedBytes = await encodeRemoteTextBytes(contentToSave, targetEncoding);
-        const uploaded = await uploadEditorBlob(
-          new Blob([encodedBytes], { type: "application/octet-stream" }),
-          path,
-          { silent: true },
-        );
-        if (!uploaded) return false;
+        await fileService.saveEdit(path, document.sourceBytes, encodedBytes);
         setDocuments((current) =>
           current.map((item) =>
             item.path === path
@@ -637,7 +635,7 @@ const FileEditorDialog = ({
                   encoding: targetEncoding,
                   sourceBytes: encodedBytes,
                   size: encodedBytes.byteLength,
-                  ...(item.content === contentToSave ? { savedContent: contentToSave } : {}),
+                  savedContent: contentToSave,
                 }
               : item,
           ),
@@ -646,6 +644,11 @@ const FileEditorDialog = ({
         toast.success(t("file_manager.editor.saved", "File saved"));
         return true;
       } catch (error) {
+        if (error instanceof FileEditConflict) {
+          setDocuments((current) => current.map((item) => item.path === path ? { ...item, conflict: true } : item));
+          toast.error(t("file_manager.editor.edit_conflict"));
+          return false;
+        }
         toast.error(error instanceof Error ? error.message : t("file_manager.save_failed", "Failed to save file"));
         return false;
       } finally {
@@ -657,8 +660,23 @@ const FileEditorDialog = ({
         });
       }
     },
-    [onSaved, t, uploadEditorBlob],
+    [fileService, onSaved, t],
   );
+
+  const reloadConflictedFile = useCallback(async (path: string) => {
+    setReloadEditPath(undefined);
+    try {
+      const result = await fileService.read(path);
+      const encoding = detectRemoteTextEncoding(result.bytes);
+      const content = decodeRemoteTextBytes(result.bytes, encoding);
+      setDocuments((current) => current.map((item) => item.path === path && item.conflict ? {
+        ...item, sourceBytes: result.bytes, content, savedContent: content, encoding,
+        size: result.size, contentType: result.content_type, conflict: false,
+      } : item));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("file_manager.load_failed"));
+    }
+  }, [fileService, t]);
 
   const saveActive = useCallback(async () => {
     if (activePathRef.current) {
@@ -1546,7 +1564,7 @@ const FileEditorDialog = ({
             <div className="mx-1 h-4 w-px bg-[#3a3a3a]" />
             <button
               className={editorIconButton}
-              disabled={!activeDocument || activeDocument.kind !== "text" || activeDocument.content === activeDocument.savedContent || savingPaths.has(activeDocument.path)}
+              disabled={!activeDocument || activeDocument.kind !== "text" || activeDocument.conflict || activeDocument.content === activeDocument.savedContent || savingPaths.has(activeDocument.path)}
               onClick={() => void saveActive()}
               title={t("file_manager.editor.save", "Save")}
             >
@@ -1558,6 +1576,12 @@ const FileEditorDialog = ({
             <button className={editorIconButton} onClick={() => triggerEditorAction("redo")} title={t("file_manager.editor.redo", "Redo")}>
               <Redo2 size={15} />
             </button>
+            {activeDocument?.kind === "text" && !activeDocument.loading && (
+              <button type="button" className="px-2 text-xs text-[#ccc] hover:bg-[#333]"
+                onClick={() => setRangePath(rangePath === activeDocument.path ? undefined : activeDocument.path)}>
+                {t(rangePath === activeDocument.path ? "file_manager.editor.range_back" : "file_manager.editor.range_open")}
+              </button>
+            )}
             <div className="ml-auto flex items-center">
               <button className={editorIconButton} onClick={() => setShowExplorer((value) => !value)} title={t("file_manager.editor.explorer", "Explorer")}>
                 {showExplorer ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
@@ -1739,9 +1763,20 @@ const FileEditorDialog = ({
                     <span className="text-sm">{t("file_manager.editor.empty", "Open a file from Explorer")}</span>
                   </div>
                 )}
-                {activeDocument && !activeDocument.loading && activeDocument.kind === "text" && (
+                {activeDocument?.kind === "text" && activeDocument.conflict && (
+                  <div role="alert" className="flex items-center gap-2 border-b border-[#555] px-3 py-2 text-xs text-amber-300">
+                    <span>{t("file_manager.editor.edit_conflict")}</span>
+                    <button type="button" className="underline" onClick={() => setReloadEditPath(activeDocument.path)}>
+                      {t("file_manager.editor.range_reload")}
+                    </button>
+                  </div>
+                )}
+                {activeDocument && activeDocument.kind === "text" && rangePath === activeDocument.path && (
+                  <FileRangeViewer key={activeDocument.path} uuid={uuid} path={activeDocument.path} />
+                )}
+                {activeDocument && !activeDocument.loading && activeDocument.kind === "text" && rangePath !== activeDocument.path && (
                   <Editor
-                    height="100%"
+                    height={activeDocument.conflict ? "calc(100% - 2rem)" : "100%"}
                     theme="vs-dark"
                     path={`${uuid}:${activeDocument.path}`}
                     language={activeDocument.language}
@@ -1835,7 +1870,10 @@ const FileEditorDialog = ({
                     </div>
                   )
                 )}
-                {activeDocument?.kind === "too-large" && (
+                {activeDocument?.kind === "too-large" && previewKindForFile(activeDocument.path) === "text" && (
+                  <FileRangeViewer key={activeDocument.path} uuid={uuid} path={activeDocument.path} />
+                )}
+                {activeDocument?.kind === "too-large" && previewKindForFile(activeDocument.path) !== "text" && (
                   <div className="flex h-full flex-col items-center justify-center gap-3 text-[#a7a7a7]">
                     <Braces size={40} strokeWidth={1.25} />
                     <span className="text-sm">{t("file_manager.editor.too_large_preview", "File is too large to preview")}</span>
@@ -1978,6 +2016,17 @@ const FileEditorDialog = ({
           onCancel={() => setPendingClose(null)}
         />
 
+        <ConfirmDialog
+          open={reloadEditPath !== undefined}
+          title={t("file_manager.editor.range_reload")}
+          description={t("file_manager.editor.edit_reload_confirm")}
+          confirmLabel={t("file_manager.editor.range_reload")}
+          cancelLabel={t("common.cancel", "Cancel")}
+          onConfirm={() => {
+            if (reloadEditPath) void reloadConflictedFile(reloadEditPath);
+          }}
+          onCancel={() => setReloadEditPath(undefined)}
+        />
         <ConfirmDialog
           open={pendingEncodingReopen !== null}
           title={t("file_manager.editor.reopen_with_encoding_title", "Reopen with Encoding?")}
